@@ -2,10 +2,11 @@
 import type { LibraryState, Lyrics, Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
+import { autoTrim, measure } from "../lib/loudness";
 import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
-import { app, toast } from "./app";
+import { app, toast, updateSettings } from "./app";
 
 interface PlayerState {
   library: LibraryState;
@@ -19,6 +20,8 @@ interface PlayerState {
   coverPalette?: Palette;
   /** Таймер сна: во сколько выключить (Date.now()) или «после этого трека». */
   sleep?: { at?: number; endOfTrack?: boolean };
+  /** «Поймать текст»: следующий клик по строке говорит, что её поют прямо сейчас. */
+  syncLyrics?: boolean;
 }
 
 export const player = createStore<PlayerState>({
@@ -39,7 +42,14 @@ export function currentTrack(): Track | undefined {
 /** Что сейчас играет — для заголовков и текстов. */
 export function nowMeta(): { title: string; artist: string; cover?: string; duration: number } | undefined {
   const t = currentTrack();
-  return t ? { title: t.title, artist: t.artist, cover: t.cover, duration: t.duration || engine.el.duration || 0 } : undefined;
+  return t
+    ? {
+        title: t.title,
+        artist: t.artist,
+        cover: t.cover,
+        duration: t.duration || engine.el.duration || 0,
+      }
+    : undefined;
 }
 
 /** Позиция трека, где он сейчас. */
@@ -52,6 +62,60 @@ export function lyricsTime(): number {
   const id = currentTrack()?.id;
   const shift = id ? (app.get().settings.lyricsOffsets[id] ?? 0) : 0;
   return engine.audibleTime + shift;
+}
+
+// ---------- Громкость каждой песни ----------
+
+/** Итоговая поправка громкости трека, дБ: автовыравнивание + своя настройка. */
+export function trackTrim(id: string): number {
+  const s = app.get().settings;
+  const loud = s.trackLoudness[id];
+  return (s.autoLevel && loud !== undefined ? autoTrim(loud) : 0) + (s.trackGain[id] ?? 0);
+}
+
+/** Измерить трек, если ещё не мерили, и плавно поправить громкость, пока он играет. */
+async function levelTrack(id: string, url: string): Promise<void> {
+  if (!app.get().settings.autoLevel || app.get().settings.trackLoudness[id] !== undefined) return;
+  const loud = await measure(url);
+  if (loud === undefined) return;
+  updateSettings({ trackLoudness: { ...app.get().settings.trackLoudness, [id]: loud } });
+  if (currentTrack()?.id === id) engine.setTrim(trackTrim(id));
+}
+
+/** Своя громкость песни, дБ. */
+export function setTrackGain(id: string, db: number): void {
+  const v = Math.round(Math.max(-12, Math.min(12, db)) * 2) / 2;
+  const copy = { ...app.get().settings.trackGain };
+  if (v === 0) delete copy[id];
+  else copy[id] = v;
+  updateSettings({ trackGain: copy });
+  if (currentTrack()?.id === id) engine.setTrim(trackTrim(id));
+}
+
+export function setAutoLevel(on: boolean): void {
+  updateSettings({ autoLevel: on });
+  const t = currentTrack();
+  if (!t) return;
+  engine.setTrim(trackTrim(t.id));
+  if (on) void levelTrack(t.id, `camado-media://track/${t.id}`);
+}
+
+/** Сдвиг текста для трека, секунды (+ — текст позже). */
+export function setLyricsOffset(trackId: string, seconds: number): void {
+  const v = Math.round(Math.max(-30, Math.min(30, seconds)) * 20) / 20;
+  const copy = { ...app.get().settings.lyricsOffsets };
+  if (Math.abs(v) < 0.01) delete copy[trackId];
+  else copy[trackId] = v;
+  updateSettings({ lyricsOffsets: copy });
+}
+
+/** Пользователь нажал строку, которую поют сейчас: подгоняем весь текст трека под неё. */
+export function catchLyricsLine(lineTime: number): void {
+  const id = currentTrack()?.id;
+  player.set({ syncLyrics: false });
+  if (!id) return;
+  setLyricsOffset(id, lineTime - engine.audibleTime);
+  toast("Текст подогнан под эту строку", "ok");
 }
 
 export function duration(): number {
@@ -92,7 +156,9 @@ async function startCurrent(fade = 0): Promise<void> {
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
   player.set({ lyrics: undefined, lyricsLoading: true });
   try {
-    await engine.play(`camado-media://track/${t.id}`, fade);
+    const url = `camado-media://track/${t.id}`;
+    await engine.play(url, fade, trackTrim(t.id));
+    void levelTrack(t.id, url);
   } catch (err) {
     console.error(err);
     toast(`Не смог воспроизвести «${t.title}»`, "warn");
@@ -235,7 +301,9 @@ export async function loadCoverPalette(cover?: string): Promise<void> {
     const g = c.getContext("2d", { willReadFrequently: true })!;
     g.drawImage(img, 0, 0, 48, 48);
     const px = g.getImageData(0, 0, 48, 48).data;
-    player.set({ coverPalette: paletteFromPixels(px, paletteById(app.get().settings.palette)) });
+    player.set({
+      coverPalette: paletteFromPixels(px, paletteById(app.get().settings.palette)),
+    });
   } catch {
     player.set({ coverPalette: undefined });
   }

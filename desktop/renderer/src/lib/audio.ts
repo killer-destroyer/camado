@@ -10,8 +10,17 @@ export type SoundMode = "normal" | "slowed" | "nightcore";
 const MODES: Record<SoundMode, { rate: number; wet: number }> = {
   normal: { rate: 1, wet: 0 },
   slowed: { rate: 0.85, wet: 0.42 }, // slowed + reverb
-  nightcore: { rate: 1.25, wet: 0 },
+  nightcore: { rate: 1.15, wet: 0 },
 };
+
+/**
+ * Ползунок → громкость «по слуху». Ухо слышит громкость логарифмически, поэтому
+ * прямой ползунок ведёт себя как горячий кран: чуть сдвинул — уже орёт.
+ * Кубическая кривая делает шаги ползунка равными на слух.
+ */
+export const dbToGain = (db: number) => 10 ** (Math.max(-24, Math.min(24, db)) / 20);
+
+export const volumeCurve = (v: number) => Math.max(0, Math.min(1, v)) ** 3;
 
 function makeDeck(): HTMLAudioElement {
   const a = new Audio();
@@ -37,6 +46,8 @@ export class AudioEngine {
   private ctx?: AudioContext;
   private analyser?: AnalyserNode;
   private deckGains: GainNode[] = [];
+  /** Громкость каждой песни отдельно (дБ → множитель), своя у каждой деки — переходы не прыгают. */
+  private trims: GainNode[] = [];
   private master?: GainNode;
   private wetGain?: GainNode;
   private fadeTimer?: number;
@@ -75,7 +86,7 @@ export class AudioEngine {
 
   set volume(v: number) {
     this.volumeValue = Math.max(0, Math.min(1, v));
-    if (this.master && this.ctx) this.master.gain.setTargetAtTime(this.volumeValue, this.ctx.currentTime, 0.05);
+    if (this.master && this.ctx) this.master.gain.setTargetAtTime(volumeCurve(this.volumeValue), this.ctx.currentTime, 0.05);
   }
 
   /**
@@ -100,6 +111,25 @@ export class AudioEngine {
     return this.ensureContext();
   }
 
+  /** Вход общей громкости: всё, что подключено сюда, слушается ползунка громкости. */
+  output(): AudioNode {
+    this.ensureContext();
+    return this.master!;
+  }
+
+  /** Поменять громкость текущей песни (дБ), плавно. */
+  setTrim(db: number): void {
+    if (!this.ctx || !this.trims.length) return;
+    this.trims[this.active]!.gain.setTargetAtTime(dbToGain(db), this.ctx.currentTime, 0.08);
+  }
+
+  /** Скорость slowed и nightcore из настроек. */
+  setRates(slowed: number, nightcore: number): void {
+    MODES.slowed.rate = Math.max(0.6, Math.min(0.97, slowed));
+    MODES.nightcore.rate = Math.max(1.03, Math.min(1.5, nightcore));
+    this.setMode(this.mode);
+  }
+
   private ensureContext(): AudioContext {
     if (!this.ctx) {
       const ctx = new AudioContext({ latencyHint: "interactive" });
@@ -116,12 +146,13 @@ export class AudioEngine {
       fxIn.connect(this.analyser);
       fxIn.connect(convolver).connect(this.wetGain).connect(this.analyser);
       this.master = ctx.createGain();
-      this.master.gain.value = this.volumeValue;
+      this.master.gain.value = volumeCurve(this.volumeValue);
       this.analyser.connect(this.master).connect(ctx.destination);
+      this.trims = this.decks.map(() => ctx.createGain());
       this.deckGains = this.decks.map((d, i) => {
         const g = ctx.createGain();
         g.gain.value = i === this.active ? 1 : 0;
-        ctx.createMediaElementSource(d).connect(g).connect(fxIn);
+        ctx.createMediaElementSource(d).connect(this.trims[i]!).connect(g).connect(fxIn);
         return g;
       });
     }
@@ -147,7 +178,7 @@ export class AudioEngine {
    * Играть трек. fade > 0 — плавный переход: новый трек на второй деке нарастает,
    * старый затихает, потом останавливается.
    */
-  async play(url?: string, fade = 0): Promise<void> {
+  async play(url?: string, fade = 0, trimDb = 0): Promise<void> {
     const ctx = this.ensureContext();
     if (!url || this.el.src === url) {
       await this.el.play();
@@ -171,6 +202,8 @@ export class AudioEngine {
       this.deckGains[nextIdx]!.gain.cancelScheduledValues(now);
       this.deckGains[nextIdx]!.gain.setValueAtTime(1, now);
     }
+    this.trims[nextIdx]!.gain.cancelScheduledValues(now);
+    this.trims[nextIdx]!.gain.setValueAtTime(dbToGain(trimDb), now);
     deck.src = url;
     deck.playbackRate = MODES[this.mode].rate;
     deck.preservesPitch = false;

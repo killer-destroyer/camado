@@ -7,6 +7,8 @@ import { useStore } from "./lib/store";
 import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/app";
 import { refreshData, watchData } from "./state/data";
 import { initFocus, refreshFocusStats } from "./state/focus";
+import { initAlarms, ring } from "./state/alarms";
+import { AlarmModal } from "./components/Alarm";
 import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
@@ -62,7 +64,9 @@ export function App() {
       initPlayer(),
       initFocus(),
       api.on("data-changed", () => void refreshFocusStats()),
-      api.on("reminder", (p) => toast(p.text, "warn")),
+      initAlarms(),
+      // Напоминания о сроках звенят, утренняя сводка — просто всплывает.
+      api.on("reminder", (p) => (p.text.startsWith("⏰") ? ring(p.text) : toast(p.text, "warn"))),
       api.on("go", (screen) => go(screen as ScreenId)),
     ];
 
@@ -94,6 +98,7 @@ export function App() {
       const [full, at] = raw.split("@") as [string, string | undefined];
       const [name, anchor] = full.split("#") as [string, string | undefined];
       if (anchor === "bottom") setTimeout(() => document.querySelector(".screen-wrap")?.scrollTo({ top: 1e6 }), 900);
+      else if (anchor) setTimeout(() => document.querySelector(`.${anchor}`)?.scrollIntoView({ block: "center" }), 900);
       if (at !== undefined) {
         const [sec, idx] = at.split(":").map(Number) as [number, number | undefined];
         const tracks = player.get().library.tracks;
@@ -138,6 +143,7 @@ export function App() {
         </Guard>
       )}
       <CommandPalette />
+      <AlarmModal />
       <Toasts />
       <UpdateBanner />
       <OverlayFeed />

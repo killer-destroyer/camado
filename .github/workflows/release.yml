@@ -37,7 +37,7 @@ jobs:
       - run: npm ci
       - run: npm test
       # Номер версии растёт с каждой сборкой — по нему программа понимает, что вышло обновление.
-      - run: npm version 0.4.${{ github.run_number }} --no-git-tag-version --allow-same-version
+      - run: npm version 0.5.${{ github.run_number }} --no-git-tag-version --allow-same-version
       - run: npx electron-vite build
       - name: Собрать установщик
         shell: bash

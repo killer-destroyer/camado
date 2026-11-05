@@ -143,9 +143,7 @@ kbd {
 .glass {
   /* Без backdrop-filter: размывать живой фон каждый кадр — главный пожиратель FPS.
      Полупрозрачная заливка поверх мягкого фона выглядит почти так же. */
-  background:
-    linear-gradient(160deg, rgb(var(--text-rgb) / 0.08), rgb(var(--text-rgb) / 0.03)),
-    rgb(var(--bg-rgb) / 0.42);
+  background: linear-gradient(160deg, rgb(var(--text-rgb) / 0.08), rgb(var(--text-rgb) / 0.03)), rgb(var(--bg-rgb) / 0.42);
   border: 1px solid rgb(var(--text-rgb) / 0.09);
   border-radius: var(--r);
   box-shadow:
@@ -777,7 +775,7 @@ button.card:hover {
     "plan plan hot"
     "quick quick hot"
     "week week focus"
-    "notes notes music";
+    "notes alarms music";
   gap: 18px;
 }
 .today-grid .setup {
@@ -803,6 +801,9 @@ button.card:hover {
 }
 .today-grid .notes-card {
   grid-area: notes;
+}
+.today-grid .alarms-card {
+  grid-area: alarms;
 }
 .today-grid .card:nth-child(2) {
   animation-delay: 0.05s;
@@ -843,7 +844,9 @@ button.card:hover {
   background: rgb(var(--text-rgb) / 0.045);
   border: 1px solid rgb(var(--text-rgb) / 0.06);
   animation: rise 0.5s var(--ease) both;
-  transition: background 0.2s, transform 0.3s var(--spring);
+  transition:
+    background 0.2s,
+    transform 0.3s var(--spring);
 }
 .plan-step:hover {
   background: rgb(var(--text-rgb) / 0.075);
@@ -902,7 +905,9 @@ button.card:hover {
   text-align: left;
   background: rgb(var(--text-rgb) / 0.045);
   border: 1px solid rgb(var(--text-rgb) / 0.06);
-  transition: background 0.2s, transform 0.3s var(--spring);
+  transition:
+    background 0.2s,
+    transform 0.3s var(--spring);
 }
 .setup-item:hover {
   background: rgb(var(--accent-rgb) / 0.12);
@@ -1599,8 +1604,7 @@ button.card:hover {
   color: rgb(var(--text-rgb) / 0.7);
   background:
     radial-gradient(circle at 30% 20%, rgb(var(--accent-rgb) / 0.55), transparent 60%),
-    radial-gradient(circle at 80% 90%, rgb(var(--accent-2-rgb) / 0.45), transparent 60%),
-    var(--bg-2);
+    radial-gradient(circle at 80% 90%, rgb(var(--accent-2-rgb) / 0.45), transparent 60%), var(--bg-2);
   font-family: var(--display);
   font-weight: 600;
   font-size: 15px;
@@ -1997,13 +2001,6 @@ button.card:hover {
   box-shadow:
     0 0 0 3px rgb(0 0 0 / 0.6),
     inset 0 0 30px rgb(0 0 0 / 0.35);
-}
-.disc-hole {
-  position: absolute;
-  inset: 48.6%;
-  border-radius: 50%;
-  background: #050506;
-  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
 }
 /* Блик не крутится вместе с диском — так пластинка выглядит настоящей */
 .disc-sheen {
@@ -2786,7 +2783,7 @@ button.card:hover {
       "quick quick"
       "focus music"
       "week week"
-      "notes notes";
+      "notes alarms";
   }
   .setup-items {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2884,7 +2881,9 @@ code {
   color: var(--muted);
   margin: -8px 0 18px;
   overflow: hidden;
-  transition: border-color 0.2s, box-shadow 0.25s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.25s;
 }
 .link-bar:focus-within {
   border-color: rgb(var(--accent-rgb) / 0.7);
@@ -3215,4 +3214,325 @@ html.mini-mode[data-platform="win32"] .mini-win {
 .mini-controls .mini-open {
   margin-left: auto;
   color: var(--muted);
+}
+
+/* v0.5: громкость в плеере, скорость звука, «поймать» текст */
+.np-controls-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.np-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.np-side.right {
+  justify-content: flex-end;
+}
+.np-volume {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 170px;
+  min-width: 110px;
+  flex-shrink: 1;
+}
+.np-volume .slider {
+  flex: 1;
+  min-width: 60px;
+}
+.np-side.right .sleep-menu {
+  left: auto;
+  right: -40px;
+  transform: none;
+}
+.level-menu {
+  min-width: 280px;
+  padding: 12px;
+  gap: 6px;
+}
+.level-title {
+  font-weight: 700;
+  font-size: 14px;
+  padding: 2px 4px;
+}
+.level-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 12px;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.level-info button {
+  padding: 4px 8px;
+  font-family: var(--body, inherit);
+  font-size: 12px;
+  color: var(--muted);
+}
+.level-auto {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 6px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgb(var(--text-rgb) / 0.08);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.level-auto small {
+  display: block;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12px;
+  margin-top: 2px;
+}
+.sound-menu {
+  min-width: 230px;
+}
+.sleep-menu button.on {
+  color: var(--accent);
+  background: rgb(var(--accent-rgb) / 0.1);
+}
+.rate-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.rate-row b {
+  font-family: var(--mono);
+  color: var(--text);
+  min-width: 44px;
+  text-align: right;
+}
+.lyr-shift .catch {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid rgb(var(--text-rgb) / 0.08);
+}
+.lyr-shift.syncing {
+  color: var(--accent);
+  border-color: rgb(var(--accent-rgb) / 0.5);
+  background: rgb(var(--accent-rgb) / 0.12);
+}
+.lyr-shift.syncing .catch {
+  color: var(--accent);
+}
+@media (max-width: 1100px) {
+  .np-volume {
+    width: 120px;
+  }
+  .np-controls {
+    gap: 12px;
+  }
+}
+
+/* Звонящее напоминание */
+.alarm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  background: rgb(var(--bg-rgb) / 0.72);
+  animation: rise 0.3s var(--ease) both;
+}
+.alarm-card {
+  width: min(520px, calc(100vw - 48px));
+  padding: 34px 32px 26px;
+  border-radius: 28px;
+  text-align: center;
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  animation: pop 0.4s var(--spring) both;
+}
+.alarm-icon {
+  width: 84px;
+  height: 84px;
+  margin: 0 auto 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  animation: alarm-wiggle 0.9s ease-in-out infinite;
+}
+@keyframes alarm-wiggle {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(-12deg);
+  }
+  40% {
+    transform: rotate(10deg);
+  }
+  60% {
+    transform: rotate(-6deg);
+  }
+}
+.alarm-text {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: pre-line;
+  max-height: 40vh;
+  overflow: auto;
+}
+.alarm-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 24px;
+}
+.alarm-actions .btn {
+  min-width: 150px;
+  height: 46px;
+}
+
+/* Звуки напоминаний */
+.alarm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 14px 0 6px;
+}
+.alarm-opt {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgb(var(--text-rgb) / 0.05);
+  border: 1px solid rgb(var(--text-rgb) / 0.08);
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    transform 0.2s var(--spring);
+}
+.alarm-opt:hover {
+  background: rgb(var(--text-rgb) / 0.09);
+  transform: translateY(-1px);
+}
+.alarm-opt.on {
+  border-color: rgb(var(--accent-rgb) / 0.7);
+  background: rgb(var(--accent-rgb) / 0.12);
+}
+.ao-play {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: rgb(var(--text-rgb) / 0.1);
+}
+.alarm-opt.on .ao-play {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.ao-name {
+  font-weight: 700;
+  font-size: 14px;
+}
+.ao-hint {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.btn.sm-link {
+  height: 32px;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+/* Свои напоминания на «Сегодня» */
+.alarms-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.alarm-add {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.alarm-add .input.time {
+  width: 128px;
+  font-family: var(--mono);
+}
+.alarm-add .btn {
+  margin-left: auto;
+  height: 36px;
+}
+.alarm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.alarm-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  padding: 4px 4px 4px 10px;
+  border-radius: 10px;
+  background: rgb(var(--text-rgb) / 0.05);
+}
+.alarm-item b {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+}
+.alarm-item span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.alarm-item .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+
+/* Пресеты фокуса */
+.preset-about {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.focus-guide ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.focus-guide li::marker {
+  color: var(--accent);
+}
+.focus-music {
+  padding: 0 6px;
+}
+.chip-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

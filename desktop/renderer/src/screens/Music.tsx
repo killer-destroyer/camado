@@ -5,7 +5,7 @@ import type { Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import { useStore } from "../lib/store";
-import { toast } from "../state/app";
+import { app, toast } from "../state/app";
 import { player, playQueue, shuffleAll } from "../state/player";
 import { CoverFlow } from "../components/CoverFlow";
 import { Empty } from "../components/ui";
@@ -182,7 +182,7 @@ export function Music() {
         </Empty>
       ) : (
         <>
-          {list.length > 0 && <CoverFlow tracks={list} playingIndex={playingIndex} onPlay={(i) => play(list, i)} />}
+          {list.length > 0 && <CoverFlow tracks={list} playingIndex={playingIndex} onPlay={(i) => play(list, i)} onOpen={() => app.set({ nowPlaying: true })} />}
           <div className="track-list glass">
             {list.slice(0, 400).map((t, i) => (
               <button key={t.id} className={`track-row ${t.id === playingId ? "playing" : ""}`} onClick={() => play(list, i)}>

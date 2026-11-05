@@ -15,7 +15,8 @@ import {
 } from "electron";
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { copyFile, mkdir } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
@@ -284,6 +285,21 @@ const handlers: Record<string, Handler> = {
   "library.rescan": () => library.rescan(),
 
   "lyrics.get": (q: Parameters<LyricsService["get"]>[0]) => lyrics.get(q),
+
+  "alarm.pickSound": async () => {
+    const res = await dialog.showOpenDialog(win!, {
+      title: "Свой звук для напоминаний",
+      properties: ["openFile"],
+      filters: [{ name: "Звук", extensions: ["mp3", "m4a", "aac", "wav", "ogg", "opus", "flac", "webm"] }],
+    });
+    const src = res.filePaths[0];
+    if (res.canceled || !src) return null;
+    const dir = join(dataDir, "sounds");
+    await mkdir(dir, { recursive: true });
+    const name = `custom${extname(src).toLowerCase()}`;
+    await copyFile(src, join(dir, name));
+    return { name: basename(src), url: `camado-media://sound/${name}?v=${Date.now()}` };
+  },
 
   "music.importUrl": async (url: string) => {
     const dir = join(app.getPath("music"), "Камадо");
@@ -663,7 +679,14 @@ void app.whenReady().then(async () => {
   protocol.handle("camado-media", (req) => {
     const url = new URL(req.url);
     const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
-    const path = url.hostname === "track" ? library.trackPath(name) : url.hostname === "cover" ? library.coverPath(name) : undefined;
+    const path =
+      url.hostname === "track"
+        ? library.trackPath(name)
+        : url.hostname === "cover"
+          ? library.coverPath(name)
+          : url.hostname === "sound" && /^custom\.[a-z0-9]{2,5}$/.test(name)
+            ? join(dataDir, "sounds", name)
+            : undefined;
     if (!path) return new Response("not found", { status: 404 });
     return serveFile(path, req.headers.get("range"));
   });

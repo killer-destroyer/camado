@@ -88,8 +88,8 @@ export class LyricsService {
 
     await mkdir(this.cacheDir, { recursive: true });
     const key = createHash("sha1")
-      // v2: после улучшения поиска старые «не нашлось» больше не действуют
-      .update(`v2|${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
+      // v3: после улучшения поиска старые результаты больше не действуют
+      .update(`v3|${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
       .digest("hex");
     const cacheFile = join(this.cacheDir, `${key}.json`);
     if (existsSync(cacheFile)) {
@@ -151,7 +151,9 @@ export class LyricsService {
   private async fromLrclib(q: LyricsQuery): Promise<Lyrics> {
     const near = (r: LrclibRecord) => !q.duration || !r.duration || Math.abs(r.duration - q.duration) <= 5;
     const pick = (list: LrclibRecord[]) => {
-      const ok = list.filter((r) => !r.instrumental);
+      // Одну песню в базу часто заливают много раз с разной длиной — берём ту, что ближе всего к нашему файлу.
+      const diff = (r: LrclibRecord) => (q.duration && r.duration ? Math.abs(r.duration - q.duration) : 0);
+      const ok = list.filter((r) => !r.instrumental).sort((a, b) => diff(a) - diff(b));
       const best = ok.find((r) => r.syncedLyrics && near(r)) ?? ok.find((r) => r.plainLyrics && near(r));
       return best ? fromRecord(best) : undefined;
     };

@@ -1,6 +1,6 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { useEffect, useState } from "react";
-import { Check, Download, FolderPlus, KeyRound, RefreshCw, Trash2 } from "lucide-react";
+import { AlarmClock, Check, Download, FolderPlus, KeyRound, Music4, Play, RefreshCw, Square, Trash2 } from "lucide-react";
 import type { AiStatus, BotStatus } from "../../../shared/types";
 import type { AppSettings } from "../../../shared/settings";
 import { api } from "../lib/api";
@@ -8,8 +8,10 @@ import { fps } from "../lib/frame";
 import { PALETTES } from "../lib/palettes";
 import { useStore } from "../lib/store";
 import { app, toast, updateSettings } from "../state/app";
-import { player } from "../state/player";
+import { player, setAutoLevel } from "../state/player";
 import { Row, Segmented, Slider, Toggle } from "../components/ui";
+import { ALARM_SOUNDS, alarmPlaying, startAlarm, stopAlarm } from "../lib/alarmSounds";
+import { ring } from "../state/alarms";
 
 function PaletteGrid({ s }: { s: AppSettings }) {
   return (
@@ -18,7 +20,10 @@ function PaletteGrid({ s }: { s: AppSettings }) {
         <button
           key={p.id}
           className={`pal ${s.palette === p.id && !s.coverColors ? "active" : ""}`}
-          style={{ background: `radial-gradient(120% 90% at 20% 10%, ${p.accent}55, transparent 60%), radial-gradient(90% 90% at 90% 90%, ${p.accent2}44, transparent 60%), ${p.bg}`, color: p.text }}
+          style={{
+            background: `radial-gradient(120% 90% at 20% 10%, ${p.accent}55, transparent 60%), radial-gradient(90% 90% at 90% 90%, ${p.accent2}44, transparent 60%), ${p.bg}`,
+            color: p.text,
+          }}
           onClick={() => updateSettings({ palette: p.id, coverColors: false })}
         >
           <span className="pal-dots">
@@ -113,7 +118,10 @@ function AiSection() {
   return (
     <section className="set-section glass">
       <h3>ИИ (Claude)</h3>
-      <Row title={st?.enabled ? `Включён, ключ ${st.keyHint ?? ""}` : "Выключен — ручной режим"} hint={st ? `Потрачено в этом месяце ~$${st.spentUsd.toFixed(2)} из $${st.budgetUsd} · модель ${st.model}` : ""}>
+      <Row
+        title={st?.enabled ? `Включён, ключ ${st.keyHint ?? ""}` : "Выключен — ручной режим"}
+        hint={st ? `Потрачено в этом месяце ~$${st.spentUsd.toFixed(2)} из $${st.budgetUsd} · модель ${st.model}` : ""}
+      >
         {st?.enabled && (
           <button className="btn" onClick={() => void api.ai.clearKey().then(load)}>
             Выключить
@@ -122,15 +130,27 @@ function AiSection() {
       </Row>
       <div className="key-row">
         <KeyRound size={17} />
-        <input className="input" type="password" placeholder="sk-ant-… (console.anthropic.com → API Keys)" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void save()} />
+        <input
+          className="input"
+          type="password"
+          placeholder="sk-ant-… (console.anthropic.com → API Keys)"
+          value={key}
+          onChange={(e) => setKey(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && void save()}
+        />
         <button className="btn primary" disabled={!key || busy} onClick={() => void save()}>
           {busy ? "Проверяю…" : "Подключить"}
         </button>
       </div>
       <div className="set-hint">
-        Ключ берётся на сайте Anthropic: войди, пополни баланс, затем API Keys → Create Key. Он проверяется бесплатным запросом и хранится только у тебя на компьютере.
+        Ключ берётся на сайте Anthropic: войди, пополни баланс, затем API Keys → Create Key. Он проверяется бесплатным запросом и хранится
+        только у тебя на компьютере.
       </div>
-      <button className="btn" style={{ marginTop: 10 }} onClick={() => window.open("https://console.anthropic.com/settings/keys", "_blank")}>
+      <button
+        className="btn"
+        style={{ marginTop: 10 }}
+        onClick={() => window.open("https://console.anthropic.com/settings/keys", "_blank")}
+      >
         Открыть сайт Anthropic
       </button>
     </section>
@@ -168,10 +188,20 @@ function DiscordSection({ s }: { s: AppSettings }) {
               </button>
             </li>
             <li>
-              Скопируй <b>Application ID</b> и вставь сюда. (По желанию: во вкладке Rich Presence → Art Assets загрузи иконку с именем <code>camado</code>.)
+              Скопируй <b>Application ID</b> и вставь сюда. (По желанию: во вкладке Rich Presence → Art Assets загрузи иконку с именем{" "}
+              <code>camado</code>.)
               <div className="key-row">
-                <input className="input" placeholder="Application ID, например 1234567890123456789" value={id} onChange={(e) => setId(e.target.value.replace(/\D/g, ""))} />
-                <button className="btn primary" disabled={!id || id === s.discord.clientId} onClick={() => updateSettings({ discord: { ...s.discord, clientId: id } })}>
+                <input
+                  className="input"
+                  placeholder="Application ID, например 1234567890123456789"
+                  value={id}
+                  onChange={(e) => setId(e.target.value.replace(/\D/g, ""))}
+                />
+                <button
+                  className="btn primary"
+                  disabled={!id || id === s.discord.clientId}
+                  onClick={() => updateSettings({ discord: { ...s.discord, clientId: id } })}
+                >
                   Сохранить
                 </button>
               </div>
@@ -230,7 +260,13 @@ function BotSection({ s }: { s: AppSettings }) {
           <li>
             <b>Вставь сюда токен</b>, который пришлёт BotFather (длинная строка вида <code>123456789:AAF…</code>).
             <div className="key-row">
-              <input className="input" placeholder="123456789:AAF…" value={token} onChange={(e) => setToken(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void connect()} />
+              <input
+                className="input"
+                placeholder="123456789:AAF…"
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && void connect()}
+              />
               <button className="btn primary" disabled={!token || busy} onClick={() => void connect()}>
                 {busy ? "Проверяю…" : "Подключить"}
               </button>
@@ -242,7 +278,8 @@ function BotSection({ s }: { s: AppSettings }) {
       {st?.configured && !st.paired && (
         <div className="pairing">
           <div>
-            <b>Последний шаг:</b> открой своего бота{st.username ? ` @${st.username}` : ""} и отправь ему этот код — так он запомнит, что ты хозяин.
+            <b>Последний шаг:</b> открой своего бота
+            {st.username ? ` @${st.username}` : ""} и отправь ему этот код — так он запомнит, что ты хозяин.
           </div>
           <div className="pair-code">{code}</div>
           {st.username && (
@@ -271,6 +308,94 @@ function BotSection({ s }: { s: AppSettings }) {
           Отключить бота
         </button>
       )}
+    </section>
+  );
+}
+
+/** Звук напоминаний: 10 своих звуков, свой файл, нарастание громкости. */
+function AlarmSection({ s }: { s: AppSettings }) {
+  const a = s.alarm;
+  const [preview, setPreview] = useState<string | null>(null);
+  const set = (patch: Partial<AppSettings["alarm"]>) => updateSettings({ alarm: { ...a, ...patch } });
+  useEffect(() => () => stopAlarm(), []);
+  const listen = (id: string) => {
+    if (preview === id && alarmPlaying()) {
+      stopAlarm();
+      setPreview(null);
+      return;
+    }
+    set({ sound: id });
+    setPreview(id);
+    startAlarm({
+      sound: id,
+      ramp: 0,
+      volume: a.volume,
+      customUrl: a.customUrl,
+      once: true,
+    });
+    setTimeout(() => setPreview((p) => (p === id ? null : p)), 3500);
+  };
+  const pickCustom = async () => {
+    const r = await api.alarm.pickSound();
+    if (!r) return;
+    updateSettings({
+      alarm: { ...a, sound: "custom", customName: r.name, customUrl: r.url },
+    });
+    toast(`Свой звук: ${r.name}`, "ok");
+  };
+  return (
+    <section className="set-section glass">
+      <h3>Напоминания</h3>
+      <div className="set-hint">Звенит, когда подходит срок задания и для твоих напоминаний на «Сегодня». Нажми звук, чтобы послушать.</div>
+      <div className="alarm-grid">
+        {ALARM_SOUNDS.map((x) => (
+          <button key={x.id} className={`alarm-opt ${a.sound === x.id ? "on" : ""}`} onClick={() => listen(x.id)}>
+            <span className="ao-play">
+              {preview === x.id ? <Square size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+            </span>
+            <span className="ao-name">{x.name}</span>
+            <span className="ao-hint">{x.hint}</span>
+          </button>
+        ))}
+        <button
+          className={`alarm-opt custom ${a.sound === "custom" ? "on" : ""}`}
+          onClick={() => (a.customUrl ? listen("custom") : void pickCustom())}
+        >
+          <span className="ao-play">
+            <Music4 size={14} />
+          </span>
+          <span className="ao-name">{a.customName ? "Свой звук" : "Свой звук…"}</span>
+          <span className="ao-hint">{a.customName || "выбрать файл"}</span>
+        </button>
+      </div>
+      {a.customUrl && (
+        <button className="btn sm-link" onClick={() => void pickCustom()}>
+          Выбрать другой файл
+        </button>
+      )}
+      <Row
+        title="Громкость нарастает"
+        hint={a.ramp ? `Начинает еле слышно и за ${a.ramp} с становится громким — не пугает` : "Сразу на полную"}
+      >
+        <Segmented
+          size="sm"
+          value={a.ramp}
+          onChange={(v) => set({ ramp: v })}
+          options={[
+            { value: 0, label: "сразу" },
+            { value: 5, label: "5 с" },
+            { value: 10, label: "10 с" },
+            { value: 20, label: "20 с" },
+            { value: 30, label: "30 с" },
+          ]}
+        />
+      </Row>
+      <Row title="Громкость напоминаний">
+        <Slider value={a.volume} step={0.01} onChange={(v) => set({ volume: v })} label="Громкость напоминаний" />
+      </Row>
+      <button className="btn" onClick={() => ring("⏰ Проверка: так будет звучать напоминание")}>
+        <AlarmClock size={16} /> Проверить, как звенит
+      </button>
     </section>
   );
 }
@@ -314,7 +439,10 @@ export function Settings() {
 
       <section className="set-section glass">
         <h3>Плавность</h3>
-        <Row title="Частота кадров" hint={`Твой монитор: ${info.refreshRate} Гц. «Авто» — подстраивается под монитор (60, 144, 165…). Сейчас: `}>
+        <Row
+          title="Частота кадров"
+          hint={`Твой монитор: ${info.refreshRate} Гц. «Авто» — подстраивается под монитор (60, 144, 165…). Сейчас: `}
+        >
           <Segmented
             size="sm"
             value={s.fpsCap}
@@ -363,7 +491,16 @@ export function Settings() {
             ]}
           />
         </Row>
-        <Row title="Плавный переход между треками" hint={s.crossfade ? `${s.crossfade} с — песни перетекают одна в другую` : "Выключен — треки сменяются сразу"}>
+        <Row
+          title="Выравнивать громкость песен"
+          hint="Скачанные треки записаны по-разному. Камадо измеряет каждую песню: тихие подтягивает, громкие приглушает. Подстроить одну песню — кнопка с ползунками в плеере."
+        >
+          <Toggle value={s.autoLevel} onChange={setAutoLevel} />
+        </Row>
+        <Row
+          title="Плавный переход между треками"
+          hint={s.crossfade ? `${s.crossfade} с — песни перетекают одна в другую` : "Выключен — треки сменяются сразу"}
+        >
           <Slider value={s.crossfade} min={0} max={12} step={1} onChange={(v) => updateSettings({ crossfade: v })} />
         </Row>
         <Row title="Звук" hint="Slowed + reverb — медленнее, ниже и с эхом. Nightcore — быстрее и выше.">
@@ -378,13 +515,27 @@ export function Settings() {
             ]}
           />
         </Row>
+        {s.soundMode !== "normal" && (
+          <Row
+            title={s.soundMode === "slowed" ? "Скорость slowed" : "Скорость nightcore"}
+            hint="Можно менять и прямо в плеере, кнопкой режима звука."
+          >
+            {s.soundMode === "slowed" ? (
+              <Slider value={s.slowedRate} min={0.7} max={0.95} step={0.01} onChange={(v) => updateSettings({ slowedRate: v })} />
+            ) : (
+              <Slider value={s.nightcoreRate} min={1.05} max={1.4} step={0.01} onChange={(v) => updateSettings({ nightcoreRate: v })} />
+            )}
+          </Row>
+        )}
         <Row title="Размер текста">
           <Slider value={s.lyricsSize} min={0.7} max={1.4} step={0.05} onChange={(v) => updateSettings({ lyricsSize: v })} />
         </Row>
-        
+
         <div className="folders">
           <div className="set-title">Папки с музыкой</div>
-          <div className="set-hint">Камадо следит за ними: скачал трек в такую папку любым способом — через пару секунд он появится в библиотеке.</div>
+          <div className="set-hint">
+            Камадо следит за ними: скачал трек в такую папку любым способом — через пару секунд он появится в библиотеке.
+          </div>
           {folders.map((f) => (
             <div key={f} className="folder">
               <span>{f}</span>
@@ -398,6 +549,8 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      <AlarmSection s={s} />
 
       <section className="set-section glass">
         <h3>Тряска в такт</h3>

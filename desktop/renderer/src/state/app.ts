@@ -56,9 +56,14 @@ export function go(screen: ScreenId): void {
 function applySettings(s: AppSettings): void {
   setFpsCap(s.fpsCap);
   engine.shakeEnabled = s.shake.enabled;
-  engine.shakeOpts = { intensity: s.shake.intensity, rotation: s.shake.rotation, zoom: s.shake.zoom };
+  engine.shakeOpts = {
+    intensity: s.shake.intensity,
+    rotation: s.shake.rotation,
+    zoom: s.shake.zoom,
+  };
   engine.beat.sensitivity = s.shake.sensitivity;
   engine.volume = s.volume;
+  engine.setRates(s.slowedRate, s.nightcoreRate);
   engine.setMode(s.soundMode);
   document.documentElement.dataset.blur = s.blur ? "1" : "0";
   document.documentElement.style.setProperty("--lyrics-scale", String(s.lyricsSize));
@@ -71,7 +76,8 @@ export async function initApp(): Promise<void> {
   api.on("update-status", (u) => {
     const was = app.get().update.state;
     app.set({ update: u });
-    if (u.state === "ready" && was !== "ready") toast(`Новая версия ${u.version} скачана — перезапусти Камадо в Настройках или из полоски сверху.`, "ok");
+    if (u.state === "ready" && was !== "ready")
+      toast(`Новая версия ${u.version} скачана — перезапусти Камадо в Настройках или из полоски сверху.`, "ok");
   });
   applySettings(settings);
   document.documentElement.dataset.platform = info.platform;

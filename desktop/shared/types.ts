@@ -180,9 +180,15 @@ export interface CamadoApi {
   lyrics: {
     get(query: LyricsQuery): Promise<Lyrics>;
   };
+  alarm: {
+    /** Выбрать свой звук для напоминаний: копируется к Камадо, возвращает название и адрес. */
+    pickSound(): Promise<{ name: string; url: string } | null>;
+  };
   music: {
     /** Скачать по ссылке в папку «Музыка/Камадо». Для страницы с несколькими треками вернёт список. */
-    importUrl(url: string): Promise<
+    importUrl(
+      url: string,
+    ): Promise<
       | { kind: "saved"; file: string; name: string }
       | { kind: "choose"; links: { url: string; name: string }[] }
       | { kind: "error"; error: string }

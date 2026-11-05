@@ -55,6 +55,7 @@ const api: CamadoApi = {
     rescan: call("library.rescan") as CamadoApi["library"]["rescan"],
   },
   lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"] },
+  alarm: { pickSound: call("alarm.pickSound") as CamadoApi["alarm"]["pickSound"] },
   music: { importUrl: call("music.importUrl") as CamadoApi["music"]["importUrl"] },
   overlay: {
     toggle: call("overlay.toggle") as CamadoApi["overlay"]["toggle"],

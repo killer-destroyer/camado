@@ -9,24 +9,34 @@ import { useFrame } from "../lib/frame";
 
 const WINDOW = 7; // сколько обложек по сторонам держим на экране
 const AUTOPLAY_MS = 1200;
-const MAX_VEL = 9; // обложек в секунду
+const MAX_VEL = 14; // обложек в секунду
+const DRAG_PX = 0.5; // сколько ширин обложки нужно протащить мышью на одну обложку (меньше — легче)
 
 export function CoverFlow({
   tracks,
   playingIndex,
   onPlay,
+  onOpen,
 }: {
   tracks: Track[];
   /** Индекс играющего трека в этом списке (−1, если играет что-то не отсюда). */
   playingIndex: number;
   onPlay: (index: number) => void;
+  /** Клик по центральной обложке — открыть «Сейчас играет». */
+  onOpen?: () => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const countdown = useRef<HTMLDivElement>(null);
   const pos = useRef(Math.max(0, playingIndex));
   const vel = useRef(0);
   const target = useRef<number | null>(null);
-  const dragging = useRef<{ x: number; pos: number; lastX: number; lastT: number; moved: number } | null>(null);
+  const dragging = useRef<{
+    x: number;
+    pos: number;
+    lastX: number;
+    lastT: number;
+    moved: number;
+  } | null>(null);
   const items = useRef(new Map<number, HTMLDivElement>());
   const lastWritten = useRef(new Map<number, string>());
   const userMoved = useRef(false);
@@ -37,6 +47,8 @@ export function CoverFlow({
   playingRef.current = playingIndex;
   const onPlayRef = useRef(onPlay);
   onPlayRef.current = onPlay;
+  const onOpenRef = useRef(onOpen);
+  onOpenRef.current = onOpen;
   const n = tracks.length;
 
   // Трек сменился не из карусели (кнопка «дальше», список) — подъезжаем к нему, но ничего не включаем.
@@ -61,7 +73,7 @@ export function CoverFlow({
       } else {
         // инерция с заметным трением и мягкая доводка до ближайшей обложки
         pos.current += vel.current * dt;
-        vel.current = damp(vel.current, 0, 5.5, dt);
+        vel.current = damp(vel.current, 0, 4.2, dt);
         if (Math.abs(vel.current) < 1.5) pos.current = damp(pos.current, Math.round(pos.current), 10, dt);
         if (pos.current < 0 || pos.current > n - 1) {
           pos.current = damp(pos.current, clamp(pos.current), 14, dt);
@@ -101,28 +113,31 @@ export function CoverFlow({
     const w = root.current?.clientWidth ?? 1200;
     const size = Math.min(300, w * 0.24);
     root.current?.style.setProperty("--cf", `${size}px`);
-    for (const [i, el] of items.current) {
-      const off = i - pos.current;
-      const a = Math.abs(off);
-      const sign = Math.sign(off);
-      const x = a < 1 ? off * size * 0.82 : sign * (size * 0.82 + (a - 1) * size * 0.34);
-      const rot = -Math.max(-1, Math.min(1, off)) * 62;
-      const z = -Math.min(a, 6) * 110 - (a < 1 ? 0 : 60);
-      const scale = a < 1 ? 1.12 - a * 0.12 : 1;
-      // Порядок по глубине — по индексу относительно центра: у соседей никогда не совпадает, ничего не мигает.
-      const zIndex = String(1000 - Math.abs(i - c) * 2 - (i < c ? 1 : 0));
-      const shade = a > 0.6 ? Math.min(0.55, a * 0.1).toFixed(2) : "0";
-      const opacity = Math.max(0, 1 - Math.max(0, a - 4.5) * 0.6).toFixed(2);
-      const transform = `translate3d(${x.toFixed(1)}px, 0, ${z.toFixed(1)}px) rotateY(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
-      const key = `${transform}|${zIndex}|${shade}|${opacity}`;
-      if (lastWritten.current.get(i) === key) continue; // ничего не поменялось — не трогаем DOM
-      lastWritten.current.set(i, key);
-      el.style.transform = transform;
-      el.style.zIndex = zIndex;
-      el.style.opacity = opacity;
-      el.style.setProperty("--shade", shade);
-    }
+    for (const [i, el] of items.current) place(i, el, size, c);
   }, 15);
+
+  /** Поставить обложку на её место в 3D. Пишем в DOM, только если что-то поменялось. */
+  function place(i: number, el: HTMLDivElement, size: number, c: number): void {
+    const off = i - pos.current;
+    const a = Math.abs(off);
+    const sign = Math.sign(off);
+    const x = a < 1 ? off * size * 0.82 : sign * (size * 0.82 + (a - 1) * size * 0.34);
+    const rot = -Math.max(-1, Math.min(1, off)) * 62;
+    const z = -Math.min(a, 6) * 110 - (a < 1 ? 0 : 60);
+    const scale = a < 1 ? 1.12 - a * 0.12 : 1;
+    // Порядок по глубине — по индексу относительно центра: у соседей никогда не совпадает, ничего не мигает.
+    const zIndex = String(1000 - Math.abs(i - c) * 2 - (i < c ? 1 : 0));
+    const shade = a > 0.6 ? Math.min(0.55, a * 0.1).toFixed(2) : "0";
+    const opacity = Math.max(0, 1 - Math.max(0, a - 4.5) * 0.6).toFixed(2);
+    const transform = `translate3d(${x.toFixed(1)}px, 0, ${z.toFixed(1)}px) rotateY(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+    const key = `${transform}|${zIndex}|${shade}|${opacity}`;
+    if (lastWritten.current.get(i) === key) return;
+    lastWritten.current.set(i, key);
+    el.style.transform = transform;
+    el.style.zIndex = zIndex;
+    el.style.opacity = opacity;
+    el.style.setProperty("--shade", shade);
+  }
 
   const go = (i: number) => {
     vel.current = 0;
@@ -139,7 +154,7 @@ export function CoverFlow({
       e.preventDefault();
       target.current = null;
       userMoved.current = true;
-      vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current + e.deltaX * 0.012));
+      vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current + e.deltaX * 0.022));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -168,14 +183,20 @@ export function CoverFlow({
         onPointerDown={(e) => {
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           target.current = null;
-          dragging.current = { x: e.clientX, pos: pos.current, lastX: e.clientX, lastT: performance.now(), moved: 0 };
+          dragging.current = {
+            x: e.clientX,
+            pos: pos.current,
+            lastX: e.clientX,
+            lastT: performance.now(),
+            moved: 0,
+          };
           vel.current = 0;
         }}
         onPointerMove={(e) => {
           const d = dragging.current;
           if (!d) return;
-          // «Тяжёлый» свайп: одна обложка — на ширину почти целой обложки движения мышью.
-          const size = Math.min(300, (root.current?.clientWidth ?? 1200) * 0.24);
+          // Одна обложка — на полширины обложки движения мышью: листается легко, но не улетает.
+          const size = Math.min(300, (root.current?.clientWidth ?? 1200) * 0.24) * DRAG_PX;
           pos.current = d.pos - (e.clientX - d.x) / size;
           const now = performance.now();
           const dtm = Math.max(1, now - d.lastT);
@@ -195,8 +216,11 @@ export function CoverFlow({
             if (hit) {
               const i = Number(hit.dataset.i);
               userMoved.current = false;
-              if (i === centerRef.current) onPlay(i);
-              else {
+              if (i === centerRef.current) {
+                // Клик по центральной обложке: включить (если ещё не играет) и открыть плеер.
+                if (i !== playingRef.current) onPlay(i);
+                onOpenRef.current?.();
+              } else {
                 target.current = clamp(i);
                 vel.current = 0;
                 // по боковой — подъехать и сразу включить
@@ -214,8 +238,14 @@ export function CoverFlow({
                 key={tr.id}
                 data-i={i}
                 ref={(el) => {
-                  if (el) items.current.set(i, el);
-                  else {
+                  if (el) {
+                    items.current.set(i, el);
+                    // Сразу на своё место — иначе новая обложка на один кадр появляется в центре поверх других.
+                    if (!lastWritten.current.has(i)) {
+                      const size = Math.min(300, (root.current?.clientWidth ?? 1200) * 0.24);
+                      place(i, el, size, Math.round(clamp(pos.current)));
+                    }
+                  } else {
                     items.current.delete(i);
                     lastWritten.current.delete(i);
                   }

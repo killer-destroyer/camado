@@ -6,7 +6,8 @@ import { activeLineIndex, timedWords } from "../../../shared/lrc";
 import { engine } from "../lib/audio";
 import { damp, layoutBurst, type BurstWord } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
-import { duration, lyricsTime, seek } from "../state/player";
+import { useStore } from "../lib/store";
+import { catchLyricsLine, duration, lyricsTime, player, seek } from "../state/player";
 
 // Совсем чуть-чуть раньше звука: глаз успевает прочитать к моменту, когда слово прозвучит.
 // Задержку самого звука (Bluetooth и т. п.) уже вычитает lyricsTime().
@@ -90,7 +91,11 @@ function FlowLyrics({ lyrics }: { lyrics: LyricsData }) {
               }}
               className={`lf-line ${i === active ? "active" : ""} ${i < active ? "past" : ""}`}
               data-d={d}
-              onClick={() => lyrics.synced && seek(l.time)}
+              onClick={() => {
+                if (!lyrics.synced) return;
+                if (player.get().syncLyrics) catchLyricsLine(l.time);
+                else seek(l.time);
+              }}
             >
               {i === active && lyrics.synced ? <WordSpans ref={karaoke} words={words} /> : l.text}
             </div>
@@ -122,7 +127,10 @@ function BurstLyrics({ lyrics }: { lyrics: LyricsData }) {
     if (!el || active < 0) return;
     const words = timedWords(lyrics.lines, active, duration());
     const base = Math.min(el.clientWidth, el.clientHeight) * 0.075;
-    const line = { idx: active, words: layoutBurst(words, active + 1, el.clientWidth, el.clientHeight, base, false) };
+    const line = {
+      idx: active,
+      words: layoutBurst(words, active + 1, el.clientWidth, el.clientHeight, base, false),
+    };
     setPrev(curRef.current);
     curRef.current = line;
     setCur(line);
@@ -195,7 +203,11 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
 
 /** Текст песни. Нет текста или он ещё ищется — ничего не показываем (без надписей). */
 export function Lyrics({ lyrics, mode }: { lyrics?: LyricsData; loading?: boolean; mode: LyricsMode }) {
-  if (mode === "off" || !lyrics || lyrics.lines.length === 0) return null;
+  const syncing = useStore(player, (s) => !!s.syncLyrics);
+  if (!lyrics || lyrics.lines.length === 0) return null;
+  // Пока подгоняем текст, нужен список строк, по которым можно нажать.
+  if (syncing && lyrics.synced) return <FlowLyrics lyrics={lyrics} />;
+  if (mode === "off") return null;
   if (mode === "burst") return <BurstLyrics lyrics={lyrics} />;
   if (mode === "line") return <LineLyrics lyrics={lyrics} />;
   return <FlowLyrics lyrics={lyrics} />;

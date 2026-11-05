@@ -8,6 +8,7 @@ import { app, updateSettings } from "../state/app";
 import { data } from "../state/data";
 import { focus, focusToday, pause, remainingMs, reset, setMode, start, type FocusMode } from "../state/focus";
 import { Segmented, Slider, Toggle } from "../components/ui";
+import { FOCUS_PRESETS, presetById } from "../../../shared/focusPresets";
 
 const R = 150;
 const C = 2 * Math.PI * R;
@@ -34,7 +35,12 @@ export function Focus() {
   });
 
   const max = Math.max(30, ...week.map((d) => d.minutes));
-  const label: Record<FocusMode, string> = { work: "Работа", short: "Перерыв", long: "Длинный перерыв" };
+  const preset = presetById(cfg.preset);
+  const label: Record<FocusMode, string> = {
+    work: "Работа",
+    short: "Перерыв",
+    long: "Длинный перерыв",
+  };
 
   return (
     <div className="screen focus">
@@ -43,7 +49,10 @@ export function Focus() {
         <Segmented
           value={s.mode}
           onChange={(m) => !s.running && setMode(m)}
-          options={(["work", "short", "long"] as const).map((m) => ({ value: m, label: label[m] }))}
+          options={(["work", "short", "long"] as const).map((m) => ({
+            value: m,
+            label: label[m],
+          }))}
         />
       </header>
 
@@ -96,29 +105,96 @@ export function Focus() {
 
           <div className="card glass">
             <div className="card-head">
-              <span>Длительность</span>
+              <span>Стратегия</span>
             </div>
-            {(["work", "short", "long"] as const).map((m) => (
-              <div className="dur-row" key={m}>
-                <span>{label[m]}</span>
-                <Slider
-                  value={cfg[m]}
-                  min={m === "work" ? 10 : 1}
-                  max={m === "work" ? 90 : 30}
-                  step={1}
-                  onChange={(v) => {
-                    updateSettings({ focus: { ...cfg, [m]: v } });
-                    if (!s.running && s.mode === m) setTimeout(() => setMode(m), 0);
+            <div className="chips">
+              {FOCUS_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  className={`chip-btn ${cfg.preset === p.id ? "on" : ""}`}
+                  disabled={s.running}
+                  onClick={() => {
+                    updateSettings({
+                      focus: {
+                        ...cfg,
+                        preset: p.id,
+                        work: p.work,
+                        short: p.short,
+                        long: p.long,
+                        longEvery: p.longEvery,
+                      },
+                    });
+                    setTimeout(() => setMode(s.mode), 0);
                   }}
-                />
-                <b>{cfg[m]} мин</b>
-              </div>
-            ))}
-            <label className="inline-toggle">
-              <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
-              включать музыку на старте
-            </label>
+                >
+                  {p.name}
+                </button>
+              ))}
+              <button
+                className={`chip-btn ${cfg.preset === "custom" ? "on" : ""}`}
+                disabled={s.running}
+                onClick={() => updateSettings({ focus: { ...cfg, preset: "custom" } })}
+              >
+                Свой
+              </button>
+            </div>
+            {preset && <div className="preset-about">{preset.about}</div>}
           </div>
+
+          {preset && (
+            <div className="card glass focus-guide">
+              <div className="card-head">
+                <span>{s.mode === "work" ? "Как работать" : "Что делать на перерыве"}</span>
+              </div>
+              <ul>
+                {(s.mode === "work" ? preset.during : preset.rest).map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {cfg.preset === "custom" && (
+            <div className="card glass">
+              <div className="card-head">
+                <span>Длительность</span>
+              </div>
+              {(["work", "short", "long"] as const).map((m) => (
+                <div className="dur-row" key={m}>
+                  <span>{label[m]}</span>
+                  <Slider
+                    value={cfg[m]}
+                    min={m === "work" ? 10 : 1}
+                    max={m === "work" ? 90 : 30}
+                    step={1}
+                    onChange={(v) => {
+                      updateSettings({
+                        focus: { ...cfg, [m]: v, preset: "custom" },
+                      });
+                      if (!s.running && s.mode === m) setTimeout(() => setMode(m), 0);
+                    }}
+                  />
+                  <b>{cfg[m]} мин</b>
+                </div>
+              ))}
+              <div className="dur-row">
+                <span>Длинный после</span>
+                <Slider
+                  value={cfg.longEvery}
+                  min={0}
+                  max={6}
+                  step={1}
+                  onChange={(v) => updateSettings({ focus: { ...cfg, longEvery: v } })}
+                />
+                <b>{cfg.longEvery ? `${cfg.longEvery} сесс.` : "никогда"}</b>
+              </div>
+            </div>
+          )}
+
+          <label className="inline-toggle focus-music">
+            <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
+            включать музыку на старте
+          </label>
 
           <div className="card glass">
             <div className="card-head">

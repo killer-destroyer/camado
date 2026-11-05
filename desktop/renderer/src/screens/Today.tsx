@@ -1,6 +1,7 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
 import { useEffect, useState } from "react";
-import { ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
+import { AlarmClock, ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
+import { addAlarm, removeAlarm } from "../state/alarms";
 import { buildDayPlan } from "../../../shared/plan";
 import type { TaskKind } from "../../../shared/types";
 import { api } from "../lib/api";
@@ -65,7 +66,11 @@ function QuickAdd() {
         <Zap size={18} />
         <span>Быстрая запись</span>
         {aiOn && (
-          <button className={`chip-btn ${viaAi ? "on" : ""}`} onClick={() => setViaAi(!viaAi)} title="Писать обычным текстом — Камадо разберёт">
+          <button
+            className={`chip-btn ${viaAi ? "on" : ""}`}
+            onClick={() => setViaAi(!viaAi)}
+            title="Писать обычным текстом — Камадо разберёт"
+          >
             <Sparkles size={14} /> через Камадо
           </button>
         )}
@@ -90,6 +95,87 @@ function QuickAdd() {
       </div>
     </div>
   );
+}
+
+/** Свои напоминания: «в 18:00 — позвонить маме». Звенят выбранным в Настройках звуком. */
+function Reminders() {
+  const list = useStore(app, (s) => s.settings.alarms);
+  const [text, setText] = useState("");
+  const [time, setTime] = useState(() => {
+    const d = new Date(Date.now() + 60 * 60e3);
+    return `${String(d.getHours()).padStart(2, "0")}:00`;
+  });
+  const [day, setDay] = useState<"today" | "tomorrow">("today");
+  const add = () => {
+    const [h, m] = time.split(":").map(Number) as [number, number];
+    if (!Number.isFinite(h)) return;
+    const at = new Date();
+    at.setHours(h, m || 0, 0, 0);
+    if (day === "tomorrow") at.setDate(at.getDate() + 1);
+    else if (at.getTime() <= Date.now()) at.setDate(at.getDate() + 1); // время уже прошло — значит, завтра
+    addAlarm(text.trim() || "Напоминание", at);
+    toast(`Напомню ${fmtWhen(at)}`, "ok");
+    setText("");
+  };
+  return (
+    <div className="card glass alarms-card">
+      <div className="card-head">
+        <AlarmClock size={18} />
+        <span>Напоминания</span>
+        <button className="link-btn" onClick={() => go("settings")}>
+          звук <ArrowRight size={14} />
+        </button>
+      </div>
+      <input
+        className="input"
+        value={text}
+        placeholder="что напомнить"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && add()}
+      />
+      <div className="alarm-add">
+        <input className="input time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+        <Segmented
+          size="sm"
+          value={day}
+          onChange={setDay}
+          options={[
+            { value: "today", label: "сегодня" },
+            { value: "tomorrow", label: "завтра" },
+          ]}
+        />
+        <button className="btn primary" onClick={add}>
+          Добавить
+        </button>
+      </div>
+      {list.length > 0 && (
+        <div className="alarm-list">
+          {list.slice(0, 5).map((a) => (
+            <div key={a.id} className="alarm-item">
+              <b>{fmtWhen(new Date(a.at))}</b>
+              <span>{a.text}</span>
+              <button className="icon-btn" title="Удалить" onClick={() => removeAlarm(a.id)}>
+                <X size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function fmtWhen(d: Date): string {
+  const t = d.toLocaleTimeString("ru-RU", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  if (d.toDateString() === today.toDateString()) return `сегодня в ${t}`;
+  if (d.toDateString() === tomorrow.toDateString()) return `завтра в ${t}`;
+  return `${d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })} в ${t}`;
 }
 
 function Week() {
@@ -149,7 +235,11 @@ function Plan() {
       <div className="card-head">
         <ListChecks size={18} />
         <span>План на сегодня</span>
-        {total > 0 && <span className="plan-total">≈ {total >= 60 ? `${Math.floor(total / 60)} ч ${total % 60 ? `${total % 60} мин` : ""}` : `${total} мин`}</span>}
+        {total > 0 && (
+          <span className="plan-total">
+            ≈ {total >= 60 ? `${Math.floor(total / 60)} ч ${total % 60 ? `${total % 60} мин` : ""}` : `${total} мин`}
+          </span>
+        )}
       </div>
       {steps.length === 0 ? (
         <div className="calm-state">
@@ -199,10 +289,30 @@ function FirstSteps() {
     void api.bot.status().then((s) => setBot(s.configured && s.paired));
   }, []);
   const items = [
-    { done: tracks > 0, label: "Добавь музыку", hint: "папка, файлы или ссылка", go: "music" as const },
-    { done: tasks > 0, label: "Запиши первое задание", hint: "в «Быстрой записи» ниже", go: "tasks" as const },
-    { done: !!bot, label: "Подключи Telegram-бота", hint: "писать Камадо с телефона", go: "settings" as const },
-    { done: !!ai, label: "Включи ИИ", hint: "понимать обычный текст", go: "settings" as const },
+    {
+      done: tracks > 0,
+      label: "Добавь музыку",
+      hint: "папка, файлы или ссылка",
+      go: "music" as const,
+    },
+    {
+      done: tasks > 0,
+      label: "Запиши первое задание",
+      hint: "в «Быстрой записи» ниже",
+      go: "tasks" as const,
+    },
+    {
+      done: !!bot,
+      label: "Подключи Telegram-бота",
+      hint: "писать Камадо с телефона",
+      go: "settings" as const,
+    },
+    {
+      done: !!ai,
+      label: "Включи ИИ",
+      hint: "понимать обычный текст",
+      go: "settings" as const,
+    },
   ];
   if (hidden || ai === null || bot === null || items.every((i) => i.done)) return null;
   const hide = () => {
@@ -252,7 +362,11 @@ export function Today() {
 
   const hot = tasks.filter((t) => t.dueAt).slice(0, 5);
   const noDue = tasks.filter((t) => !t.dueAt).length;
-  const today = new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(new Date());
+  const today = new Intl.DateTimeFormat("ru-RU", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  }).format(new Date());
 
   return (
     <div className="screen today">
@@ -336,6 +450,8 @@ export function Today() {
         </button>
 
         <Week />
+
+        <Reminders />
 
         <div className="card glass notes-card">
           <div className="card-head">

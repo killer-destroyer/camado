@@ -4,6 +4,12 @@ export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
 export type LyricsMode = "flow" | "burst" | "line" | "off";
 export type ShakeTarget = "scene" | "cover" | "lyrics";
 
+export interface AlarmItem {
+  id: string;
+  at: string; // ISO
+  text: string;
+}
+
 export interface AppSettings {
   palette: string;
   /** Брать цвета из обложки текущего трека (фон, пластинка, волны). */
@@ -32,8 +38,22 @@ export interface AppSettings {
   crossfade: number;
   /** Звук: обычный, slowed + reverb, nightcore. */
   soundMode: "normal" | "slowed" | "nightcore";
-  volume: number; // 0…1
-  focus: { work: number; short: number; long: number; autoMusic: boolean };
+  /** Скорость slowed (0.7…0.95) и nightcore (1.05…1.4). */
+  slowedRate: number;
+  nightcoreRate: number;
+  volume: number; // 0…1 — положение ползунка; громкость «по слуху» считает движок
+  /** Выравнивать громкость песен автоматически (тихие подтянуть, громкие приглушить). */
+  autoLevel: boolean;
+  /** Своя громкость песни, дБ (+ — громче). Поверх автовыравнивания. */
+  trackGain: Record<string, number>;
+  /** Измеренная громкость песен, дБ — чтобы не мерить заново. */
+  trackLoudness: Record<string, number>;
+  /** preset — id пресета фокуса или "custom"; longEvery — длинный перерыв после N сессий (0 — никогда). */
+  focus: { work: number; short: number; long: number; autoMusic: boolean; preset: string; longEvery: number };
+  /** Звук напоминаний: id встроенного звука или "custom"; ramp — за сколько секунд нарастает громкость (0 — сразу). */
+  alarm: { sound: string; ramp: number; volume: number; customName: string; customUrl: string };
+  /** Свои напоминания «напомни в 18:00». */
+  alarms: AlarmItem[];
   runBot: boolean;
   /** Статус «Слушает в Camado» в Discord. */
   discord: { enabled: boolean; clientId: string };
@@ -55,8 +75,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   vinyl: true,
   crossfade: 6,
   soundMode: "normal",
+  slowedRate: 0.85,
+  nightcoreRate: 1.15,
   volume: 0.8,
-  focus: { work: 25, short: 5, long: 15, autoMusic: true },
+  autoLevel: true,
+  trackGain: {},
+  trackLoudness: {},
+  focus: { work: 25, short: 5, long: 15, autoMusic: true, preset: "pomodoro", longEvery: 4 },
+  alarm: { sound: "marimba", ramp: 10, volume: 0.9, customName: "", customUrl: "" },
+  alarms: [],
   runBot: true,
   discord: { enabled: false, clientId: "" },
   closeToTray: true,
@@ -71,6 +98,10 @@ export function mergeSettings(saved: unknown): AppSettings {
     shake: { ...DEFAULT_SETTINGS.shake, ...(s.shake ?? {}) },
     focus: { ...DEFAULT_SETTINGS.focus, ...(s.focus ?? {}) },
     discord: { ...DEFAULT_SETTINGS.discord, ...(s.discord ?? {}) },
+    alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
+    alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },
+    trackGain: { ...(s.trackGain ?? {}) },
+    trackLoudness: { ...(s.trackLoudness ?? {}) },
   };
 }

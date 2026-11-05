@@ -1,16 +1,18 @@
 // Огромная пластинка у левого края экрана «Сейчас играет».
 // Узор свой для каждого трека, цвета из обложки, в центре крутится круглая обложка.
-// Крути её мышкой или двумя пальцами на трекпаде — это скретч: звук «иглы» и перемотка.
+// Крути её мышкой или двумя пальцами на трекпаде — это скретч: песня звучит вперёд и назад, потом перемотка.
 import { useEffect, useRef } from "react";
 import { engine } from "../lib/audio";
 import { damp } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
-import { scratchSpeed, scratchStart, scratchStop } from "../lib/scratch";
+import { prepareScratch, scratchBegin, scratchEnd, scratchMove } from "../lib/scratch";
 import { drawVinyl, type VinylColors } from "../lib/vinylArt";
 import { player, position, seek } from "../state/player";
 
 const DEG_PER_SEC = 72; // ~12 об/мин: спокойнее настоящих 33⅓ — на огромном диске так приятнее
-const SEC_PER_TURN = 6; // скретч: полный оборот = 6 секунд трека
+// Скретч: один оборот = столько секунд трека, сколько диск проходит за оборот сам по себе.
+// Тогда крутишь с обычной скоростью — песня звучит как обычно, быстрее — быстрее.
+const SEC_PER_TURN = 360 / DEG_PER_SEC;
 
 /** Где пластинка на экране (те же формулы, что в CSS: --D, left, top). */
 export function discGeometry(w: number, h: number): { D: number; cx: number; cy: number; r: number } {
@@ -25,7 +27,13 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
   const glow = useRef<HTMLDivElement>(null);
   const angle = useRef(0);
   const speed = useRef(0);
-  const scratch = useRef<{ last: number; turned: number; start: number; lastT: number } | null>(null);
+  const scratch = useRef<{
+    last: number;
+    turned: number;
+    start: number;
+    lastT: number;
+    rate: number;
+  } | null>(null);
   const wheelEnd = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -34,9 +42,14 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
 
   useFrame((dt) => {
     const playing = player.get().playing;
-    if (!scratch.current) {
+    const sc = scratch.current;
+    if (!sc) {
       speed.current = damp(speed.current, playing ? DEG_PER_SEC : 0, playing ? 1.6 : 2.6, dt);
       angle.current = (angle.current + speed.current * dt) % 360;
+    } else if (performance.now() - sc.lastT > 70 && sc.rate !== 0) {
+      // Рука остановилась — пластинка стоит, звука нет.
+      sc.rate = 0;
+      scratchMove(sc.start + (sc.turned / 360) * SEC_PER_TURN, 0);
     }
     if (disc.current) disc.current.style.transform = `rotate(${angle.current.toFixed(2)}deg)`;
     if (pulse.current) pulse.current.style.transform = `scale(${(1 + engine.pulse * 0.012).toFixed(4)})`;
@@ -45,9 +58,16 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
 
   const begin = () => {
     if (scratch.current) return;
-    scratch.current = { last: 0, turned: 0, start: position(), lastT: performance.now() };
+    scratch.current = {
+      last: 0,
+      turned: 0,
+      start: position(),
+      lastT: performance.now(),
+      rate: 0,
+    };
     engine.el.muted = true;
-    scratchStart();
+    prepareScratch(engine.el.src);
+    scratchBegin(position());
   };
   const turn = (deltaDeg: number) => {
     const s = scratch.current;
@@ -57,12 +77,15 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
     s.lastT = now;
     s.turned += deltaDeg;
     angle.current += deltaDeg;
-    scratchSpeed(deltaDeg / 360 / dt);
+    // Скорость в «разах» от обычной, слегка сглаженная — рука дрожит, звук не должен.
+    const raw = deltaDeg / dt / DEG_PER_SEC;
+    s.rate = s.rate * 0.35 + raw * 0.65;
+    scratchMove(s.start + (s.turned / 360) * SEC_PER_TURN, s.rate);
   };
   const end = () => {
     const s = scratch.current;
     scratch.current = null;
-    scratchStop();
+    scratchEnd();
     engine.el.muted = false;
     if (s && Math.abs(s.turned) > 3) seek(s.start + (s.turned / 360) * SEC_PER_TURN);
   };
@@ -78,7 +101,7 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
       <div
         ref={disc}
         className="disc"
-        title="Крути пластинку — это скретч и перемотка"
+        onPointerEnter={() => prepareScratch(engine.el.src)}
         onPointerDown={(e) => {
           (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
           begin();
@@ -106,7 +129,6 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
       >
         <canvas ref={canvas} className="disc-art" />
         <div className="disc-label" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
-        <div className="disc-hole" />
       </div>
       <div className="disc-sheen" />
     </div>
