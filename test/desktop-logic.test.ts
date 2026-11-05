@@ -120,3 +120,56 @@ describe("палитры и настройки", () => {
     expect(mergeSettings(null)).toEqual(DEFAULT_SETTINGS);
   });
 });
+
+describe("версии для обновлений", async () => {
+  const { isNewer, versionFromYml } = await import("../desktop/shared/version.js");
+  it("сравнивает номера правильно, а не как строки", () => {
+    expect(isNewer("0.3.12", "0.3.9")).toBe(true);
+    expect(isNewer("0.3.9", "0.3.12")).toBe(false);
+    expect(isNewer("0.3.5", "0.3.5")).toBe(false);
+    expect(isNewer("1.0.0", "0.9.99")).toBe(true);
+    expect(isNewer("0.4", "0.3.40")).toBe(true);
+  });
+  it("достаёт версию из latest.yml", () => {
+    expect(versionFromYml("version: 0.3.17\nfiles:\n  - url: Camado-Setup.exe\n")).toBe("0.3.17");
+    expect(versionFromYml("version: '0.3.2'")).toBe("0.3.2");
+    expect(versionFromYml("мусор")).toBeUndefined();
+  });
+});
+
+describe("план на сегодня", async () => {
+  const { buildDayPlan } = await import("../desktop/shared/plan.js");
+  const now = new Date("2026-11-05T15:00:00Z").getTime();
+  const H = 3600e3;
+  const t = (id: number, kind: string, hours: number | null, status = "todo") => ({
+    id,
+    subject: "Матан",
+    title: `#${id}`,
+    details: null,
+    kind,
+    dueAt: hours === null ? null : new Date(now + hours * H).toISOString(),
+    status,
+    createdAt: "",
+    updatedAt: "",
+  });
+
+  it("сначала просроченное и горящее, контрольная через 2 дня — выше дальнего ДЗ", () => {
+    const plan = buildDayPlan(
+      [t(1, "homework", 24 * 6), t(2, "test", 48), t(3, "homework", 5), t(4, "lab", -3), t(5, "other", null), t(6, "homework", 2, "done")] as never,
+      now,
+    );
+    expect(plan.map((s) => s.task.id)).toEqual([4, 3, 2]);
+    expect(plan[0]!.reason).toContain("просрочено");
+    expect(plan[2]!.reason).toContain("контрольная через 2 дня");
+    expect(plan.every((s) => s.minutes % 25 === 0)).toBe(true);
+    expect(plan.reduce((a, s) => a + s.minutes, 0)).toBeLessThanOrEqual(200);
+  });
+
+  it("уже позанимался — план короче", () => {
+    const tasks = [t(1, "exam", 30), t(2, "homework", 10), t(3, "lab", 40)] as never;
+    const full = buildDayPlan(tasks, now, 0).reduce((a, s) => a + s.minutes, 0);
+    const after = buildDayPlan(tasks, now, 150).reduce((a, s) => a + s.minutes, 0);
+    expect(after).toBeLessThan(full);
+    expect(buildDayPlan([], now)).toEqual([]);
+  });
+});

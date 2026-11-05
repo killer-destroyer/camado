@@ -130,7 +130,7 @@ function BurstLyrics({ lyrics }: { lyrics: LyricsData }) {
 
   useFrame(() => {
     const line = curRef.current;
-    if (root.current) root.current.style.setProperty("--pulse", engine.pulse.toFixed(3));
+    if (root.current) root.current.style.transform = `scale(${(1 + engine.pulse * 0.035).toFixed(4)})`;
     if (!line || line.idx !== activeRef.current) return;
     const t = position() + LOOKAHEAD;
     let n = 0;

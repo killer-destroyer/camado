@@ -30,7 +30,7 @@ export function Focus() {
       const sec = Math.floor((left % 60e3) / 1000);
       time.current.textContent = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
     }
-    if (glow.current) glow.current.style.setProperty("--pulse", engine.pulse.toFixed(3));
+    if (glow.current) glow.current.style.transform = `scale(${(1 + engine.pulse * 0.08).toFixed(4)})`;
   });
 
   const max = Math.max(30, ...week.map((d) => d.minutes));
@@ -48,7 +48,8 @@ export function Focus() {
       </header>
 
       <div className="focus-layout">
-        <div ref={glow} className={`focus-timer mode-${s.mode} ${s.running ? "running" : ""}`}>
+        <div className={`focus-timer mode-${s.mode} ${s.running ? "running" : ""}`}>
+          <div ref={glow} className="focus-glow" />
           <svg viewBox="0 0 340 340" className="focus-ring">
             <defs>
               <linearGradient id="fg" x1="0" y1="0" x2="1" y2="1">

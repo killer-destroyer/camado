@@ -1,6 +1,6 @@
 {
   "name": "camado",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Камадо — личный ИИ-ассистент студента: Telegram-бот и приложение для компьютера",
   "scripts": {
     "dev": "tsx watch --env-file=.env --disable-warning=ExperimentalWarning src/index.ts",
@@ -24,6 +24,7 @@
   "homepage": "https://github.com/killer-destroyer/camado-",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",
+    "electron-updater": "^6.8.11",
     "grammy": "^1.46.0",
     "music-metadata": "^12.3.4",
     "zod": "^4.6.7"

@@ -1,5 +1,4 @@
-// Звуковой движок: играет локальные файлы и «слушает» звук для визуализатора.
-// Для онлайн-плееров (Яндекс, SoundCloud) слушает системный звук (Windows/macOS).
+// Звуковой движок: играет файлы и «слушает» звук для визуализатора, битов и тряски.
 import { BeatDetector, bandEnergy, damp, logBands, Shaker, type ShakeOffset } from "./dsp";
 
 export const BAND_COUNT = 72;
@@ -8,9 +7,6 @@ export class AudioEngine {
   readonly el: HTMLAudioElement;
   private ctx?: AudioContext;
   private analyser?: AnalyserNode;
-  private loopAnalyser?: AnalyserNode;
-  private loopStream?: MediaStream;
-  mode: "local" | "loopback" = "local";
 
   readonly fft = new Uint8Array(1024);
   readonly wave = new Uint8Array(2048);
@@ -62,42 +58,10 @@ export class AudioEngine {
     await this.el.play();
   }
 
-  get loopbackActive(): boolean {
-    return this.mode === "loopback";
-  }
-
-  /** Захват системного звука. false — ОС не дала звук. */
-  async startLoopback(): Promise<boolean> {
-    if (this.loopStream) return true;
-    const ctx = this.ensureContext();
-    const stream = await navigator.mediaDevices.getDisplayMedia({ audio: true, video: true });
-    stream.getVideoTracks().forEach((t) => t.stop());
-    if (stream.getAudioTracks().length === 0) {
-      stream.getTracks().forEach((t) => t.stop());
-      return false;
-    }
-    const src = ctx.createMediaStreamSource(stream);
-    this.loopAnalyser = ctx.createAnalyser();
-    this.loopAnalyser.fftSize = 2048;
-    this.loopAnalyser.smoothingTimeConstant = 0.7;
-    src.connect(this.loopAnalyser); // не в динамики — иначе будет эхо
-    this.loopStream = stream;
-    this.mode = "loopback";
-    this.beat.reset();
-    return true;
-  }
-
-  stopLoopback(): void {
-    this.loopStream?.getTracks().forEach((t) => t.stop());
-    this.loopStream = undefined;
-    this.loopAnalyser = undefined;
-    this.mode = "local";
-  }
-
   /** Вызывается каждый кадр раньше всех: обновляет спектр, биты, тряску. */
   update(dt: number, t: number): void {
-    const a = this.mode === "loopback" ? this.loopAnalyser : this.analyser;
-    const live = a && (this.mode === "loopback" || !this.el.paused);
+    const a = this.analyser;
+    const live = a && !this.el.paused;
     if (a && live) {
       a.getByteFrequencyData(this.fft);
       a.getByteTimeDomainData(this.wave);

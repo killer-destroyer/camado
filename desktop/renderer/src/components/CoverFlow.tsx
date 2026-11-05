@@ -76,7 +76,8 @@ export function CoverFlow({
       el.style.transform = `translate3d(${x}px, 0, ${z}px) rotateY(${rot}deg) scale(${scale})`;
       el.style.zIndex = String(1000 - Math.round(a * 10));
       el.style.opacity = String(Math.max(0, 1 - Math.max(0, a - 4.5) * 0.6));
-      el.style.filter = a > 0.6 ? `brightness(${Math.max(0.45, 1 - a * 0.1)})` : "none";
+      // затемнение боковых — через прозрачность слоя, а не filter (filter перерисовывает картинку)
+      el.style.setProperty("--shade", a > 0.6 ? Math.min(0.55, a * 0.1).toFixed(3) : "0");
     }
   }, 15);
 
@@ -163,6 +164,7 @@ export function CoverFlow({
                 className={`cf-item ${i === center ? "center" : ""} ${tr.id === playingId ? "playing" : ""}`}
               >
                 <div className="cf-cover" style={tr.cover ? { backgroundImage: `url("${tr.cover}")` } : undefined}>
+                  <span className="cf-shade" />
                   {!tr.cover && (
                     <div className="cf-placeholder">
                       <Disc3 size={56} strokeWidth={1.1} />

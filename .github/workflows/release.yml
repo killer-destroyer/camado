@@ -20,7 +20,10 @@ jobs:
         include:
           - os: windows-latest
             args: --win
-            files: release/Camado-Setup.exe
+            files: |
+              release/Camado-Setup.exe
+              release/Camado-Setup.exe.blockmap
+              release/latest.yml
           - os: macos-latest
             args: --mac
             files: release/Camado-mac.dmg
@@ -33,6 +36,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      # Номер версии растёт с каждой сборкой — по нему программа понимает, что вышло обновление.
+      - run: npm version 0.3.${{ github.run_number }} --no-git-tag-version --allow-same-version
       - run: npx electron-vite build
       - name: Собрать установщик
         shell: bash
@@ -70,9 +75,10 @@ jobs:
         run: |
           ls -la artifacts
           gh release delete camado-latest --yes --cleanup-tag || true
+          VERSION=$(grep -m1 '^version:' artifacts/latest.yml | awk '{print $2}')
           gh release create camado-latest artifacts/* \
             --target "${{ github.sha }}" \
-            --title "Камадо — последняя версия" \
+            --title "Камадо $VERSION" \
             --latest \
             --notes "Собрано автоматически из ${GITHUB_REF_NAME} (${GITHUB_SHA::7}).
 

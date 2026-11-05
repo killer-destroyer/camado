@@ -13,11 +13,20 @@ const schema = z.object({
   CAMADO_MODEL_BRAIN: z.string().default("claude-sonnet-5-5"),
   CAMADO_MODEL_SMART: z.string().default("claude-opus-5-5"),
   CAMADO_MONTHLY_BUDGET_USD: z.coerce.number().positive().default(25),
-  CAMADO_TIMEZONE: z.string().default("America/New_York"),
+  // По умолчанию — пояс компьютера/сервера (раньше был Нью-Йорк, и сроки «съезжали»).
+  CAMADO_TIMEZONE: optional(z.string()).transform((v) => v ?? systemTimeZone()),
   CAMADO_DB_PATH: z.string().default("data/camado.db"),
 });
 
 export type Config = z.infer<typeof schema>;
+
+export function systemTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = schema.safeParse(env);

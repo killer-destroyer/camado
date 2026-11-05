@@ -4,14 +4,15 @@ import { engine } from "./lib/audio";
 import { onFrame } from "./lib/frame";
 import { applyPalette, paletteById } from "./lib/palettes";
 import { useStore } from "./lib/store";
-import { app, go, initApp, toast, type ScreenId } from "./state/app";
+import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/app";
 import { refreshData, watchData } from "./state/data";
 import { initFocus, refreshFocusStats } from "./state/focus";
 import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
 import { Background } from "./components/Background";
-import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts } from "./components/Chrome";
+import { Guard } from "./components/Guard";
+import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
 import { NowPlaying } from "./components/NowPlaying";
-import { OnlineHost } from "./components/Online";
+import { OverlayFeed } from "./components/Overlay";
 import { Chat } from "./screens/Chat";
 import { Focus } from "./screens/Focus";
 import { Music } from "./screens/Music";
@@ -40,7 +41,7 @@ export function App() {
   const nowPlaying = useStore(app, (s) => s.nowPlaying);
   const settings = useStore(app, (s) => s.settings);
   const coverPalette = useStore(player, (s) => s.coverPalette);
-  const hasTrack = useStore(player, (s) => s.index >= 0 || !!s.online);
+  const hasTrack = useStore(player, (s) => s.index >= 0);
 
   const palette = settings.coverPalette && coverPalette ? coverPalette : paletteById(settings.palette);
 
@@ -99,7 +100,8 @@ export function App() {
         if (tracks[i] && player.get().queue[player.get().index]?.id !== tracks[i]!.id) void playQueue(tracks, i).then(jump);
         else jump();
       }
-      if (name === "nowplaying") app.set({ nowPlaying: true });
+      if (name === "overlay") void toggleOverlay();
+      else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "burst" || name === "line" || name === "flow") {
         app.set((s) => ({ nowPlaying: true, settings: { ...s.settings, lyricsMode: name } }));
@@ -118,19 +120,25 @@ export function App() {
   return (
     <div className={`app ${hasTrack ? "has-player" : ""}`}>
       <Background palette={palette} mode={settings.background} />
-      <div className="grain" />
       <div className="titlebar" />
       <Sidebar />
       <main className="main">
         <div key={screen} className="screen-wrap">
-          <Screen />
+          <Guard name={screen}>
+            <Screen />
+          </Guard>
         </div>
-        <OnlineHost />
       </main>
       <MiniPlayer />
-      {nowPlaying && <NowPlaying />}
+      {nowPlaying && (
+        <Guard name="плеер">
+          <NowPlaying />
+        </Guard>
+      )}
       <CommandPalette />
       <Toasts />
+      <UpdateBanner />
+      <OverlayFeed />
       {settings.showFps && <FpsMeter />}
     </div>
   );

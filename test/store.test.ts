@@ -89,3 +89,12 @@ describe("заметки и фокус", () => {
     expect(s.listFocusSessions(new Date("2026-11-04T00:00:00Z")).map((f) => f.minutes)).toEqual([50]);
   });
 });
+
+describe("настройки", async () => {
+  const { loadConfig, systemTimeZone } = await import("../src/config.js");
+  it("часовой пояс по умолчанию — системный, а не Нью-Йорк", () => {
+    expect(loadConfig({}).CAMADO_TIMEZONE).toBe(systemTimeZone());
+    expect(loadConfig({ CAMADO_TIMEZONE: "" }).CAMADO_TIMEZONE).toBe(systemTimeZone());
+    expect(loadConfig({ CAMADO_TIMEZONE: "Europe/Moscow" }).CAMADO_TIMEZONE).toBe("Europe/Moscow");
+  });
+});

@@ -43,7 +43,8 @@ void main(){
 
   // виньетка и зерно плёнки
   col *= mix(1.0 - 0.32 * length(uv - 0.5), 1.0, uLight * 0.7);
-  col += (hash(gl_FragCoord.xy + fract(t) * 91.0) - 0.5) * 0.028;
+  // неподвижный дизеринг против полос в градиенте (раньше тут было мерцающее «зерно»)
+  col += (hash(gl_FragCoord.xy) - 0.5) / 255.0;
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -65,6 +66,7 @@ export function Background({ palette, mode }: { palette: Palette; mode: "aurora"
   target.current = palette;
   const clock = useRef(Math.random() * 100);
   const drawnStatic = useRef(false);
+  const since = useRef(1);
 
   useEffect(() => {
     const c = canvas.current!;
@@ -103,9 +105,14 @@ export function Background({ palette, mode }: { palette: Palette; mode: "aurora"
     drawnStatic.current = false;
   }, [palette, mode]);
 
-  useFrame((dt) => {
+  useFrame((frameDt) => {
     const g = gl.current;
     if (!g) return;
+    // Фон медленный: 60 кадров в секунду ему хватает даже на 144-герцовом мониторе.
+    since.current += frameDt;
+    if (since.current < 1 / 60 - 0.002) return;
+    const dt = Math.min(since.current, 0.1);
+    since.current = 0;
     const p = target.current;
     const goal: Record<string, [number, number, number]> = {
       uBg: rgb(p.bg),

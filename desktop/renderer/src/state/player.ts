@@ -6,19 +6,6 @@ import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { app, toast } from "./app";
 
-/** То, что играет во встроенном онлайн-плеере. */
-export interface OnlineNow {
-  service: "yandex" | "soundcloud";
-  title: string;
-  artist: string;
-  artwork?: string;
-  duration: number;
-  position: number;
-  /** performance.now() момента, когда position был верен. */
-  at: number;
-  playing: boolean;
-}
-
 interface PlayerState {
   library: LibraryState;
   queue: Track[];
@@ -26,13 +13,9 @@ interface PlayerState {
   playing: boolean;
   shuffle: boolean;
   repeat: "off" | "all" | "one";
-  source: "local" | "online";
-  online?: OnlineNow;
   lyrics?: Lyrics;
   lyricsLoading: boolean;
   coverPalette?: Palette;
-  /** Обработчик управления онлайн-плеером (ставит вкладка «Онлайн»). */
-  onlineControl?: (action: "playpause" | "next" | "prev") => void;
 }
 
 export const player = createStore<PlayerState>({
@@ -42,7 +25,6 @@ export const player = createStore<PlayerState>({
   playing: false,
   shuffle: false,
   repeat: "all",
-  source: "local",
   lyricsLoading: false,
 });
 
@@ -51,23 +33,14 @@ export function currentTrack(): Track | undefined {
   return s.queue[s.index];
 }
 
-/** Что сейчас играет — для заголовков и текстов (локальный трек или онлайн). */
+/** Что сейчас играет — для заголовков и текстов. */
 export function nowMeta(): { title: string; artist: string; cover?: string; duration: number } | undefined {
-  const s = player.get();
-  if (s.source === "online" && s.online) {
-    return { title: s.online.title, artist: s.online.artist, cover: s.online.artwork, duration: s.online.duration };
-  }
   const t = currentTrack();
   return t ? { title: t.title, artist: t.artist, cover: t.cover, duration: t.duration || engine.el.duration || 0 } : undefined;
 }
 
 /** Текущая позиция в секундах — вызывается каждый кадр. */
 export function position(): number {
-  const s = player.get();
-  if (s.source === "online" && s.online) {
-    const o = s.online;
-    return o.playing ? o.position + (performance.now() - o.at) / 1000 : o.position;
-  }
   return engine.el.currentTime || 0;
 }
 
@@ -88,7 +61,7 @@ export function watchLibrary(): () => void {
 // ---------- Управление ----------
 
 export async function playQueue(tracks: Track[], index: number): Promise<void> {
-  player.set({ queue: tracks, index, source: "local" });
+  player.set({ queue: tracks, index });
   await startCurrent();
 }
 
@@ -109,7 +82,6 @@ async function startCurrent(): Promise<void> {
 
 export function togglePlay(): void {
   const s = player.get();
-  if (s.source === "online") return s.onlineControl?.("playpause");
   if (!currentTrack()) {
     const first = s.library.tracks[0];
     if (first) void playQueue(s.library.tracks, 0);
@@ -121,7 +93,6 @@ export function togglePlay(): void {
 
 export function next(auto = false): void {
   const s = player.get();
-  if (s.source === "online") return s.onlineControl?.("next");
   if (s.queue.length === 0) return;
   if (auto && s.repeat === "one") {
     engine.el.currentTime = 0;
@@ -145,7 +116,6 @@ export function next(auto = false): void {
 
 export function prev(): void {
   const s = player.get();
-  if (s.source === "online") return s.onlineControl?.("prev");
   if (engine.el.currentTime > 3) {
     engine.el.currentTime = 0;
     return;
@@ -156,7 +126,6 @@ export function prev(): void {
 }
 
 export function seek(sec: number): void {
-  if (player.get().source === "online") return;
   const d = engine.el.duration;
   // Длина ещё может быть неизвестна (трек только начал грузиться) — тогда просто ставим позицию.
   engine.el.currentTime = Math.max(0, Number.isFinite(d) ? Math.min(d - 0.05, sec) : sec);
@@ -176,7 +145,7 @@ export async function loadLyrics(): Promise<void> {
   const id = ++lyricsReq;
   if (!meta) return player.set({ lyrics: undefined, lyricsLoading: false });
   player.set({ lyrics: undefined, lyricsLoading: true });
-  const t = player.get().source === "local" ? currentTrack() : undefined;
+  const t = currentTrack();
   try {
     const lyrics = await api.lyrics.get({
       title: meta.title,

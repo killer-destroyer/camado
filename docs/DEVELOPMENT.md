@@ -157,3 +157,13 @@ npm run typecheck
 ## Установщики
 
 `.github/workflows/release.yml` после каждого пуша в `main` или `claude/**` собирает `Camado-Setup.exe` и `Camado-mac.dmg` и обновляет релиз `camado-latest`. Локально: `npm run app:dist` → `release/`.
+
+## Обновления
+
+- `desktop/main/updates.ts`: Windows (и Linux AppImage) — electron-updater, провайдер `generic` по адресу `releases/latest/download` (см. `publish` в `electron-builder.yml`). Mac без подписи Apple обновляться сам не может — показываем «вышла версия, скачать».
+- В CI версия = `0.3.<номер сборки>`, в релиз кладутся `latest.yml` и `.blockmap`.
+- Репозиторий должен быть публичным: из приватного файлы релиза без входа в GitHub не скачать.
+
+## Музыка по ссылке
+
+`desktop/main/download.ts`: прямой файл или HTML-страница (ищем `<audio>`, `<source>`, `og:audio`, ссылки на аудиофайлы). Стриминги (YouTube, Яндекс, SoundCloud…) не скачиваем — честно говорим, что нельзя. Файлы ложатся в «Музыка/Камадо».

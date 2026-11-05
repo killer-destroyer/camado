@@ -1,13 +1,14 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
 import { useEffect, useState } from "react";
-import { ArrowRight, Flame, Music2, NotebookPen, Sparkles, Timer, Zap } from "lucide-react";
+import { ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
+import { buildDayPlan } from "../../../shared/plan";
 import type { TaskKind } from "../../../shared/types";
 import { api } from "../lib/api";
 import { countdown, greeting, KIND_LABEL, plural, urgency } from "../lib/format";
 import { useStore } from "../lib/store";
 import { app, go, toast } from "../state/app";
 import { data } from "../state/data";
-import { focusToday } from "../state/focus";
+import { focus, focusToday, setMode, start as startFocus } from "../state/focus";
 import { nowMeta, player } from "../state/player";
 import { MiniSpectrum } from "../components/Visualizer";
 import { Segmented } from "../components/ui";
@@ -127,12 +128,120 @@ function Week() {
   );
 }
 
+function Plan() {
+  const tasks = useStore(data, (s) => s.tasks);
+  const done = useStore(focusToday, (s) => s.minutes);
+  const session = useStore(app, (s) => s.settings.focus.work);
+  const steps = buildDayPlan(tasks, Date.now(), done, session);
+  const total = steps.reduce((a, s) => a + s.minutes, 0);
+
+  const begin = (taskId: number, subject: string | null) => {
+    if (focus.get().running) return go("focus");
+    setMode("work");
+    focus.set({ subject: subject ?? "" });
+    void api.tasks.update(taskId, { status: "in_progress" });
+    startFocus();
+    go("focus");
+  };
+
+  return (
+    <div className="card glass plan">
+      <div className="card-head">
+        <ListChecks size={18} />
+        <span>План на сегодня</span>
+        {total > 0 && <span className="plan-total">≈ {total >= 60 ? `${Math.floor(total / 60)} ч ${total % 60 ? `${total % 60} мин` : ""}` : `${total} мин`}</span>}
+      </div>
+      {steps.length === 0 ? (
+        <div className="calm-state">
+          <span className="calm-emoji">✨</span>
+          {done > 0 ? `Сегодня уже ${Math.round(done)} мин в фокусе — и всё срочное позади.` : "Планировать нечего — свободный день."}
+        </div>
+      ) : (
+        <ol className="plan-list">
+          {steps.map((s, i) => (
+            <li key={s.task.id} className="plan-step" style={{ animationDelay: `${i * 70}ms` }}>
+              <span className="plan-num">{i + 1}</span>
+              <div className="plan-text">
+                <div className="plan-title">{s.task.title}</div>
+                <div className="plan-why">
+                  {s.task.subject ? `${s.task.subject} · ` : ""}
+                  {s.reason}
+                </div>
+              </div>
+              <span className="plan-min">{s.minutes} мин</span>
+              <button className="play-btn sm" title="Начать фокус по этому заданию" onClick={() => begin(s.task.id, s.task.subject)}>
+                <Play size={16} fill="currentColor" />
+              </button>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+const SETUP_KEY = "camado-setup-hidden";
+
+function FirstSteps() {
+  const tracks = useStore(player, (s) => s.library.tracks.length);
+  const tasks = useStore(data, (s) => s.tasks.length);
+  const [ai, setAi] = useState<boolean | null>(null);
+  const [bot, setBot] = useState<boolean | null>(null);
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem(SETUP_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    void api.ai.status().then((s) => setAi(s.enabled));
+    void api.bot.status().then((s) => setBot(s.configured && s.paired));
+  }, []);
+  const items = [
+    { done: tracks > 0, label: "Добавь музыку", hint: "папка, файлы или ссылка", go: "music" as const },
+    { done: tasks > 0, label: "Запиши первое задание", hint: "в «Быстрой записи» ниже", go: "tasks" as const },
+    { done: !!bot, label: "Подключи Telegram-бота", hint: "писать Камадо с телефона", go: "settings" as const },
+    { done: !!ai, label: "Включи ИИ", hint: "понимать обычный текст", go: "settings" as const },
+  ];
+  if (hidden || ai === null || bot === null || items.every((i) => i.done)) return null;
+  const hide = () => {
+    setHidden(true);
+    try {
+      localStorage.setItem(SETUP_KEY, "1");
+    } catch {
+      // приватный режим — просто скроем до перезапуска
+    }
+  };
+  return (
+    <div className="card glass setup">
+      <div className="card-head">
+        <Sparkles size={18} />
+        <span>Первые шаги</span>
+        <button className="icon-btn setup-close" title="Скрыть" onClick={hide}>
+          <X size={16} />
+        </button>
+      </div>
+      <div className="setup-items">
+        {items.map((i) => (
+          <button key={i.label} className={`setup-item ${i.done ? "done" : ""}`} onClick={() => go(i.go)}>
+            <span className={`check ${i.done ? "on" : ""}`}>{i.done && <Check size={13} strokeWidth={3} />}</span>
+            <span>
+              <b>{i.label}</b>
+              <em>{i.hint}</em>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function Today() {
   const tasks = useStore(data, (s) => s.tasks);
   const notes = useStore(data, (s) => s.notes);
   const minutes = useStore(focusToday, (s) => s.minutes);
   useStore(player, (s) => s.index);
-  useStore(player, (s) => s.online?.title);
   const playing = useStore(player, (s) => s.playing);
   const meta = nowMeta();
   const [, tick] = useState(0);
@@ -161,6 +270,8 @@ export function Today() {
       </header>
 
       <div className="today-grid">
+        <FirstSteps />
+        <Plan />
         <div className="card glass hot">
           <div className="card-head">
             <Flame size={18} />

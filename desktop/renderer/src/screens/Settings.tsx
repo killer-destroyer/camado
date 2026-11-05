@@ -1,6 +1,6 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { useEffect, useState } from "react";
-import { Check, FolderPlus, KeyRound, Trash2 } from "lucide-react";
+import { Check, Download, FolderPlus, KeyRound, RefreshCw, Trash2 } from "lucide-react";
 import type { AiStatus, BotStatus } from "../../../shared/types";
 import type { AppSettings } from "../../../shared/settings";
 import { api } from "../lib/api";
@@ -48,6 +48,50 @@ function LiveFps() {
     return () => clearInterval(t);
   }, []);
   return <b className="live-fps">{v} FPS</b>;
+}
+
+function UpdatesSection() {
+  const u = useStore(app, (x) => x.update);
+  const [busy, setBusy] = useState(false);
+  const check = async () => {
+    setBusy(true);
+    app.set({ update: await api.updates.check() });
+    setBusy(false);
+  };
+  const text: Record<typeof u.state, string> = {
+    dev: "Запущено из исходников — обновления приходят через git.",
+    idle: "Проверю обновления через пару секунд.",
+    checking: "Проверяю…",
+    none: "У тебя последняя версия ✓",
+    downloading: `Качаю версию ${u.version ?? ""}… ${u.percent ?? 0}%`,
+    ready: `Версия ${u.version} скачана. Перезапусти — и всё обновится, задания и настройки сохранятся.`,
+    manual: `Вышла версия ${u.version}. Скачай и поставь поверх — задания и настройки сохранятся.`,
+    error: u.error ?? "Не получилось проверить обновления.",
+  };
+  return (
+    <section className="set-section glass">
+      <h3>Обновления</h3>
+      <Row title={`Камадо ${u.current || ""}`} hint={text[u.state]}>
+        {u.state === "ready" || u.state === "manual" ? (
+          <button className="btn primary" onClick={() => void api.updates.install()}>
+            <Download size={16} /> {u.state === "ready" ? "Перезапустить и обновить" : "Скачать"}
+          </button>
+        ) : (
+          u.state !== "dev" && (
+            <button className="btn" disabled={busy || u.state === "checking" || u.state === "downloading"} onClick={() => void check()}>
+              <RefreshCw size={16} className={u.state === "checking" ? "spin" : ""} /> Проверить
+            </button>
+          )
+        )}
+      </Row>
+      {u.state === "downloading" && (
+        <div className="update-progress">
+          <i style={{ width: `${u.percent ?? 0}%` }} />
+        </div>
+      )}
+      <div className="set-hint">Камадо сам проверяет обновления при запуске и каждые 3 часа.</div>
+    </section>
+  );
 }
 
 function AiSection() {
@@ -197,6 +241,8 @@ export function Settings() {
         <h1 className="display">Настройки</h1>
       </header>
 
+      <UpdatesSection />
+
       <section className="set-section glass">
         <h3>Внешний вид</h3>
         <PaletteGrid s={s} />
@@ -215,8 +261,8 @@ export function Settings() {
             ]}
           />
         </Row>
-        <Row title="Стекло (размытие под панелями)" hint="Красиво, но на слабых ноутбуках можно выключить.">
-          <Toggle value={s.glass} onChange={(v) => updateSettings({ glass: v })} />
+        <Row title="Размытие под панелями" hint="Красиво, но нагружает видеокарту. Включай, если компьютер мощный.">
+          <Toggle value={s.blur} onChange={(v) => updateSettings({ blur: v })} />
         </Row>
       </section>
 

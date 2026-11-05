@@ -1,12 +1,12 @@
 // «Сейчас играет»: на весь экран — пластинка, визуализатор, текст песни и тряска в такт.
 import { useRef } from "react";
-import { ChevronDown, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Vibrate } from "lucide-react";
+import { ChevronDown, PictureInPicture2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Vibrate } from "lucide-react";
 import type { LyricsMode, VisualizerStyle } from "../../../shared/settings";
 import { engine } from "../lib/audio";
 import { fmtTime } from "../lib/format";
 import { useFrame } from "../lib/frame";
 import { useStore } from "../lib/store";
-import { app, updateSettings } from "../state/app";
+import { app, toggleOverlay, updateSettings } from "../state/app";
 import { cycleRepeat, duration, next, nowMeta, player, position, prev, seek, togglePlay } from "../state/player";
 import { Lyrics } from "./Lyrics";
 import { Segmented } from "./ui";
@@ -32,12 +32,16 @@ export function Progress({ big = false }: { big?: boolean }) {
   const cur = useRef<HTMLSpanElement>(null);
   const tot = useRef<HTMLSpanElement>(null);
   const bar = useRef<HTMLDivElement>(null);
+  const last = useRef({ cur: "", tot: "" });
   useFrame(() => {
     const d = duration();
     const p = position();
     if (fill.current) fill.current.style.transform = `scaleX(${d > 0 ? Math.min(1, p / d) : 0})`;
-    if (cur.current) cur.current.textContent = fmtTime(p);
-    if (tot.current) tot.current.textContent = fmtTime(d);
+    // Текст меняем раз в секунду, а не каждый кадр: смена текста — это пересчёт раскладки.
+    const c = fmtTime(p);
+    const t = fmtTime(d);
+    if (cur.current && c !== last.current.cur) cur.current.textContent = last.current.cur = c;
+    if (tot.current && t !== last.current.tot) tot.current.textContent = last.current.tot = t;
   }, 30);
   const seekTo = (e: React.PointerEvent) => {
     const r = bar.current!.getBoundingClientRect();
@@ -64,14 +68,13 @@ export function Progress({ big = false }: { big?: boolean }) {
 
 export function NowPlaying() {
   const settings = useStore(app, (s) => s.settings);
+  const overlayOn = useStore(app, (s) => s.overlay);
   const playing = useStore(player, (s) => s.playing);
   const lyrics = useStore(player, (s) => s.lyrics);
   const loading = useStore(player, (s) => s.lyricsLoading);
   const shuffle = useStore(player, (s) => s.shuffle);
   const repeat = useStore(player, (s) => s.repeat);
-  const source = useStore(player, (s) => s.source);
   useStore(player, (s) => s.index);
-  useStore(player, (s) => s.online?.title);
   const meta = nowMeta();
 
   const scene = useRef<HTMLDivElement>(null);
@@ -86,8 +89,6 @@ export function NowPlaying() {
     if (scene.current) scene.current.style.transform = tgt === "scene" ? transform : "";
     if (cover.current) cover.current.style.transform = tgt === "cover" ? transform : "";
     if (lyr.current) lyr.current.style.transform = tgt === "lyrics" ? transform : "";
-    scene.current?.style.setProperty("--pulse", engine.pulse.toFixed(3));
-    scene.current?.style.setProperty("--energy", engine.energy.toFixed(3));
   }, 40);
 
   const mode = settings.lyricsMode;
@@ -120,10 +121,13 @@ export function NowPlaying() {
         <button className="icon-btn" title="Свернуть (Esc)" onClick={() => app.set({ nowPlaying: false })}>
           <ChevronDown size={22} />
         </button>
-        <div className="np-source">{source === "online" ? "Онлайн-плеер" : "Моя музыка"}</div>
+        <div className="np-source">Сейчас играет</div>
         <div className="np-switches">
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
           <Segmented size="sm" value={settings.visualizer} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
+          <button className={`icon-btn ${overlayOn ? "active" : ""}`} title="Текст песни поверх всех окон" onClick={() => void toggleOverlay()}>
+            <PictureInPicture2 size={18} />
+          </button>
           <button
             className={`icon-btn ${settings.shake.enabled ? "active" : ""}`}
             title="Тряска в такт"
@@ -137,7 +141,7 @@ export function NowPlaying() {
       <div className="np-bottom">
         <Progress big />
         <div className="np-controls">
-          <button className={`icon-btn ${shuffle ? "active" : ""}`} title="Перемешать" onClick={() => player.set({ shuffle: !shuffle })} disabled={source === "online"}>
+          <button className={`icon-btn ${shuffle ? "active" : ""}`} title="Перемешать" onClick={() => player.set({ shuffle: !shuffle })}>
             <Shuffle size={18} />
           </button>
           <button className="icon-btn lg" title="Назад" onClick={prev}>
@@ -149,7 +153,7 @@ export function NowPlaying() {
           <button className="icon-btn lg" title="Дальше" onClick={() => next()}>
             <SkipForward size={24} fill="currentColor" />
           </button>
-          <button className={`icon-btn ${repeat !== "off" ? "active" : ""}`} title="Повтор" onClick={cycleRepeat} disabled={source === "online"}>
+          <button className={`icon-btn ${repeat !== "off" ? "active" : ""}`} title="Повтор" onClick={cycleRepeat}>
             {repeat === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
         </div>

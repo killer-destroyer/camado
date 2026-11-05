@@ -11,6 +11,8 @@ const SEC_PER_TURN = 60 / (100 / 3);
 
 export function Vinyl({ cover, showVinyl }: { cover?: string; showVinyl: boolean }) {
   const disc = useRef<HTMLDivElement>(null);
+  const glow = useRef<HTMLDivElement>(null);
+  const sleeve = useRef<HTMLDivElement>(null);
   const angle = useRef(0);
   const speed = useRef(0);
   const drag = useRef<{ last: number; startPos: number; turned: number } | null>(null);
@@ -19,10 +21,10 @@ export function Vinyl({ cover, showVinyl }: { cover?: string; showVinyl: boolean
     const playing = player.get().playing;
     speed.current = damp(speed.current, playing && !drag.current ? RPM_DEG_PER_SEC : 0, playing ? 2.2 : 3.5, dt);
     if (!drag.current) angle.current = (angle.current + speed.current * dt) % 360;
-    if (disc.current) {
-      disc.current.style.transform = `rotate(${angle.current}deg)`;
-      disc.current.style.setProperty("--glow", String(engine.pulse));
-    }
+    if (disc.current) disc.current.style.transform = `rotate(${angle.current.toFixed(2)}deg)`;
+    // Свечение и «пульс» — только прозрачность и масштаб: видеокарта делает это бесплатно.
+    if (glow.current) glow.current.style.opacity = engine.pulse.toFixed(3);
+    if (sleeve.current) sleeve.current.style.transform = `scale(${(1 + engine.pulse * 0.018).toFixed(4)})`;
   });
 
   const pointerAngle = (e: React.PointerEvent) => {
@@ -33,12 +35,13 @@ export function Vinyl({ cover, showVinyl }: { cover?: string; showVinyl: boolean
   return (
     <div className={`vinyl-stage ${showVinyl ? "with-disc" : ""}`}>
       {showVinyl && (
+        <div className="vinyl-slot">
+        <div ref={glow} className="vinyl-glow" />
         <div
           ref={disc}
           className="vinyl-disc"
           title="Крути пластинку, чтобы перемотать"
           onPointerDown={(e) => {
-            if (player.get().source !== "local") return;
             (e.target as HTMLElement).setPointerCapture(e.pointerId);
             drag.current = { last: pointerAngle(e), startPos: position(), turned: 0 };
           }}
@@ -62,8 +65,9 @@ export function Vinyl({ cover, showVinyl }: { cover?: string; showVinyl: boolean
           <div className="vinyl-label" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
           <div className="vinyl-hole" />
         </div>
+        </div>
       )}
-      <div className="vinyl-sleeve" style={cover ? { backgroundImage: `url("${cover}")` } : undefined}>
+      <div ref={sleeve} className="vinyl-sleeve" style={cover ? { backgroundImage: `url("${cover}")` } : undefined}>
         {!cover && <Disc3 size={72} strokeWidth={1.2} />}
       </div>
     </div>

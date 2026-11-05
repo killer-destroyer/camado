@@ -61,6 +61,32 @@ export interface AiStatus {
   model: string;
 }
 
+/** То, что показывает плавающий текст песни поверх окон. */
+export interface OverlayState {
+  text: string;
+  next?: string;
+  words: LyricsWord[];
+  lineEnd: number;
+  position: number;
+  playing: boolean;
+  /** Date.now() в момент отправки — чтобы плавно досчитывать позицию между обновлениями. */
+  sentAt: number;
+  colors: { text: string; accent: string; accent2: string };
+}
+
+export interface UpdateStatus {
+  /**
+   * dev — запущено из исходников (обновлений нет), checking — проверяю, none — последняя версия,
+   * downloading — качаю, ready — скачано, нужен перезапуск, manual — есть новая (Mac, скачать вручную), error.
+   */
+  state: "dev" | "idle" | "checking" | "none" | "downloading" | "ready" | "manual" | "error";
+  current: string;
+  version?: string;
+  percent?: number;
+  error?: string;
+  checkedAt?: number;
+}
+
 export interface BotStatus {
   /** Токен бота задан (в приложении или в .env). */
   configured: boolean;
@@ -77,8 +103,6 @@ export interface AppInfo {
   timeZone: string;
   /** Частота обновления основного монитора, Гц. */
   refreshRate: number;
-  /** Работает ли захват системного звука на этой ОС. */
-  loopbackSupported: boolean;
 }
 
 export type TaskInput = {
@@ -145,9 +169,25 @@ export interface CamadoApi {
   lyrics: {
     get(query: LyricsQuery): Promise<Lyrics>;
   };
-  online: {
-    /** Клавиша в веб-плеер (пробел — пауза), если сайт не дал управлять собой. */
-    sendKey(webContentsId: number, key: string): Promise<void>;
+  music: {
+    /** Скачать по ссылке в папку «Музыка/Камадо». Для страницы с несколькими треками вернёт список. */
+    importUrl(url: string): Promise<
+      | { kind: "saved"; file: string; name: string }
+      | { kind: "choose"; links: { url: string; name: string }[] }
+      | { kind: "error"; error: string }
+    >;
+  };
+  overlay: {
+    /** Включить/выключить текст песни поверх всех окон. Возвращает новое состояние. */
+    toggle(): Promise<boolean>;
+    isOpen(): Promise<boolean>;
+    push(state: OverlayState): Promise<void>;
+  };
+  updates: {
+    status(): Promise<UpdateStatus>;
+    check(): Promise<UpdateStatus>;
+    /** Перезапустить и установить (Windows) или открыть ссылку на скачивание (Mac). */
+    install(): Promise<void>;
   };
   window: {
     setTitleBarColors(symbol: string): Promise<void>;
@@ -156,5 +196,9 @@ export interface CamadoApi {
   /** Путь к файлу, перетащенному в окно. */
   pathForFile(file: File): string;
   on(event: "data-changed" | "library-changed" | "media-key", cb: (payload?: unknown) => void): () => void;
+  on(event: "download-progress", cb: (payload: { name: string; received: number; total: number }) => void): () => void;
   on(event: "reminder", cb: (payload: { text: string }) => void): () => void;
+  on(event: "update-status", cb: (payload: UpdateStatus) => void): () => void;
+  on(event: "overlay-state", cb: (payload: OverlayState) => void): () => void;
+  on(event: "overlay-changed", cb: (payload: boolean) => void): () => void;
 }

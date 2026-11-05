@@ -23,7 +23,8 @@ import {
 import { fps, useFrame } from "../lib/frame";
 import { PALETTES } from "../lib/palettes";
 import { useStore } from "../lib/store";
-import { app, go, updateSettings, type ScreenId } from "../state/app";
+import { api } from "../lib/api";
+import { app, go, toggleOverlay, updateSettings, type ScreenId } from "../state/app";
 import { next, nowMeta, player, prev, togglePlay } from "../state/player";
 import { Progress } from "./NowPlaying";
 import { Slider } from "./ui";
@@ -40,6 +41,7 @@ export const NAV: { id: ScreenId; label: string; icon: typeof Sun }[] = [
 
 export function Sidebar() {
   const screen = useStore(app, (s) => s.screen);
+  const update = useStore(app, (s) => s.update.state);
   const items = [...NAV, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const [pillTop, setPillTop] = useState(0);
@@ -57,6 +59,7 @@ export function Sidebar() {
         <span className="nav-pill" style={{ transform: `translateY(${pillTop}px)` }} />
         {items.map((n, i) => {
           const Icon = n.icon;
+          const dot = n.id === "settings" && (update === "ready" || update === "manual");
           return (
             <button
               key={n.id}
@@ -68,6 +71,7 @@ export function Sidebar() {
               data-tip={n.label}
             >
               <Icon size={21} strokeWidth={screen === n.id ? 2.3 : 1.8} />
+              {dot && <span className="nav-dot" />}
             </button>
           );
         })}
@@ -79,8 +83,8 @@ export function Sidebar() {
 export function MiniPlayer() {
   const playing = useStore(player, (s) => s.playing);
   useStore(player, (s) => s.index);
-  useStore(player, (s) => s.online?.title);
   const volume = useStore(app, (s) => s.settings.volume);
+  const overlayOn = useStore(app, (s) => s.overlay);
   const meta = nowMeta();
   const [muted, setMuted] = useState<number | null>(null);
   if (!meta) return null;
@@ -111,6 +115,9 @@ export function MiniPlayer() {
         <Progress />
       </div>
       <MiniSpectrum />
+      <button className={`icon-btn ${overlayOn ? "active" : ""}`} title="Текст песни поверх всех окон" onClick={() => void toggleOverlay()}>
+        <Sparkles size={18} />
+      </button>
       <div className="mp-volume">
         <button
           className="icon-btn"
@@ -132,6 +139,17 @@ export function MiniPlayer() {
   );
 }
 
+export function UpdateBanner() {
+  const u = useStore(app, (s) => s.update);
+  if (u.state !== "ready" && u.state !== "manual") return null;
+  return (
+    <button className="update-banner" onClick={() => void api.updates.install()}>
+      <Sparkles size={15} />
+      {u.state === "ready" ? `Версия ${u.version} готова — перезапустить` : `Вышла версия ${u.version} — скачать`}
+    </button>
+  );
+}
+
 export function Toasts() {
   const toasts = useStore(app, (s) => s.toasts);
   return (
@@ -147,8 +165,12 @@ export function Toasts() {
 
 export function FpsMeter() {
   const ref = useRef<HTMLDivElement>(null);
+  const last = useRef(-1);
   useFrame(() => {
-    if (ref.current) ref.current.textContent = `${fps.value} FPS`;
+    if (ref.current && fps.value !== last.current) {
+      last.current = fps.value;
+      ref.current.textContent = `${fps.value} FPS`;
+    }
   }, 99);
   return <div ref={ref} className="fps-meter" />;
 }
@@ -176,6 +198,7 @@ export function CommandPalette() {
       { id: "play", label: "Пауза / играть", hint: "пробел", icon: Play, run: togglePlay },
       { id: "next", label: "Следующий трек", icon: SkipForward, run: () => next() },
       { id: "np", label: "Открыть плеер на весь экран", icon: Maximize2, run: () => app.set({ nowPlaying: true }) },
+      { id: "overlay", label: "Текст песни поверх всех окон", icon: Sparkles, run: () => void toggleOverlay() },
       { id: "burst", label: "Текст: режим «Взрыв»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "burst" }) },
       { id: "flow", label: "Текст: режим «Лента»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "flow" }) },
       { id: "line", label: "Текст: режим «Строка»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "line" }) },

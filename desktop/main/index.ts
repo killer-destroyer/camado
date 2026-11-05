@@ -2,7 +2,6 @@
 import {
   app,
   BrowserWindow,
-  desktopCapturer,
   dialog,
   globalShortcut,
   ipcMain,
@@ -11,10 +10,8 @@ import {
   Notification,
   protocol,
   screen,
-  session,
   shell,
   Tray,
-  webContents,
 } from "electron";
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
@@ -28,14 +25,15 @@ import { BudgetExceededError } from "../../src/llm/metered.js";
 import { parseTaskArgs } from "../../src/manual.js";
 import { startReminderLoop } from "../../src/reminders.js";
 import { mergeSettings, type AppSettings } from "../shared/settings.js";
-import type { AppInfo, BotStatus, TaskInput, TaskPatch } from "../shared/types.js";
+import type { AppInfo, BotStatus, OverlayState, TaskInput, TaskPatch } from "../shared/types.js";
+import { importFromUrl } from "./download.js";
 import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
+import { Updates } from "./updates.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const SETTINGS_KV = "desktop_settings";
-const ONLINE_HOSTS = /(^|\.)(yandex\.(ru|com|by|kz|uz)|ya\.ru|soundcloud\.com|sndcdn\.com|google\.com|apple\.com|facebook\.com|vk\.com|vk\.ru)$/;
 
 protocol.registerSchemesAsPrivileged([
   { scheme: "camado-media", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
@@ -96,6 +94,7 @@ const send = (channel: string, payload?: unknown) => {
 };
 
 const library = new Library(dataDir, () => send("library-changed"));
+const updates = new Updates((s) => send("update-status", s));
 const lyrics = new LyricsService(join(dataDir, "lyrics-cache"), (id) => library.trackPath(id));
 
 // Любое изменение данных (из окна, бота или ИИ) — окно перерисовывает списки.
@@ -176,7 +175,6 @@ const handlers: Record<string, Handler> = {
     version: app.getVersion(),
     timeZone: config.CAMADO_TIMEZONE,
     refreshRate: Math.round(screen.getPrimaryDisplay().displayFrequency || 60),
-    loopbackSupported: process.platform === "win32" || process.platform === "darwin",
   }),
 
   "tasks.list": (includeClosed?: boolean) => store.listTasks({ includeClosed }),
@@ -283,15 +281,31 @@ const handlers: Record<string, Handler> = {
 
   "lyrics.get": (q: Parameters<LyricsService["get"]>[0]) => lyrics.get(q),
 
-  "online.sendKey": (id: number, key: string) => {
-    const wc = webContents.fromId(id);
-    if (!wc || wc.getType() !== "webview") return;
-    wc.sendInputEvent({ type: "keyDown", keyCode: key });
-    wc.sendInputEvent({ type: "keyUp", keyCode: key });
+  "music.importUrl": async (url: string) => {
+    const dir = join(app.getPath("music"), "Камадо");
+    const r = await importFromUrl(url, dir, (p) => send("download-progress", p));
+    if (r.kind === "saved") await library.addPaths([dir]);
+    return r;
   },
+
+
 
   "window.setTitleBarColors": (symbol: string) => {
     if (win && process.platform !== "darwin") win.setTitleBarOverlay({ color: "#00000000", symbolColor: symbol, height: 44 });
+  },
+
+  "overlay.toggle": () => toggleOverlay(),
+  "overlay.isOpen": () => Boolean(overlay && !overlay.isDestroyed()),
+  "overlay.push": (state: OverlayState) => {
+    if (overlay && !overlay.isDestroyed()) overlay.webContents.send("overlay-state", state);
+  },
+
+  "updates.status": () => updates.status,
+  "updates.check": () => updates.check(),
+  "updates.install": () => {
+    // Иначе закрытие окна при установке свернуло бы его в трей, а не выключило программу.
+    quitting = true;
+    updates.install();
   },
 
   notify: (title: string, body: string) => notify(title, body),
@@ -306,6 +320,53 @@ ipcMain.handle("camado", async (event, method: string, ...args: unknown[]) => {
 
 function isAppUrl(url: string): boolean {
   return url.startsWith("file://") || (process.env.ELECTRON_RENDERER_URL ? url.startsWith(process.env.ELECTRON_RENDERER_URL) : false);
+}
+
+// ---------- Текст песни поверх всех окон ----------
+
+let overlay: BrowserWindow | undefined;
+
+function loadRenderer(w: BrowserWindow, hash?: string): void {
+  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(process.env.ELECTRON_RENDERER_URL + (hash ? `#${hash}` : ""));
+  else void w.loadFile(join(here, "../renderer/index.html"), hash ? { hash } : undefined);
+}
+
+function toggleOverlay(): boolean {
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.close();
+    return false;
+  }
+  const area = screen.getPrimaryDisplay().workArea;
+  const width = Math.min(1100, area.width - 80);
+  const height = 170;
+  overlay = new BrowserWindow({
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: area.y + area.height - height - 24,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    resizable: false,
+    movable: false,
+    show: false,
+    webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+  });
+  overlay.setAlwaysOnTop(true, "screen-saver");
+  overlay.setIgnoreMouseEvents(true); // клики проходят сквозь текст
+  overlay.setVisibleOnAllWorkspaces(true);
+  overlay.once("ready-to-show", () => overlay?.showInactive());
+  overlay.on("closed", () => {
+    overlay = undefined;
+    send("overlay-changed", false);
+  });
+  loadRenderer(overlay, "overlay");
+  send("overlay-changed", true);
+  return true;
 }
 
 // ---------- Окно и трей ----------
@@ -336,7 +397,6 @@ function createWindow(): void {
       preload: join(here, "../preload/index.cjs"),
       contextIsolation: true,
       sandbox: true,
-      webviewTag: true,
       spellcheck: false,
       backgroundThrottling: false,
     },
@@ -349,14 +409,21 @@ function createWindow(): void {
       win?.hide();
     }
   });
-  win.on("closed", () => (win = undefined));
+  win.on("closed", () => {
+    win = undefined;
+    overlay?.close();
+  });
+  // Если окно всё-таки упало целиком — перезапускаем его, а не оставляем белый экран.
+  win.webContents.on("render-process-gone", (_e, details) => {
+    console.error("Окно упало:", details.reason);
+    if (details.reason !== "clean-exit") win?.webContents.reload();
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (/^https?:/.test(url)) void shell.openExternal(url);
     return { action: "deny" };
   });
 
-  if (process.env.ELECTRON_RENDERER_URL) void win.loadURL(process.env.ELECTRON_RENDERER_URL);
-  else void win.loadFile(join(here, "../renderer/index.html"));
+  loadRenderer(win);
 
   if (process.env.CAMADO_SHOTS) {
     win.webContents.on("console-message", (e) => console.log(`[окно] ${e.message}`));
@@ -373,6 +440,7 @@ function createTray(): void {
     Menu.buildFromTemplate([
       { label: "Открыть Камадо", click: () => showWindow() },
       { label: "Пауза / играть", click: () => send("media-key", "playpause") },
+      { label: "Текст песни поверх окон", click: () => toggleOverlay() },
       { type: "separator" },
       {
         label: "Выйти",
@@ -405,6 +473,9 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
     }
     const img = await w.webContents.capturePage();
     await writeFile(join(dir, `${name}.png`), img.toPNG());
+    if (overlay && !overlay.isDestroyed()) {
+      await writeFile(join(dir, `${name}-overlay.png`), (await overlay.webContents.capturePage()).toPNG());
+    }
   }
   quitting = true;
   app.quit();
@@ -413,27 +484,6 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
 // ---------- Запуск ----------
 
 app.on("second-instance", () => showWindow());
-
-app.on("web-contents-created", (_e, contents) => {
-  // Встроенные плееры (Яндекс Музыка, SoundCloud): без доступа к Node, только свои сайты.
-  contents.on("will-attach-webview", (event, prefs, params) => {
-    delete prefs.preload;
-    prefs.nodeIntegration = false;
-    prefs.contextIsolation = true;
-    try {
-      if (!ONLINE_HOSTS.test(new URL(params.src ?? "").hostname)) event.preventDefault();
-    } catch {
-      event.preventDefault();
-    }
-  });
-  if (contents.getType() === "webview") {
-    // Окна входа (логин через Яндекс ID, Google и т. п.) открываем в том же плеере.
-    contents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:/.test(url)) void contents.loadURL(url);
-      return { action: "deny" };
-    });
-  }
-});
 
 app.on("before-quit", () => {
   quitting = true;
@@ -454,17 +504,6 @@ void app.whenReady().then(async () => {
     return serveFile(path, req.headers.get("range"));
   });
 
-  // Захват системного звука для визуализатора онлайн-плееров (Windows, macOS).
-  session.defaultSession.setDisplayMediaRequestHandler(
-    (_req, callback) => {
-      void desktopCapturer.getSources({ types: ["screen"] }).then((sources) => {
-        const supported = process.platform === "win32" || process.platform === "darwin";
-        callback(supported && sources[0] ? { video: sources[0], audio: "loopback" } : {});
-      });
-    },
-    { useSystemPicker: false },
-  );
-
   await library.load();
   createWindow();
   // Подхватить новые файлы в папках, добавленных раньше.
@@ -484,6 +523,7 @@ void app.whenReady().then(async () => {
   }
 
   startBot();
+  updates.start();
   startReminderLoop(
     store,
     async (text) => {

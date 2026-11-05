@@ -55,7 +55,17 @@ const api: CamadoApi = {
     rescan: call("library.rescan") as CamadoApi["library"]["rescan"],
   },
   lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"] },
-  online: { sendKey: call("online.sendKey") as CamadoApi["online"]["sendKey"] },
+  music: { importUrl: call("music.importUrl") as CamadoApi["music"]["importUrl"] },
+  overlay: {
+    toggle: call("overlay.toggle") as CamadoApi["overlay"]["toggle"],
+    isOpen: call("overlay.isOpen") as CamadoApi["overlay"]["isOpen"],
+    push: call("overlay.push") as CamadoApi["overlay"]["push"],
+  },
+  updates: {
+    status: call("updates.status") as CamadoApi["updates"]["status"],
+    check: call("updates.check") as CamadoApi["updates"]["check"],
+    install: call("updates.install") as CamadoApi["updates"]["install"],
+  },
   window: { setTitleBarColors: call("window.setTitleBarColors") as CamadoApi["window"]["setTitleBarColors"] },
   notify: call("notify") as CamadoApi["notify"],
   pathForFile: (file: File) => webUtils.getPathForFile(file),

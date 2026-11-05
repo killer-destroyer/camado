@@ -5,14 +5,25 @@ import type { VisualizerStyle } from "../../../shared/settings";
 import { BAND_COUNT, engine } from "../lib/audio";
 import { useFrame } from "../lib/frame";
 
-function cssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// Цвета палитры. Читаем из CSS только когда палитра меняется — getComputedStyle каждый кадр тормозит.
+const theme = { a: "#ffffff", b: "#ffffff", c: "#ffffff" };
+let watching = false;
+function watchTheme(): void {
+  if (watching) return;
+  watching = true;
+  const read = () => {
+    const cs = getComputedStyle(document.documentElement);
+    theme.a = cs.getPropertyValue("--accent").trim() || theme.a;
+    theme.b = cs.getPropertyValue("--accent-2").trim() || theme.b;
+    theme.c = cs.getPropertyValue("--accent-3").trim() || theme.c;
+  };
+  read();
+  new MutationObserver(read).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
 }
 
 export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: VisualizerStyle; className?: string; ringRadius?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useRef({ w: 0, h: 0, dpr: 1 });
-  const colors = useRef({ a: "#fff", b: "#fff", c: "#fff" });
   const peaks = useRef(new Float32Array(BAND_COUNT));
   const spin = useRef(0);
 
@@ -26,15 +37,8 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
       c.height = Math.max(1, Math.round(r.height * dpr));
     });
     ro.observe(c);
-    const readColors = () =>
-      (colors.current = { a: cssVar("--accent"), b: cssVar("--accent-2"), c: cssVar("--accent-3") });
-    readColors();
-    const mo = new MutationObserver(readColors);
-    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
-    return () => {
-      ro.disconnect();
-      mo.disconnect();
-    };
+    watchTheme();
+    return () => ro.disconnect();
   }, []);
 
   useFrame((dt) => {
@@ -45,7 +49,7 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
     if (w === 0) return;
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
-    const { a, b, c: c3 } = colors.current;
+    const { a, b, c: c3 } = theme;
     const bands = engine.smooth;
 
     if (kind === "ring") {
@@ -145,7 +149,7 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
       g.fill();
     }
     g.globalAlpha = 0.9;
-    g.strokeStyle = colors.current.a;
+    g.strokeStyle = theme.a;
     g.lineWidth = 2;
     g.beginPath();
     const wave = engine.wave;
@@ -166,6 +170,7 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
 /** Крошечный спектр для мини-плеера. */
 export function MiniSpectrum() {
   const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(watchTheme, []);
   useFrame(() => {
     const c = ref.current;
     if (!c) return;
@@ -173,7 +178,7 @@ export function MiniSpectrum() {
     const w = c.width;
     const h = c.height;
     g.clearRect(0, 0, w, h);
-    g.fillStyle = cssVar("--accent");
+    g.fillStyle = theme.a;
     const n = 14;
     const bw = w / n - 2;
     for (let i = 0; i < n; i++) {

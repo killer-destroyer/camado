@@ -21,7 +21,11 @@ export function Chat() {
     void api.ai.status().then((s) => setAiOn(s.enabled));
     void api.chat.history().then(setItems);
   }, []);
-  useEffect(() => end.current?.scrollIntoView({ behavior: "smooth" }), [items, busy]);
+  useEffect(() => {
+    // Фигурные скобки важны: scrollIntoView в новом Chromium возвращает промис,
+    // а React принял бы его за функцию очистки и упал.
+    void end.current?.scrollIntoView({ behavior: "smooth" });
+  }, [items, busy]);
 
   const send = async (msg = text) => {
     const t = msg.trim();

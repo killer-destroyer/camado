@@ -12,7 +12,8 @@ export interface AppSettings {
   fpsCap: 0 | 30 | 60 | 120 | 144 | 240;
   showFps: boolean;
   background: "aurora" | "calm" | "static";
-  glass: boolean;
+  /** Размытие под панелями. Красиво, но на живом фоне нагружает видеокарту — по умолчанию выключено. */
+  blur: boolean;
   visualizer: VisualizerStyle;
   lyricsMode: LyricsMode;
   lyricsSize: number; // 0.7…1.4
@@ -37,7 +38,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   fpsCap: 0,
   showFps: false,
   background: "aurora",
-  glass: true,
+  blur: false,
   visualizer: "ring",
   lyricsMode: "flow",
   lyricsSize: 1,
