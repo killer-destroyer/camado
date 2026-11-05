@@ -7,14 +7,14 @@ import { isNewer, versionFromYml } from "../shared/version.js";
 
 const { autoUpdater } = electronUpdater;
 
-export const FEED = "https://github.com/killer-destroyer/camado-/releases/latest/download";
+export const FEED = "https://github.com/killer-destroyer/camado/releases/latest/download";
 const MAC_DOWNLOAD = `${FEED}/Camado-mac.dmg`;
 const CHECK_EVERY = 3 * 3600e3;
 
 function explain(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   if (/404|Cannot find latest|HttpError: 40[34]/i.test(msg)) {
-    return "Не вижу новых версий: файлы обновлений недоступны. Если проект на GitHub приватный — сделай его публичным, тогда обновления заработают.";
+    return "Не вижу новых версий: GitHub не отдаёт файлы обновлений. Скорее всего, проект приватный — открой его на GitHub → Settings → внизу «Change visibility» → Public.";
   }
   if (/ENOTFOUND|ETIMEDOUT|ECONNRESET|net::|getaddrinfo/i.test(msg)) return "Нет связи с интернетом — проверю позже.";
   return "Не получилось проверить обновления. Попробую позже.";

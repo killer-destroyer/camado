@@ -4,9 +4,9 @@
 
 ## Скачать
 
-### [⬇️ Скачать для Windows](https://github.com/killer-destroyer/camado-/releases/latest/download/Camado-Setup.exe)
+### [⬇️ Скачать для Windows](https://github.com/killer-destroyer/camado/releases/latest/download/Camado-Setup.exe)
 
-[Скачать для Mac](https://github.com/killer-destroyer/camado-/releases/latest/download/Camado-mac.dmg)
+[Скачать для Mac](https://github.com/killer-destroyer/camado/releases/latest/download/Camado-mac.dmg)
 
 Запусти скачанный файл, и Камадо установится сам: появится ярлык на рабочем столе. Больше ничего делать не нужно.
 
