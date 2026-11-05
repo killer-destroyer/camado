@@ -1,16 +1,18 @@
-// «Сейчас играет»: на весь экран — пластинка, визуализатор, текст песни и тряска в такт.
-import { useRef } from "react";
-import { ChevronDown, PictureInPicture2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Vibrate } from "lucide-react";
+// «Сейчас играет»: слева огромная пластинка, справа название и текст песни,
+// внизу светящиеся волны и управление. Всё в цветах обложки, трясётся в такт.
+import { useEffect, useRef, useState } from "react";
+import { ChevronDown, Moon, PictureInPicture2, Pause, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Vibrate } from "lucide-react";
 import type { LyricsMode, VisualizerStyle } from "../../../shared/settings";
-import { engine } from "../lib/audio";
 import { fmtTime } from "../lib/format";
 import { useFrame } from "../lib/frame";
+import { paletteById } from "../lib/palettes";
 import { useStore } from "../lib/store";
+import { engine } from "../lib/audio";
 import { app, toggleOverlay, updateSettings } from "../state/app";
-import { cycleRepeat, duration, next, nowMeta, player, position, prev, seek, togglePlay } from "../state/player";
+import { currentTrack, cycleRepeat, duration, next, nowMeta, player, position, prev, seek, setSleep, togglePlay } from "../state/player";
 import { Lyrics } from "./Lyrics";
 import { Segmented } from "./ui";
-import { Vinyl } from "./Vinyl";
+import { discGeometry, Vinyl } from "./Vinyl";
 import { Visualizer } from "./Visualizer";
 
 const LYRIC_MODES: { value: LyricsMode; label: string }[] = [
@@ -20,11 +22,11 @@ const LYRIC_MODES: { value: LyricsMode; label: string }[] = [
   { value: "off", label: "Без текста" },
 ];
 
-const VIS_MODES: { value: VisualizerStyle; label: string }[] = [
-  { value: "ring", label: "Кольцо" },
-  { value: "wave", label: "Волна" },
-  { value: "bars", label: "Столбики" },
-  { value: "off", label: "Выкл" },
+const VIS_MODES: { value: VisualizerStyle; label: string; title: string }[] = [
+  { value: "wave", label: "Волны", title: "Кольцо у пластинки + волны внизу" },
+  { value: "bars", label: "Столбики", title: "Кольцо у пластинки + столбики внизу" },
+  { value: "ring", label: "Кольцо", title: "Только кольцо у пластинки" },
+  { value: "off", label: "Выкл", title: "Без визуализатора" },
 ];
 
 export function Progress({ big = false }: { big?: boolean }) {
@@ -66,54 +68,149 @@ export function Progress({ big = false }: { big?: boolean }) {
   );
 }
 
+/** Сдвиг текста для трека, где тайминг в базе кривой: «−» раньше, «+» позже. */
+function LyricsShift({ trackId }: { trackId: string }) {
+  const offsets = useStore(app, (s) => s.settings.lyricsOffsets);
+  const v = offsets[trackId] ?? 0;
+  const set = (x: number) => {
+    const next = Math.round(Math.max(-5, Math.min(5, x)) * 4) / 4;
+    const copy = { ...offsets };
+    if (next === 0) delete copy[trackId];
+    else copy[trackId] = next;
+    updateSettings({ lyricsOffsets: copy });
+  };
+  return (
+    <div className="lyr-shift" title="Если текст спешит или опаздывает — подвинь его">
+      <button onClick={() => set(v - 0.25)}>−</button>
+      <span onClick={() => set(0)}>{v === 0 ? "текст" : `${v > 0 ? "+" : ""}${v.toFixed(2)} с`}</span>
+      <button onClick={() => set(v + 0.25)}>+</button>
+    </div>
+  );
+}
+
+const SOUND = [
+  { value: "normal" as const, label: "1×", title: "Обычный звук" },
+  { value: "slowed" as const, label: "slowed", title: "Slowed + reverb: медленнее, ниже и с эхом" },
+  { value: "nightcore" as const, label: "nightcore", title: "Nightcore: быстрее и выше" },
+];
+
+function SoundModeButton() {
+  const mode = useStore(app, (s) => s.settings.soundMode);
+  const i = SOUND.findIndex((m) => m.value === mode);
+  const cur = SOUND[Math.max(0, i)]!;
+  return (
+    <button
+      className={`sound-btn ${mode !== "normal" ? "active" : ""}`}
+      title={`${cur.title}. Нажми, чтобы сменить`}
+      onClick={() => updateSettings({ soundMode: SOUND[(i + 1) % SOUND.length]!.value })}
+    >
+      {cur.label}
+    </button>
+  );
+}
+
+function SleepButton() {
+  const sleep = useStore(player, (s) => s.sleep);
+  const [open, setOpen] = useState(false);
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!sleep?.at) return;
+    const t = setInterval(() => tick((x) => x + 1), 15_000);
+    return () => clearInterval(t);
+  }, [sleep?.at]);
+  const left = sleep?.at ? Math.max(1, Math.round((sleep.at - Date.now()) / 60e3)) : 0;
+  const choose = (v: number | "track" | null) => {
+    setSleep(v);
+    setOpen(false);
+  };
+  return (
+    <div className="sleep">
+      <button className={`icon-btn ${sleep ? "active" : ""}`} title="Таймер сна" onClick={() => setOpen(!open)}>
+        <Moon size={18} />
+        {sleep && <span className="sleep-badge">{sleep.endOfTrack ? "трек" : `${left}м`}</span>}
+      </button>
+      {open && (
+        <div className="sleep-menu glass">
+          {[15, 30, 60].map((m) => (
+            <button key={m} onClick={() => choose(m)}>
+              через {m} мин
+            </button>
+          ))}
+          <button onClick={() => choose("track")}>после этого трека</button>
+          {sleep && (
+            <button className="off" onClick={() => choose(null)}>
+              выключить таймер
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NowPlaying() {
   const settings = useStore(app, (s) => s.settings);
   const overlayOn = useStore(app, (s) => s.overlay);
+  const platform = useStore(app, (s) => s.info.platform);
   const playing = useStore(player, (s) => s.playing);
   const lyrics = useStore(player, (s) => s.lyrics);
-  const loading = useStore(player, (s) => s.lyricsLoading);
   const shuffle = useStore(player, (s) => s.shuffle);
   const repeat = useStore(player, (s) => s.repeat);
+  const coverPalette = useStore(player, (s) => s.coverPalette);
   useStore(player, (s) => s.index);
   const meta = nowMeta();
+  const track = currentTrack();
+  const palette = settings.coverColors && coverPalette ? coverPalette : paletteById(settings.palette);
+  const hasLyrics = !!lyrics && lyrics.lines.length > 0 && settings.lyricsMode !== "off";
 
-  const scene = useRef<HTMLDivElement>(null);
-  const cover = useRef<HTMLDivElement>(null);
-  const lyr = useRef<HTMLDivElement>(null);
+  const shakeAll = useRef<HTMLDivElement>(null);
+  const shakeDisc = useRef<HTMLDivElement>(null);
+  const shakeLyrics = useRef<HTMLDivElement>(null);
+  const [, setSize] = useState(0);
+  useEffect(() => {
+    const on = () => setSize((x) => x + 1);
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
 
   useFrame(() => {
     const sh = settings.shake;
     const o = engine.shake;
     const transform = `translate3d(${o.x.toFixed(2)}px, ${o.y.toFixed(2)}px, 0) rotate(${o.rotate.toFixed(3)}deg) scale(${o.scale.toFixed(4)})`;
     const tgt = sh.enabled ? sh.target : null;
-    if (scene.current) scene.current.style.transform = tgt === "scene" ? transform : "";
-    if (cover.current) cover.current.style.transform = tgt === "cover" ? transform : "";
-    if (lyr.current) lyr.current.style.transform = tgt === "lyrics" ? transform : "";
+    if (shakeAll.current) shakeAll.current.style.transform = tgt === "scene" ? transform : "";
+    if (shakeDisc.current) shakeDisc.current.style.transform = tgt === "cover" ? transform : "";
+    if (shakeLyrics.current) shakeLyrics.current.style.transform = tgt === "lyrics" ? transform : "";
   }, 40);
 
   const mode = settings.lyricsMode;
-  const layout = mode === "flow" ? "split" : "center";
+  const vis = settings.visualizer;
+  const ring = (w: number, h: number) => discGeometry(w, h);
 
   return (
-    <div className="nowplaying" onKeyDown={(e) => e.key === "Escape" && app.set({ nowPlaying: false })}>
+    <div className={`nowplaying ${platform === "darwin" ? "mac" : ""}`} onKeyDown={(e) => e.key === "Escape" && app.set({ nowPlaying: false })}>
       <div className="np-backdrop" style={meta?.cover ? { backgroundImage: `url("${meta.cover}")` } : undefined} />
-      {settings.visualizer !== "ring" && settings.visualizer !== "off" && (
-        <Visualizer kind={settings.visualizer} className={`np-vis ${settings.visualizer}`} />
-      )}
+      <div className="np-tint" />
+      {(vis === "wave" || vis === "bars") && <Visualizer kind={vis} className={`np-vis ${vis}`} />}
 
-      <div ref={scene} className={`np-scene ${layout}`}>
-        <div className="np-stage">
-          <div ref={cover} className="np-cover-wrap">
-            {settings.visualizer === "ring" && <Visualizer kind="ring" className="np-ring" ringRadius={0.3} />}
-            <Vinyl cover={meta?.cover} showVinyl={settings.vinyl} />
-          </div>
-          <div className="np-meta">
+      <div ref={shakeAll} className="np-shake">
+        {vis !== "off" && <Visualizer kind="ring-only" className="np-ring-full" ring={ring} />}
+        <div ref={shakeDisc} className="np-disc-layer">
+          <Vinyl
+            trackKey={track?.id ?? meta?.title ?? "camado"}
+            cover={meta?.cover}
+            colors={{ bg: palette.bg2, accent: palette.accent, accent2: palette.accent2, accent3: palette.accent3 }}
+          />
+        </div>
+
+        <div className={`np-right ${hasLyrics ? "" : "no-lyrics"} mode-${mode}`}>
+          <div key={meta?.title} className="np-meta">
             <div className="np-title">{meta?.title ?? "Ничего не играет"}</div>
             <div className="np-artist">{meta?.artist ?? "Выбери трек в «Музыке»"}</div>
           </div>
-        </div>
-        <div ref={lyr} className={`np-lyrics mode-${mode}`}>
-          <Lyrics lyrics={lyrics} loading={loading} mode={mode} />
+          <div ref={shakeLyrics} className={`np-lyrics mode-${mode}`}>
+            <Lyrics lyrics={lyrics} mode={mode} />
+          </div>
         </div>
       </div>
 
@@ -121,10 +218,10 @@ export function NowPlaying() {
         <button className="icon-btn" title="Свернуть (Esc)" onClick={() => app.set({ nowPlaying: false })}>
           <ChevronDown size={22} />
         </button>
-        <div className="np-source">Сейчас играет</div>
         <div className="np-switches">
+          {hasLyrics && lyrics?.synced && track && <LyricsShift trackId={track.id} />}
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
-          <Segmented size="sm" value={settings.visualizer} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
+          <Segmented size="sm" value={vis} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
           <button className={`icon-btn ${overlayOn ? "active" : ""}`} title="Текст песни поверх всех окон" onClick={() => void toggleOverlay()}>
             <PictureInPicture2 size={18} />
           </button>
@@ -141,7 +238,8 @@ export function NowPlaying() {
       <div className="np-bottom">
         <Progress big />
         <div className="np-controls">
-          <button className={`icon-btn ${shuffle ? "active" : ""}`} title="Перемешать" onClick={() => player.set({ shuffle: !shuffle })}>
+          <SleepButton />
+          <button className={`icon-btn ${shuffle ? "active" : ""}`} title="Умный рандом" onClick={() => player.set({ shuffle: !shuffle })}>
             <Shuffle size={18} />
           </button>
           <button className="icon-btn lg" title="Назад" onClick={prev}>
@@ -156,6 +254,7 @@ export function NowPlaying() {
           <button className={`icon-btn ${repeat !== "off" ? "active" : ""}`} title="Повтор" onClick={cycleRepeat}>
             {repeat === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
           </button>
+          <SoundModeButton />
         </div>
       </div>
     </div>

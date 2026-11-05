@@ -12,18 +12,51 @@ const USER_AGENT = "Camado/0.2 (https://github.com/killer-destroyer/camado-)";
 const NOT_FOUND_TTL = 7 * 24 * 3600 * 1000;
 const NONE: Lyrics = { synced: false, lines: [], source: "none" };
 
-/** Убирает из названия мусор вроде «(Official Video)», «[Remastered 2011]», «feat. …». */
+/** Декоративные символы из названий с SoundCloud: ☆⋆｡ ⊹┊۵ ♡ ✧ и т. п. */
+const DECOR = /[^\p{L}0-9\s'’&().,!?:+\-]/gu;
+
+/** Убирает из названия мусор: «(Official Video)», «[Remastered]», «feat. …», [2403137955], ☆⋆｡ и т. п. */
 export function cleanTitle(title: string): string {
   return title
-    .replace(/\s*[([](?:official|lyric|lyrics|audio|video|clip|mv|hd|hq|remaster|remastered|live|explicit|clean|prod\.?|feat\.?|ft\.?|клип|премьера)[^)\]]*[)\]]/gi, "")
+    .replace(/\[\s*\d{5,}\s*\]|\(\s*\d{5,}\s*\)/g, "") // ID вроде [2403137955]
+    .replace(/\s*[([](?:official|lyric|lyrics|audio|video|clip|mv|hd|hq|remaster|remastered|live|explicit|clean|prod\.?|feat\.?|ft\.?|клип|премьера|slowed|sped up|speed up|reverb|nightcore)[^)\]]*[)\]]/gi, "")
     .replace(/\s+(?:feat\.?|ft\.?)\s.+$/i, "")
     .replace(/\s+-\s+(?:remaster(?:ed)?|single version|radio edit).*$/i, "")
+    .replace(DECOR, " ")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s\-–—|]+|[\s\-–—|]+$/g, "")
     .trim();
 }
 
+/** Есть ли в строке хоть одна буква (исполнитель «☆⋆｡» — не исполнитель). */
+export const hasLetters = (s: string) => /\p{L}/u.test(s);
+
 /** Первый исполнитель из «A, B & C» / «A feat. B». */
 export function mainArtist(artist: string): string {
-  return artist.split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bx\b|;)\s*/i)[0]!.trim() || artist;
+  const a = cleanTitle(artist);
+  return a.split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bx\b|;)\s*/i)[0]!.trim() || a;
+}
+
+/** Варианты «исполнитель + название», которые стоит попробовать — от самого точного. */
+export function queryVariants(title: string, artist: string): { track: string; artist?: string }[] {
+  const out: { track: string; artist?: string }[] = [];
+  const add = (track: string, a?: string) => {
+    const t = track.trim();
+    if (!t || !hasLetters(t)) return;
+    const key = `${t}|${a ?? ""}`.toLowerCase();
+    if (!out.some((o) => `${o.track}|${o.artist ?? ""}`.toLowerCase() === key)) out.push(a && hasLetters(a) ? { track: t, artist: a } : { track: t });
+  };
+  const t = cleanTitle(title);
+  const a = mainArtist(artist);
+  if (hasLetters(a) && !/^неизвестный исполнитель$/i.test(a)) add(t, a);
+  // «Исполнитель - Песня» в самом названии (частая история с файлами из интернета)
+  const m = t.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+  if (m) add(m[2]!, mainArtist(m[1]!));
+  add(t);
+  // без уточнения в скобках: «Botsu 8 (The Last Dance Song)» → «Botsu 8»
+  const bare = t.replace(/\s*[([][^)\]]*[)\]]\s*/g, " ").trim();
+  if (bare !== t) add(bare);
+  return out;
 }
 
 interface LrclibRecord {
@@ -55,7 +88,8 @@ export class LyricsService {
 
     await mkdir(this.cacheDir, { recursive: true });
     const key = createHash("sha1")
-      .update(`${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
+      // v2: после улучшения поиска старые «не нашлось» больше не действуют
+      .update(`v2|${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
       .digest("hex");
     const cacheFile = join(this.cacheDir, `${key}.json`);
     if (existsSync(cacheFile)) {
@@ -115,25 +149,35 @@ export class LyricsService {
   }
 
   private async fromLrclib(q: LyricsQuery): Promise<Lyrics> {
-    const title = cleanTitle(q.title);
-    const artist = mainArtist(q.artist);
-    const params: Record<string, string> = { track_name: title, artist_name: artist };
-    if (q.album) params.album_name = q.album;
-    if (q.duration) params.duration = String(Math.round(q.duration));
+    const near = (r: LrclibRecord) => !q.duration || !r.duration || Math.abs(r.duration - q.duration) <= 5;
+    const pick = (list: LrclibRecord[]) => {
+      const ok = list.filter((r) => !r.instrumental);
+      const best = ok.find((r) => r.syncedLyrics && near(r)) ?? ok.find((r) => r.plainLyrics && near(r));
+      return best ? fromRecord(best) : undefined;
+    };
+    let plain: Lyrics | undefined;
+    const take = (l: Lyrics | undefined): Lyrics | undefined => {
+      if (!l?.lines.length) return undefined;
+      if (l.synced) return l;
+      plain ??= l; // запомним простой текст, но поищем ещё с таймингом
+      return undefined;
+    };
 
-    const exact = await this.request("get", params);
-    if (exact.ok) {
-      const lyr = fromRecord((await exact.json()) as LrclibRecord);
-      if (lyr.lines.length) return lyr;
-    } else if (exact.status !== 404) {
-      throw new Error(`LRCLIB ответил ${exact.status}`);
+    for (const v of queryVariants(q.title, q.artist)) {
+      if (v.artist) {
+        const params: Record<string, string> = { track_name: v.track, artist_name: v.artist };
+        if (q.duration) params.duration = String(Math.round(q.duration));
+        const exact = await this.request("get", params);
+        if (exact.ok) {
+          const l = take(fromRecord((await exact.json()) as LrclibRecord));
+          if (l) return l;
+        } else if (exact.status !== 404) throw new Error(`LRCLIB ответил ${exact.status}`);
+      }
+      const search = await this.request("search", v.artist ? { track_name: v.track, artist_name: v.artist } : { q: v.track });
+      if (!search.ok) throw new Error(`LRCLIB ответил ${search.status}`);
+      const l = take(pick((await search.json()) as LrclibRecord[]));
+      if (l) return l;
     }
-
-    const search = await this.request("search", { track_name: title, artist_name: artist });
-    if (!search.ok) throw new Error(`LRCLIB ответил ${search.status}`);
-    const found = ((await search.json()) as LrclibRecord[]).filter((r) => !r.instrumental);
-    const near = (r: LrclibRecord) => !q.duration || !r.duration || Math.abs(r.duration - q.duration) <= 4;
-    const best = found.find((r) => r.syncedLyrics && near(r)) ?? found.find((r) => r.plainLyrics && near(r));
-    return best ? fromRecord(best) : NONE;
+    return plain ?? NONE;
   }
 }

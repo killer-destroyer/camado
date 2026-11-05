@@ -58,7 +58,8 @@ function applySettings(s: AppSettings): void {
   engine.shakeEnabled = s.shake.enabled;
   engine.shakeOpts = { intensity: s.shake.intensity, rotation: s.shake.rotation, zoom: s.shake.zoom };
   engine.beat.sensitivity = s.shake.sensitivity;
-  engine.el.volume = s.volume;
+  engine.volume = s.volume;
+  engine.setMode(s.soundMode);
   document.documentElement.dataset.blur = s.blur ? "1" : "0";
   document.documentElement.style.setProperty("--lyrics-scale", String(s.lyricsSize));
 }

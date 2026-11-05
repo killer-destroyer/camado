@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { onFrame, useFrame } from "../lib/frame";
 import { useStore } from "../lib/store";
 import { app } from "../state/app";
-import { duration, nowMeta, player, position } from "../state/player";
+import { duration, lyricsTime, player } from "../state/player";
 
 /** В главном окне: пока поверх-окно открыто, шлёт ему текущую строку ~8 раз в секунду. */
 export function OverlayFeed() {
@@ -17,24 +17,22 @@ export function OverlayFeed() {
     if (!open) return;
     return onFrame(() => {
       const s = player.get();
-      const meta = nowMeta();
       const lyrics = s.lyrics;
-      const t = position();
+      const t = lyricsTime();
       let text = "";
       let next: string | undefined;
       let words: OverlayState["words"] = [];
       let lineEnd = 0;
       if (lyrics?.synced && lyrics.lines.length) {
-        const i = activeLineIndex(lyrics.lines, t + 0.12);
+        const i = activeLineIndex(lyrics.lines, t + 0.04);
         if (i >= 0) {
           text = lyrics.lines[i]!.text;
           words = timedWords(lyrics.lines, i, duration());
           lineEnd = lyrics.lines[i + 1]?.time ?? duration();
         }
         next = lyrics.lines[i + 1]?.text;
-      } else if (meta) {
-        text = `${meta.title} — ${meta.artist}`;
       }
+      // Нет текста с таймингом — ничего не показываем (раньше тут было название трека).
       const now = Date.now();
       const key = `${text}|${s.playing}`;
       if (key === last.current.key && now - last.current.at < 125) return;
@@ -78,7 +76,7 @@ export function LyricsOverlay() {
     const s = stRef.current;
     const el = line.current;
     if (!s || !el) return;
-    const t = s.position + (s.playing ? (Date.now() - s.sentAt) / 1000 : 0) + 0.12;
+    const t = s.position + (s.playing ? (Date.now() - s.sentAt) / 1000 : 0) + 0.04;
     const spans = el.children;
     for (let i = 0; i < spans.length; i++) {
       const w = s.words[i];

@@ -25,7 +25,8 @@ import { BudgetExceededError } from "../../src/llm/metered.js";
 import { parseTaskArgs } from "../../src/manual.js";
 import { startReminderLoop } from "../../src/reminders.js";
 import { mergeSettings, type AppSettings } from "../shared/settings.js";
-import type { AppInfo, BotStatus, OverlayState, TaskInput, TaskPatch } from "../shared/types.js";
+import type { AppInfo, BotStatus, NowPlayingState, OverlayState, TaskInput, TaskPatch } from "../shared/types.js";
+import { DiscordPresence } from "./discord.js";
 import { importFromUrl } from "./download.js";
 import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
@@ -95,6 +96,8 @@ const send = (channel: string, payload?: unknown) => {
 
 const library = new Library(dataDir, () => send("library-changed"));
 const updates = new Updates((s) => send("update-status", s));
+const discord = new DiscordPresence();
+let nowPlaying: NowPlayingState | null = null;
 const lyrics = new LyricsService(join(dataDir, "lyrics-cache"), (id) => library.trackPath(id));
 
 // Любое изменение данных (из окна, бота или ИИ) — окно перерисовывает списки.
@@ -267,6 +270,7 @@ const handlers: Record<string, Handler> = {
     const before = settings.runBot;
     const next = saveSettings(patch);
     if (before !== next.runBot) next.runBot ? startBot() : await stopBot();
+    void discord.configure(next.discord.enabled, next.discord.clientId);
     return next;
   },
 
@@ -299,6 +303,20 @@ const handlers: Record<string, Handler> = {
   "overlay.push": (state: OverlayState) => {
     if (overlay && !overlay.isDestroyed()) overlay.webContents.send("overlay-state", state);
   },
+
+  "nowPlaying.push": (state: NowPlayingState | null) => {
+    nowPlaying = state;
+    updateTray();
+    if (mini && !mini.isDestroyed()) mini.webContents.send("np-state", state);
+    void discord.update(state);
+  },
+  "nowPlaying.action": (action: "playpause" | "next" | "prev" | "open") => {
+    if (action === "open") {
+      mini?.hide();
+      showWindow();
+    } else send("media-key", action);
+  },
+  "discord.status": () => discord.status,
 
   "updates.status": () => updates.status,
   "updates.check": () => updates.check(),
@@ -369,6 +387,85 @@ function toggleOverlay(): boolean {
   return true;
 }
 
+// ---------- Мини-плеер в меню-баре (Mac) и меню трея ----------
+
+let mini: BrowserWindow | undefined;
+
+function toggleMini(bounds?: Electron.Rectangle): void {
+  if (mini && !mini.isDestroyed() && mini.isVisible()) {
+    mini.hide();
+    return;
+  }
+  if (!mini || mini.isDestroyed()) {
+    mini = new BrowserWindow({
+      width: 360,
+      height: 150,
+      frame: false,
+      resizable: false,
+      movable: false,
+      show: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      transparent: process.platform === "darwin",
+      backgroundColor: process.platform === "darwin" ? "#00000000" : "#14112a",
+      ...(process.platform === "darwin" ? { vibrancy: "popover" as const, visualEffectState: "active" as const } : {}),
+      webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+    });
+    mini.on("blur", () => mini?.hide());
+    loadRenderer(mini, "mini");
+    mini.webContents.once("did-finish-load", () => mini?.webContents.send("np-state", nowPlaying));
+  }
+  const b = bounds ?? tray?.getBounds();
+  if (b) {
+    const area = screen.getDisplayMatching(b).workArea;
+    const x = Math.round(Math.min(Math.max(b.x + b.width / 2 - 180, area.x + 8), area.x + area.width - 368));
+    const y = process.platform === "darwin" ? b.y + b.height + 6 : b.y - 156;
+    mini.setPosition(x, y);
+  }
+  mini.show();
+  mini.focus();
+}
+
+function trayMenu(): Menu {
+  const np = nowPlaying;
+  return Menu.buildFromTemplate([
+    ...(np
+      ? [
+          { label: `${np.playing ? "▶" : "⏸"}  ${np.title.slice(0, 40)}`, enabled: false },
+          { label: `     ${np.artist.slice(0, 40)}`, enabled: false },
+          { type: "separator" as const },
+          { label: np.playing ? "Пауза" : "Играть", click: () => send("media-key", "playpause") },
+          { label: "Следующий трек", click: () => send("media-key", "next") },
+          { label: "Предыдущий трек", click: () => send("media-key", "prev") },
+          { type: "separator" as const },
+        ]
+      : []),
+    { label: "Открыть Камадо", click: () => showWindow() },
+    { label: "Текст песни поверх окон", click: () => toggleOverlay() },
+    { type: "separator" },
+    {
+      label: "Выйти",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+let lastTrayKey = "";
+function updateTray(): void {
+  if (!tray) return;
+  const np = nowPlaying;
+  const key = np ? `${np.title}|${np.playing}` : "";
+  if (key === lastTrayKey) return;
+  lastTrayKey = key;
+  tray.setToolTip(np ? `Камадо — ${np.title} · ${np.artist}` : "Камадо");
+  // На Mac рядом с иконкой — название трека (коротко)
+  if (process.platform === "darwin") tray.setTitle(np && np.playing ? ` ${np.title.length > 22 ? np.title.slice(0, 21) + "…" : np.title}` : "");
+  if (process.platform !== "darwin") tray.setContextMenu(trayMenu());
+}
+
 // ---------- Окно и трей ----------
 
 function showWindow(): void {
@@ -432,26 +529,93 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  const img = nativeImage.createFromPath(iconPath("tray.png"));
+  const isMac = process.platform === "darwin";
+  // На Mac — чёрно-белая «шаблонная» иконка: система сама подкрашивает её под тему меню-бара.
+  const img = nativeImage.createFromPath(iconPath(isMac ? "trayTemplate.png" : "tray.png"));
   if (img.isEmpty()) return;
+  if (isMac) img.setTemplateImage(true);
   tray = new Tray(img);
   tray.setToolTip("Камадо");
-  tray.setContextMenu(
+  if (isMac) {
+    tray.on("click", (_e, bounds) => toggleMini(bounds)); // клик — мини-плеер
+    tray.on("right-click", () => tray?.popUpContextMenu(trayMenu()));
+  } else {
+    tray.setContextMenu(trayMenu());
+    tray.on("click", () => showWindow());
+  }
+}
+
+/** Меню Mac по-русски (на Windows меню скрыто — у окна своя шапка). */
+function setAppMenu(): void {
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  Menu.setApplicationMenu(
     Menu.buildFromTemplate([
-      { label: "Открыть Камадо", click: () => showWindow() },
-      { label: "Пауза / играть", click: () => send("media-key", "playpause") },
-      { label: "Текст песни поверх окон", click: () => toggleOverlay() },
-      { type: "separator" },
       {
-        label: "Выйти",
-        click: () => {
-          quitting = true;
-          app.quit();
-        },
+        label: "Camado",
+        submenu: [
+          { role: "about", label: "О программе Camado" },
+          { type: "separator" },
+          { label: "Настройки…", accelerator: "Cmd+,", click: () => send("go", "settings") },
+          { type: "separator" },
+          { role: "hide", label: "Скрыть Camado" },
+          { role: "hideOthers", label: "Скрыть остальные" },
+          { role: "unhide", label: "Показать все" },
+          { type: "separator" },
+          {
+            label: "Выйти из Camado",
+            accelerator: "Cmd+Q",
+            click: () => {
+              quitting = true;
+              app.quit();
+            },
+          },
+        ],
+      },
+      {
+        label: "Правка",
+        submenu: [
+          { role: "undo", label: "Отменить" },
+          { role: "redo", label: "Повторить" },
+          { type: "separator" },
+          { role: "cut", label: "Вырезать" },
+          { role: "copy", label: "Копировать" },
+          { role: "paste", label: "Вставить" },
+          { role: "selectAll", label: "Выбрать всё" },
+        ],
+      },
+      {
+        label: "Плеер",
+        submenu: [
+          { label: "Пауза / играть", click: () => send("media-key", "playpause") },
+          { label: "Следующий трек", accelerator: "Cmd+Right", click: () => send("media-key", "next") },
+          { label: "Предыдущий трек", accelerator: "Cmd+Left", click: () => send("media-key", "prev") },
+          { type: "separator" },
+          { label: "Текст песни поверх окон", accelerator: "Cmd+Shift+L", click: () => toggleOverlay() },
+        ],
+      },
+      {
+        label: "Вид",
+        submenu: [
+          { role: "togglefullscreen", label: "Во весь экран" },
+          { type: "separator" },
+          { role: "resetZoom", label: "Обычный размер" },
+          { role: "zoomIn", label: "Крупнее" },
+          { role: "zoomOut", label: "Мельче" },
+        ],
+      },
+      {
+        label: "Окно",
+        submenu: [
+          { role: "minimize", label: "Свернуть" },
+          { role: "zoom", label: "Развернуть" },
+          { role: "close", label: "Закрыть окно" },
+        ],
       },
     ]),
   );
-  tray.on("click", () => showWindow());
 }
 
 // Для проверки дизайна: CAMADO_SHOTS=папка — снимки экранов и выход.
@@ -505,6 +669,10 @@ void app.whenReady().then(async () => {
   });
 
   await library.load();
+  library.watchFolders();
+  setAppMenu();
+  if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(iconPath("icon.png"));
+  void discord.configure(settings.discord.enabled, settings.discord.clientId);
   createWindow();
   // Подхватить новые файлы в папках, добавленных раньше.
   if (library.view().folders.length) void library.rescan();
@@ -538,5 +706,6 @@ void app.whenReady().then(async () => {
 
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
+  void discord.stop();
   void stopBot();
 });

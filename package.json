@@ -24,6 +24,7 @@
   "homepage": "https://github.com/killer-destroyer/camado-",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.5.0",
+    "@xhayper/discord-rpc": "^1.5.1",
     "electron-updater": "^6.8.11",
     "grammy": "^1.46.0",
     "music-metadata": "^12.3.4",

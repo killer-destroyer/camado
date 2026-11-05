@@ -61,6 +61,17 @@ export interface AiStatus {
   model: string;
 }
 
+/** Что играет — для мини-плеера в меню-баре, трея и Discord. */
+export interface NowPlayingState {
+  title: string;
+  artist: string;
+  cover?: string;
+  playing: boolean;
+  position: number;
+  duration: number;
+  sentAt: number;
+}
+
 /** То, что показывает плавающий текст песни поверх окон. */
 export interface OverlayState {
   text: string;
@@ -183,6 +194,15 @@ export interface CamadoApi {
     isOpen(): Promise<boolean>;
     push(state: OverlayState): Promise<void>;
   };
+  nowPlaying: {
+    /** Главное окно сообщает, что играет (мини-плеер, трей, Discord). */
+    push(state: NowPlayingState | null): Promise<void>;
+    /** Из мини-плеера: управление и «открыть Камадо». */
+    action(action: "playpause" | "next" | "prev" | "open"): Promise<void>;
+  };
+  discord: {
+    status(): Promise<"off" | "connecting" | "on" | "no-discord">;
+  };
   updates: {
     status(): Promise<UpdateStatus>;
     check(): Promise<UpdateStatus>;
@@ -201,4 +221,6 @@ export interface CamadoApi {
   on(event: "update-status", cb: (payload: UpdateStatus) => void): () => void;
   on(event: "overlay-state", cb: (payload: OverlayState) => void): () => void;
   on(event: "overlay-changed", cb: (payload: boolean) => void): () => void;
+  on(event: "np-state", cb: (payload: NowPlayingState | null) => void): () => void;
+  on(event: "go", cb: (payload: string) => void): () => void;
 }

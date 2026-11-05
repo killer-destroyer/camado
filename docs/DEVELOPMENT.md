@@ -167,3 +167,11 @@ npm run typecheck
 ## Музыка по ссылке
 
 `desktop/main/download.ts`: прямой файл или HTML-страница (ищем `<audio>`, `<source>`, `og:audio`, ссылки на аудиофайлы). Стриминги (YouTube, Яндекс, SoundCloud…) не скачиваем — честно говорим, что нельзя. Файлы ложатся в «Музыка/Камадо».
+
+## Звук
+
+`desktop/renderer/src/lib/audio.ts`: две деки (кроссфейд), реверб на свёртке для slowed, общая громкость после анализатора. Позиция для текста — `engine.audibleTime` (минус задержка вывода звука, на Mac с Bluetooth до 0.3 с).
+
+## Discord
+
+`desktop/main/discord.ts` (`@xhayper/discord-rpc`). Нужен Application ID своего приложения в Discord Developer Portal — вводится в настройках. Картинка — ассет `camado` в Rich Presence → Art Assets.

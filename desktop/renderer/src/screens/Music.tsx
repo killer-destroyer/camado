@@ -1,12 +1,12 @@
 // «Музыка»: своя библиотека (карусель + список), добавление из папки, перетаскиванием или по ссылке.
 import { useEffect, useMemo, useState } from "react";
-import { Check, Disc3, Download, FolderPlus, Link2, Music2, RefreshCw, Search, X } from "lucide-react";
+import { Check, Disc3, Download, FolderPlus, Link2, Music2, RefreshCw, Search, Shuffle, X } from "lucide-react";
 import type { Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { fmtTime } from "../lib/format";
 import { useStore } from "../lib/store";
 import { toast } from "../state/app";
-import { player, playQueue } from "../state/player";
+import { player, playQueue, shuffleAll } from "../state/player";
 import { CoverFlow } from "../components/CoverFlow";
 import { Empty } from "../components/ui";
 
@@ -79,7 +79,7 @@ export function Music() {
   }, [library.tracks, q]);
 
   const play = (tracks: Track[], i: number) => void playQueue(tracks, i);
-  const focusIndex = playingId ? list.findIndex((t) => t.id === playingId) : undefined;
+  const playingIndex = playingId ? list.findIndex((t) => t.id === playingId) : -1;
 
   const addLink = async (url = link) => {
     if (!url.trim() || imp.busy) return;
@@ -153,6 +153,11 @@ export function Music() {
               <input placeholder="Поиск по трекам" value={q} onChange={(e) => setQ(e.target.value)} />
             </div>
           )}
+          {library.tracks.length > 1 && (
+            <button className="btn primary" title="Умный рандом: без повторов и без одного исполнителя подряд" onClick={() => void shuffleAll(list)}>
+              <Shuffle size={16} /> Перемешать всё
+            </button>
+          )}
           <button className="icon-btn" title="Пересканировать папки" onClick={() => void api.library.rescan()}>
             <RefreshCw size={17} className={library.scanning ? "spin" : ""} />
           </button>
@@ -177,7 +182,7 @@ export function Music() {
         </Empty>
       ) : (
         <>
-          {list.length > 0 && <CoverFlow tracks={list} playingId={playingId} focusIndex={focusIndex} onPlay={(i) => play(list, i)} />}
+          {list.length > 0 && <CoverFlow tracks={list} playingIndex={playingIndex} onPlay={(i) => play(list, i)} />}
           <div className="track-list glass">
             {list.slice(0, 400).map((t, i) => (
               <button key={t.id} className={`track-row ${t.id === playingId ? "playing" : ""}`} onClick={() => play(list, i)}>

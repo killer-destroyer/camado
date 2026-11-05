@@ -21,7 +21,20 @@ function watchTheme(): void {
   new MutationObserver(read).observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
 }
 
-export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: VisualizerStyle; className?: string; ringRadius?: number }) {
+/** Кольцо вокруг пластинки: центр и радиус в пикселях холста. Без этого — по центру холста. */
+export type RingGeometry = (w: number, h: number) => { cx: number; cy: number; r: number };
+
+export function Visualizer({
+  kind,
+  className,
+  ringRadius = 0.36,
+  ring,
+}: {
+  kind: VisualizerStyle | "ring-only";
+  className?: string;
+  ringRadius?: number;
+  ring?: RingGeometry;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = useRef({ w: 0, h: 0, dpr: 1 });
   const peaks = useRef(new Float32Array(BAND_COUNT));
@@ -52,39 +65,39 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
     const { a, b, c: c3 } = theme;
     const bands = engine.smooth;
 
-    if (kind === "ring") {
-      spin.current += dt * (0.08 + engine.energy * 0.5);
-      const cx = w / 2;
-      const cy = h / 2;
-      const r0 = Math.min(w, h) * ringRadius * (1 + engine.pulse * 0.025);
-      const n = BAND_COUNT * 2;
-      const grad = g.createLinearGradient(cx - r0, cy - r0, cx + r0, cy + r0);
+    if (kind === "ring" || kind === "ring-only") {
+      // Столбики растут наружу от края пластинки. Бас — «на три часа», высокие — вверх и вниз.
+      const geo = ring ? ring(w, h) : { cx: w / 2, cy: h / 2, r: Math.min(w, h) * ringRadius };
+      const r0 = geo.r * (1 + engine.pulse * 0.01) + 10;
+      const arc = ring ? Math.PI * 0.62 : Math.PI; // у пластинки за краем экрана рисуем только видимую дугу
+      const n = ring ? 140 : BAND_COUNT * 2;
+      const maxLen = Math.min(w, h) * 0.17;
+      const grad = g.createLinearGradient(geo.cx, geo.cy - r0, geo.cx + r0, geo.cy + r0);
       grad.addColorStop(0, a);
       grad.addColorStop(0.5, b);
       grad.addColorStop(1, c3);
       g.strokeStyle = grad;
       g.lineCap = "round";
-      g.lineWidth = Math.max(2, (Math.PI * 2 * r0) / n - 3);
+      g.lineWidth = Math.max(2.5, ((arc * 2 * r0) / n) * 0.55);
       g.beginPath();
       for (let i = 0; i < n; i++) {
-        // зеркально: левая половина повторяет правую — кольцо симметричное
-        const bi = i < BAND_COUNT ? i : n - 1 - i;
-        const v = bands[Math.min(BAND_COUNT - 1, Math.floor(bi * 0.92))]!;
-        const len = 4 + v * v * Math.min(w, h) * 0.2;
-        const ang = (i / n) * Math.PI * 2 + spin.current - Math.PI / 2;
+        const t = i / (n - 1); // 0…1 по дуге
+        const ang = -arc + t * arc * 2; // от −arc до +arc, 0 — вправо
+        const bi = Math.floor(Math.abs(t * 2 - 1) * (BAND_COUNT - 1) * 0.85);
+        const v = bands[bi]!;
+        const len = 3 + v * v * maxLen;
         const cos = Math.cos(ang);
         const sin = Math.sin(ang);
-        g.moveTo(cx + cos * (r0 + 6), cy + sin * (r0 + 6));
-        g.lineTo(cx + cos * (r0 + 6 + len), cy + sin * (r0 + 6 + len));
+        g.moveTo(geo.cx + cos * r0, geo.cy + sin * r0);
+        g.lineTo(geo.cx + cos * (r0 + len), geo.cy + sin * (r0 + len));
       }
       g.stroke();
-      // мягкое свечение на ударе
       if (engine.pulse > 0.01) {
-        g.globalAlpha = engine.pulse * 0.35;
-        g.lineWidth = 18;
+        g.globalAlpha = engine.pulse * 0.4;
+        g.lineWidth = 14;
         g.strokeStyle = a;
         g.beginPath();
-        g.arc(cx, cy, r0 + 2, 0, Math.PI * 2);
+        g.arc(geo.cx, geo.cy, r0 - 4, -arc, arc);
         g.stroke();
         g.globalAlpha = 1;
       }
@@ -117,27 +130,31 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
       return;
     }
 
-    // «Волна»: три слоя жидкости из спектра + форма сигнала поверх
+    // «Волны»: три светящихся слоя из спектра + линия сигнала. Хорошо видны даже краем глаза.
     const layers = [
-      { col: c3, amp: 0.55, off: 0.8, alpha: 0.35 },
-      { col: b, amp: 0.75, off: 0.4, alpha: 0.45 },
-      { col: a, amp: 1, off: 0, alpha: 0.7 },
+      { col: c3, amp: 0.6, off: 0.8, alpha: 0.45 },
+      { col: b, amp: 0.8, off: 0.4, alpha: 0.55 },
+      { col: a, amp: 1, off: 0, alpha: 0.75 },
     ];
-    const base = h * 0.62;
+    const base = h * 0.78;
     const t = performance.now() / 1000;
+    g.globalCompositeOperation = "lighter"; // слои складываются в свечение
     for (const L of layers) {
+      const fill = g.createLinearGradient(0, h * 0.2, 0, h);
+      fill.addColorStop(0, L.col);
+      fill.addColorStop(1, "rgba(0,0,0,0)");
       g.globalAlpha = L.alpha;
-      g.fillStyle = L.col;
+      g.fillStyle = fill;
       g.beginPath();
       g.moveTo(0, h);
-      const steps = 48;
+      const steps = 56;
       let px = 0;
       let py = base;
       for (let i = 0; i <= steps; i++) {
         const x = (i / steps) * w;
-        const bi = Math.floor((i / steps) * (BAND_COUNT - 1) * 0.85);
+        const bi = Math.floor(Math.abs((i / steps) * 2 - 1) * (BAND_COUNT - 1) * 0.8);
         const v = bands[bi]!;
-        const y = base - (v * h * 0.42 + Math.sin(i * 0.5 + t * 1.4 + L.off * 4) * 10 * (0.4 + engine.energy)) * L.amp;
+        const y = base - (v * h * 0.62 + (Math.sin(i * 0.45 + t * 1.3 + L.off * 4) * 0.5 + 0.5) * 14 * (0.35 + engine.energy)) * L.amp;
         if (i === 0) g.lineTo(x, y);
         else g.quadraticCurveTo(px, py, (px + x) / 2, (py + y) / 2);
         px = x;
@@ -147,20 +164,13 @@ export function Visualizer({ kind, className, ringRadius = 0.36 }: { kind: Visua
       g.lineTo(w, h);
       g.closePath();
       g.fill();
+      // яркая кромка волны
+      g.globalAlpha = Math.min(1, L.alpha + 0.25);
+      g.strokeStyle = L.col;
+      g.lineWidth = 2;
+      g.stroke();
     }
-    g.globalAlpha = 0.9;
-    g.strokeStyle = theme.a;
-    g.lineWidth = 2;
-    g.beginPath();
-    const wave = engine.wave;
-    const step = wave.length / 256;
-    for (let i = 0; i < 256; i++) {
-      const v = (wave[Math.floor(i * step)]! - 128) / 128;
-      const x = (i / 255) * w;
-      const y = h * 0.3 + v * h * 0.16;
-      i === 0 ? g.moveTo(x, y) : g.lineTo(x, y);
-    }
-    g.stroke();
+    g.globalCompositeOperation = "source-over";
     g.globalAlpha = 1;
   }, 10);
 

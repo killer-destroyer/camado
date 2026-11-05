@@ -6,15 +6,17 @@ import { activeLineIndex, timedWords } from "../../../shared/lrc";
 import { engine } from "../lib/audio";
 import { damp, layoutBurst, type BurstWord } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
-import { duration, position, seek } from "../state/player";
+import { duration, lyricsTime, seek } from "../state/player";
 
-const LOOKAHEAD = 0.12; // текст чуть раньше звука — так ощущается синхронным
+// Совсем чуть-чуть раньше звука: глаз успевает прочитать к моменту, когда слово прозвучит.
+// Задержку самого звука (Bluetooth и т. п.) уже вычитает lyricsTime().
+const LOOKAHEAD = 0.04;
 
 function useActiveLine(lyrics: LyricsData): [number, React.MutableRefObject<number>] {
   const [active, setActive] = useState(-1);
   const ref = useRef(-1);
   useFrame(() => {
-    const t = position() + LOOKAHEAD;
+    const t = lyricsTime() + LOOKAHEAD;
     const idx = lyrics.synced
       ? activeLineIndex(lyrics.lines, t)
       : Math.min(lyrics.lines.length - 1, Math.floor((t / Math.max(1, duration())) * lyrics.lines.length));
@@ -29,7 +31,7 @@ function useActiveLine(lyrics: LyricsData): [number, React.MutableRefObject<numb
 /** Заливка слов активной строки (караоке), обновляется каждый кадр. */
 function fillWords(container: HTMLElement | null, words: LyricsWord[], nextTime: number): void {
   if (!container) return;
-  const t = position() + LOOKAHEAD;
+  const t = lyricsTime() + LOOKAHEAD;
   const spans = container.children;
   for (let i = 0; i < spans.length; i++) {
     const w = words[i];
@@ -120,7 +122,7 @@ function BurstLyrics({ lyrics }: { lyrics: LyricsData }) {
     if (!el || active < 0) return;
     const words = timedWords(lyrics.lines, active, duration());
     const base = Math.min(el.clientWidth, el.clientHeight) * 0.075;
-    const line = { idx: active, words: layoutBurst(words, active + 1, el.clientWidth, el.clientHeight, base) };
+    const line = { idx: active, words: layoutBurst(words, active + 1, el.clientWidth, el.clientHeight, base, false) };
     setPrev(curRef.current);
     curRef.current = line;
     setCur(line);
@@ -132,7 +134,7 @@ function BurstLyrics({ lyrics }: { lyrics: LyricsData }) {
     const line = curRef.current;
     if (root.current) root.current.style.transform = `scale(${(1 + engine.pulse * 0.035).toFixed(4)})`;
     if (!line || line.idx !== activeRef.current) return;
-    const t = position() + LOOKAHEAD;
+    const t = lyricsTime() + LOOKAHEAD;
     let n = 0;
     while (n < line.words.length && line.words[n]!.time <= t) n++;
     if (n !== shownRef.current) {
@@ -157,7 +159,7 @@ function BurstLyrics({ lyrics }: { lyrics: LyricsData }) {
       </span>
     ));
 
-  if (!lyrics.synced) return <LyricsNote text="Для «Взрыва» нужен текст с таймингом. Включи «Ленту»." />;
+  if (!lyrics.synced) return <FlowLyrics lyrics={lyrics} />;
   return (
     <div ref={root} className="lyrics-burst">
       {prev && render(prev, prev.words.length, true)}
@@ -175,7 +177,7 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
   useFrame(() => {
     if (activeRef.current >= 0) fillWords(karaoke.current, words, lyrics.lines[activeRef.current + 1]?.time ?? duration());
   }, 21);
-  if (!lyrics.synced) return <LyricsNote text="Для «Строки» нужен текст с таймингом. Включи «Ленту»." />;
+  if (!lyrics.synced) return <FlowLyrics lyrics={lyrics} />;
   const nextLine = lyrics.lines[active + 1]?.text;
   return (
     <div className="lyrics-line">
@@ -191,16 +193,9 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
   );
 }
 
-function LyricsNote({ text }: { text: string }) {
-  return <div className="lyrics-note">{text}</div>;
-}
-
-export function Lyrics({ lyrics, loading, mode }: { lyrics?: LyricsData; loading: boolean; mode: LyricsMode }) {
-  if (mode === "off") return null;
-  if (loading) return <LyricsNote text="Ищу текст песни…" />;
-  if (!lyrics || lyrics.lines.length === 0) {
-    return <LyricsNote text="Текста не нашлось. Можно положить файл .lrc рядом с песней — Камадо его подхватит." />;
-  }
+/** Текст песни. Нет текста или он ещё ищется — ничего не показываем (без надписей). */
+export function Lyrics({ lyrics, mode }: { lyrics?: LyricsData; loading?: boolean; mode: LyricsMode }) {
+  if (mode === "off" || !lyrics || lyrics.lines.length === 0) return null;
   if (mode === "burst") return <BurstLyrics lyrics={lyrics} />;
   if (mode === "line") return <LineLyrics lyrics={lyrics} />;
   return <FlowLyrics lyrics={lyrics} />;

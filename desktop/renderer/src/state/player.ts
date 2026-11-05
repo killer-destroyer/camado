@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
+import { pickShuffle } from "../../../shared/shuffle";
 import { app, toast } from "./app";
 
 interface PlayerState {
@@ -16,6 +17,8 @@ interface PlayerState {
   lyrics?: Lyrics;
   lyricsLoading: boolean;
   coverPalette?: Palette;
+  /** Таймер сна: во сколько выключить (Date.now()) или «после этого трека». */
+  sleep?: { at?: number; endOfTrack?: boolean };
 }
 
 export const player = createStore<PlayerState>({
@@ -39,9 +42,16 @@ export function nowMeta(): { title: string; artist: string; cover?: string; dura
   return t ? { title: t.title, artist: t.artist, cover: t.cover, duration: t.duration || engine.el.duration || 0 } : undefined;
 }
 
-/** Текущая позиция в секундах — вызывается каждый кадр. */
+/** Позиция трека, где он сейчас. */
 export function position(): number {
   return engine.el.currentTime || 0;
+}
+
+/** То, что сейчас слышно (для текста): с поправкой на задержку звука и ручной сдвиг трека. */
+export function lyricsTime(): number {
+  const id = currentTrack()?.id;
+  const shift = id ? (app.get().settings.lyricsOffsets[id] ?? 0) : 0;
+  return engine.audibleTime + shift;
 }
 
 export function duration(): number {
@@ -62,22 +72,58 @@ export function watchLibrary(): () => void {
 
 export async function playQueue(tracks: Track[], index: number): Promise<void> {
   player.set({ queue: tracks, index });
-  await startCurrent();
+  await startCurrent(0.35);
 }
 
-async function startCurrent(): Promise<void> {
+/** Перемешать всё и включить — режим умного рандома. */
+export async function shuffleAll(tracks: Track[]): Promise<void> {
+  if (tracks.length === 0) return;
+  player.set({ shuffle: true });
+  await playQueue(tracks, Math.floor(Math.random() * tracks.length));
+}
+
+const history: string[] = [];
+
+async function startCurrent(fade = 0): Promise<void> {
   const t = currentTrack();
   if (!t) return;
+  history.push(t.id);
+  if (history.length > 50) history.shift();
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
   player.set({ lyrics: undefined, lyricsLoading: true });
   try {
-    await engine.play(`camado-media://track/${t.id}`);
+    await engine.play(`camado-media://track/${t.id}`, fade);
   } catch (err) {
     console.error(err);
     toast(`Не смог воспроизвести «${t.title}»`, "warn");
   }
+  void updateMediaSession(t);
   void loadLyrics();
   void loadCoverPalette(t.cover);
+}
+
+/** «Сейчас играет» в системе (Пункт управления на Mac, медиа-клавиши, оверлей Windows). */
+let artworkUrl: string | undefined;
+async function updateMediaSession(t: Track): Promise<void> {
+  if (!("mediaSession" in navigator)) return;
+  const set = (src?: string) =>
+    (navigator.mediaSession.metadata = new MediaMetadata({
+      title: t.title,
+      artist: t.artist,
+      album: t.album,
+      artwork: src ? [{ src, sizes: "512x512" }] : [],
+    }));
+  set();
+  if (!t.cover) return;
+  try {
+    // Система принимает картинку только как blob/data — свой протокол camado-media не понимает.
+    const blob = await (await fetch(t.cover)).blob();
+    if (artworkUrl) URL.revokeObjectURL(artworkUrl);
+    artworkUrl = URL.createObjectURL(blob);
+    if (currentTrack()?.id === t.id) set(artworkUrl);
+  } catch {
+    // без обложки — не страшно
+  }
 }
 
 export function togglePlay(): void {
@@ -91,27 +137,35 @@ export function togglePlay(): void {
   else engine.el.pause();
 }
 
-export function next(auto = false): void {
+/** Индекс следующего трека или −1, если очередь кончилась. */
+function nextIndex(auto: boolean): number {
+  const s = player.get();
+  if (s.queue.length === 0) return -1;
+  if (s.shuffle && s.queue.length > 1) return pickShuffle(s.queue, s.index, history);
+  const i = s.index + 1;
+  if (i >= s.queue.length) return s.repeat === "off" && auto ? -1 : 0;
+  return i;
+}
+
+/** fade — плавный переход (секунды). Вручную — короткий, чтобы не было щелчка. */
+export function next(auto = false, fade = auto ? 0 : 0.4): void {
   const s = player.get();
   if (s.queue.length === 0) return;
+  if (auto && s.sleep?.endOfTrack) {
+    player.set({ sleep: undefined });
+    engine.el.pause();
+    toast("Таймер сна: трек закончился — спокойной ночи 🌙");
+    return;
+  }
   if (auto && s.repeat === "one") {
     engine.el.currentTime = 0;
     void engine.play();
     return;
   }
-  let i: number;
-  if (s.shuffle && s.queue.length > 1) {
-    do i = Math.floor(Math.random() * s.queue.length);
-    while (i === s.index);
-  } else {
-    i = s.index + 1;
-    if (i >= s.queue.length) {
-      if (s.repeat === "off" && auto) return;
-      i = 0;
-    }
-  }
+  const i = nextIndex(auto);
+  if (i < 0) return;
   player.set({ index: i });
-  void startCurrent();
+  void startCurrent(fade);
 }
 
 export function prev(): void {
@@ -122,7 +176,16 @@ export function prev(): void {
   }
   if (s.queue.length === 0) return;
   player.set({ index: (s.index - 1 + s.queue.length) % s.queue.length });
-  void startCurrent();
+  void startCurrent(0.4);
+}
+
+// ---------- Таймер сна ----------
+
+export function setSleep(v: number | "track" | null): void {
+  if (v === null) player.set({ sleep: undefined });
+  else if (v === "track") player.set({ sleep: { endOfTrack: true } });
+  else player.set({ sleep: { at: Date.now() + v * 60e3 } });
+  if (v !== null) toast(v === "track" ? "Выключу музыку после этого трека 🌙" : `Выключу музыку через ${v} мин 🌙`);
 }
 
 export function seek(sec: number): void {
@@ -179,12 +242,42 @@ export async function loadCoverPalette(cover?: string): Promise<void> {
 }
 
 export function initPlayer(): () => void {
-  const el = engine.el;
-  const sync = () => player.set({ playing: !el.paused });
-  const ended = () => next(true);
-  el.addEventListener("play", sync);
-  el.addEventListener("pause", sync);
-  el.addEventListener("ended", ended);
+  // Слушаем обе деки, но реагируем только на ту, что сейчас главная.
+  const isActive = (e: Event) => e.target === engine.el;
+  const sync = (e: Event) => {
+    if (isActive(e)) player.set({ playing: !engine.el.paused });
+  };
+  const ended = (e: Event) => {
+    if (isActive(e)) next(true);
+  };
+  for (const d of engine.decks) {
+    d.addEventListener("play", sync);
+    d.addEventListener("pause", sync);
+    d.addEventListener("ended", ended);
+  }
+
+  // Кроссфейд: за N секунд до конца трека заранее запускаем следующий на второй деке.
+  let crossedFor = "";
+  const timer = window.setInterval(() => {
+    const s = player.get();
+    const el = engine.el;
+    const t = currentTrack();
+    if (s.sleep?.at && Date.now() >= s.sleep.at) {
+      player.set({ sleep: undefined });
+      void engine.fadeOutAndPause(8);
+      toast("Таймер сна: выключаю музыку 🌙");
+      return;
+    }
+    const fade = app.get().settings.crossfade;
+    if (!t || el.paused || !fade || !Number.isFinite(el.duration) || el.duration < fade * 3) return;
+    if (s.repeat === "one" || s.sleep?.endOfTrack || crossedFor === t.id) return;
+    const left = (el.duration - el.currentTime) / (el.playbackRate || 1);
+    if (left <= fade && nextIndex(true) >= 0) {
+      crossedFor = t.id;
+      next(true, fade);
+    }
+  }, 200);
+
   const offKeys = api.on("media-key", (action) => {
     if (action === "playpause") togglePlay();
     if (action === "next") next();
@@ -195,11 +288,15 @@ export function initPlayer(): () => void {
     navigator.mediaSession.setActionHandler("pause", togglePlay);
     navigator.mediaSession.setActionHandler("nexttrack", () => next());
     navigator.mediaSession.setActionHandler("previoustrack", prev);
+    navigator.mediaSession.setActionHandler("seekto", (d) => d.seekTime !== undefined && seek(d.seekTime));
   }
   return () => {
-    el.removeEventListener("play", sync);
-    el.removeEventListener("pause", sync);
-    el.removeEventListener("ended", ended);
+    for (const d of engine.decks) {
+      d.removeEventListener("play", sync);
+      d.removeEventListener("pause", sync);
+      d.removeEventListener("ended", ended);
+    }
+    clearInterval(timer);
     offKeys();
   };
 }

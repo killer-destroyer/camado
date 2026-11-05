@@ -1525,6 +1525,35 @@ button.card:hover {
   pointer-events: none;
   z-index: 1;
 }
+.cf-reflect {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  height: 100%;
+  border-radius: 18px;
+  background-size: cover;
+  background-position: center;
+  transform: scaleY(-1);
+  opacity: 0.3;
+  /* слой перевёрнут: низ слоя — это край у самой обложки, там отражение видно сильнее всего */
+  mask-image: linear-gradient(to top, #000, transparent 38%);
+  pointer-events: none;
+}
+.cf-countdown {
+  width: 120px;
+  height: 3px;
+  margin: 12px auto 0;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--text-rgb) / 0.08);
+}
+.cf-countdown > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform: scaleX(0);
+  transform-origin: left;
+}
 .cf-item {
   position: absolute;
   width: var(--cf, 280px);
@@ -1541,7 +1570,6 @@ button.card:hover {
   background-size: cover;
   background-position: center;
   box-shadow: 0 30px 60px -24px rgb(0 0 0 / 0.75);
-  -webkit-box-reflect: below 8px linear-gradient(transparent 74%, rgb(0 0 0 / 0.2));
   position: relative;
   overflow: hidden;
 }
@@ -1842,6 +1870,8 @@ button.card:hover {
 /* ---------- Сейчас играет ---------- */
 
 .nowplaying {
+  --D: min(112vh, 62vw); /* диаметр пластинки — те же формулы в discGeometry() */
+  --right: calc(var(--D) * 0.68 + 56px); /* где начинается правая колонка */
   position: fixed;
   inset: 0;
   z-index: 60;
@@ -1852,7 +1882,7 @@ button.card:hover {
 @keyframes np-in {
   from {
     opacity: 0;
-    transform: scale(1.03);
+    transform: scale(1.02);
   }
 }
 .np-backdrop {
@@ -1860,102 +1890,186 @@ button.card:hover {
   inset: -15%;
   background-size: cover;
   background-position: center;
-  filter: blur(80px) saturate(1.5) brightness(0.55);
-  opacity: 0.85;
+  filter: blur(90px) saturate(1.6) brightness(0.6);
+  opacity: 0.9;
   transform: scale(1.05);
+  transition: background-image 0.8s;
 }
 [data-light="1"] .np-backdrop {
-  filter: blur(80px) saturate(1.3) brightness(1.1);
-  opacity: 0.5;
+  filter: blur(90px) saturate(1.3) brightness(1.05);
+  opacity: 0.55;
+}
+.np-tint {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(120% 90% at 15% 50%, transparent 30%, rgb(var(--bg-rgb) / 0.35)),
+    linear-gradient(90deg, transparent 40%, rgb(var(--bg-rgb) / 0.35));
 }
 .np-vis {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
-  height: 46%;
   width: 100%;
+  height: 38%;
   pointer-events: none;
-  opacity: 0.9;
 }
 .np-vis.bars {
-  height: 34%;
-  bottom: 110px;
-  padding: 0 40px;
-  opacity: 0.55;
+  height: 28%;
+  bottom: 120px;
+  opacity: 0.7;
 }
-.np-scene {
+.np-shake {
   position: absolute;
   inset: 0;
   will-change: transform;
 }
-.np-scene.split {
-  display: grid;
-  grid-template-columns: minmax(420px, 1fr) 1.1fr;
-  align-items: center;
-  padding: 70px 70px 170px;
-  gap: 40px;
+.np-ring-full {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1;
 }
-.np-scene.center {
-  display: grid;
-  place-items: center;
-  padding-bottom: 150px;
-}
-.np-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: clamp(60px, 11vh, 110px);
-  position: relative;
+.np-disc-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  will-change: transform;
   z-index: 2;
 }
-.np-scene.center.has-burst .np-stage {
-  transform: scale(0.9);
-}
-.np-cover-wrap {
-  position: relative;
-  will-change: transform;
-}
-.np-ring {
+
+/* Огромная пластинка у левого края */
+.disc-pulse {
   position: absolute;
-  left: -40%;
-  top: -40%;
-  width: 180%;
-  height: 180%;
+  width: var(--D);
+  height: var(--D);
+  left: calc(var(--D) * -0.32);
+  top: calc(50% - var(--D) / 2);
+  will-change: transform;
+  animation: disc-in 0.9s var(--spring) both;
+}
+@keyframes disc-in {
+  from {
+    transform: translateX(-12%) rotate(-25deg);
+    opacity: 0;
+  }
+}
+.disc-glow {
+  position: absolute;
+  inset: -1%;
+  border-radius: 50%;
+  box-shadow:
+    0 0 80px 10px rgb(var(--accent-rgb) / 0.45),
+    0 0 0 2px rgb(var(--accent-rgb) / 0.35);
+  opacity: 0.25;
+  will-change: opacity;
+}
+.disc {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+  will-change: transform;
+  box-shadow: 30px 0 80px -20px rgb(0 0 0 / 0.8);
+}
+.disc:active {
+  cursor: grabbing;
+}
+.disc-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+.disc-label {
+  position: absolute;
+  inset: 33%;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent), var(--accent-3));
+  background-size: cover;
+  background-position: center;
+  box-shadow:
+    0 0 0 3px rgb(0 0 0 / 0.6),
+    inset 0 0 30px rgb(0 0 0 / 0.35);
+}
+.disc-hole {
+  position: absolute;
+  inset: 48.6%;
+  border-radius: 50%;
+  background: #050506;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
+}
+/* Блик не крутится вместе с диском — так пластинка выглядит настоящей */
+.disc-sheen {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
   pointer-events: none;
+  background: conic-gradient(
+    from 30deg,
+    transparent 0 8%,
+    rgb(255 255 255 / 0.1) 12%,
+    transparent 18% 50%,
+    rgb(255 255 255 / 0.07) 56%,
+    transparent 62%
+  );
+  mask-image: radial-gradient(circle, transparent 33.5%, #000 34%);
+}
+
+/* Правая колонка: название и текст */
+.np-right {
+  position: absolute;
+  left: var(--right);
+  right: 64px;
+  top: 84px;
+  bottom: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  z-index: 3;
+}
+.np-right.no-lyrics {
+  justify-content: center;
 }
 .np-meta {
-  text-align: center;
-  max-width: 520px;
+  animation: rise 0.6s var(--ease) both;
 }
 .np-title {
   font-family: var(--display);
-  font-size: 30px;
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-size: clamp(28px, 3.4vw, 54px);
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  text-shadow: 0 6px 40px rgb(0 0 0 / 0.35);
+}
+.np-right.no-lyrics .np-title {
+  font-size: clamp(36px, 4.6vw, 76px);
 }
 .np-artist {
   color: var(--muted);
-  font-size: 17px;
-  margin-top: 8px;
+  font-size: clamp(16px, 1.4vw, 22px);
+  font-weight: 650;
+  margin-top: 10px;
 }
 .np-top {
   position: absolute;
   top: 10px;
   left: 18px;
-  right: 160px;
+  right: 150px;
   display: flex;
   align-items: center;
   gap: 14px;
   z-index: 5;
 }
-.np-source {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--muted);
+.nowplaying.mac .np-top {
+  left: 86px; /* место под кнопки окна Mac */
+  right: 18px;
 }
 .np-switches {
   margin-left: auto;
@@ -1963,12 +2077,34 @@ button.card:hover {
   gap: 10px;
   align-items: center;
 }
+.lyr-shift {
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  border-radius: 12px;
+  background: rgb(var(--text-rgb) / 0.06);
+  border: 1px solid rgb(var(--text-rgb) / 0.08);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.lyr-shift button {
+  width: 30px;
+  height: 100%;
+  font-size: 16px;
+  color: var(--text);
+}
+.lyr-shift span {
+  min-width: 58px;
+  text-align: center;
+  cursor: pointer;
+  font-family: var(--mono);
+}
 .np-bottom {
   position: absolute;
-  left: 50%;
+  left: calc(var(--right) - 20px);
+  right: 64px;
   bottom: 30px;
-  transform: translateX(-50%);
-  width: min(760px, 80vw);
   display: flex;
   flex-direction: column;
   gap: 14px;
@@ -1982,117 +2118,16 @@ button.card:hover {
 }
 .np-lyrics {
   position: relative;
-  z-index: 3;
+  flex: 1;
+  min-height: 0;
   will-change: transform;
-}
-.np-lyrics.mode-flow {
-  height: min(70vh, 640px);
 }
 .np-lyrics.mode-burst {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
+  position: relative;
 }
 .np-lyrics.mode-line {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 140px;
-}
-
-/* Пластинка */
-.vinyl-stage {
-  --s: min(360px, 34vh);
-  position: relative;
-  width: var(--s);
-  height: var(--s);
-  transition: transform 0.8s var(--spring);
-}
-.vinyl-stage.with-disc {
-  transform: translateX(calc(var(--s) * -0.18));
-}
-.vinyl-sleeve {
-  position: absolute;
-  inset: 0;
-  border-radius: 12px;
-  background-color: var(--bg-2);
-  background-size: cover;
-  background-position: center;
-  display: grid;
-  place-items: center;
-  color: rgb(var(--text-rgb) / 0.5);
-  box-shadow:
-    0 50px 90px -30px rgb(0 0 0 / 0.85),
-    inset 0 0 0 1px rgb(255 255 255 / 0.1);
-  z-index: 2;
-  will-change: transform;
-}
-.vinyl-sleeve::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: linear-gradient(120deg, rgb(255 255 255 / 0.16), transparent 40%);
-}
-.vinyl-slot {
-  position: absolute;
-  top: 4%;
-  left: 4%;
-  width: 92%;
-  height: 92%;
-  z-index: 1;
-  transform: translateX(39%);
-  animation: disc-out 1s var(--spring) 0.15s both;
-}
-@keyframes disc-out {
-  from {
-    transform: translateX(0);
-  }
-}
-.vinyl-glow {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  box-shadow: 0 0 60px 6px rgb(var(--accent-rgb) / 0.6);
-  opacity: 0;
-  will-change: opacity;
-}
-.vinyl-disc {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  cursor: grab;
-  touch-action: none;
-  will-change: transform;
-  background:
-    repeating-radial-gradient(circle at 50% 50%, #0e0e10 0 1.6px, #1a1a1e 2px 3.2px),
-    #111;
-  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.9);
-}
-.vinyl-disc:active {
-  cursor: grabbing;
-}
-.vinyl-disc::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: conic-gradient(from 20deg, transparent 0 10%, rgb(255 255 255 / 0.12) 14%, transparent 22% 55%, rgb(255 255 255 / 0.08) 62%, transparent 70%);
-}
-.vinyl-label {
-  position: absolute;
-  inset: 31%;
-  border-radius: 50%;
-  background: radial-gradient(circle, var(--accent), var(--accent-3));
-  background-size: cover;
-  background-position: center;
-  box-shadow: 0 0 0 4px #0b0b0d;
-}
-.vinyl-hole {
-  position: absolute;
-  inset: 48.5%;
-  border-radius: 50%;
-  background: #050506;
+  display: flex;
+  align-items: center;
 }
 
 /* Тексты: Лента */
@@ -3018,4 +3053,166 @@ html.overlay-mode #root {
   color: var(--o-text);
   opacity: 0.85;
   animation: rise 0.5s var(--ease) both;
+}
+.np-right.no-lyrics .np-lyrics {
+  display: none;
+}
+
+/* Таймер сна и режим звука */
+.sleep {
+  position: relative;
+}
+.sleep-badge {
+  position: absolute;
+  top: -4px;
+  right: -8px;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 5px;
+  border-radius: 99px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.sleep-menu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
+  min-width: 190px;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-2) 92%, transparent);
+  animation: pop 0.25s var(--spring) both;
+  z-index: 10;
+}
+.sleep-menu button {
+  text-align: left;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+}
+.sleep-menu button:hover {
+  background: rgb(var(--accent-rgb) / 0.16);
+}
+.sleep-menu .off {
+  color: var(--u-overdue);
+}
+.sound-btn {
+  height: 32px;
+  min-width: 52px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  border: 1px solid rgb(var(--text-rgb) / 0.12);
+  transition: all 0.2s;
+}
+.sound-btn:hover {
+  color: var(--text);
+}
+.sound-btn.active {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: transparent;
+}
+
+/* Мини-плеер в меню-баре Mac */
+html.mini-mode,
+html.mini-mode body,
+html.mini-mode #root {
+  background: transparent !important;
+}
+.mini-win {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  align-items: center;
+  border-radius: 14px;
+  color: var(--text);
+}
+html.mini-mode[data-platform="win32"] .mini-win {
+  background: var(--bg-2);
+}
+.mini-win.empty {
+  justify-content: center;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mini-cover {
+  width: 118px;
+  height: 118px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-3));
+  background-size: cover;
+  background-position: center;
+  box-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.6);
+  cursor: pointer;
+}
+.mini-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mini-title {
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-artist {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-bar {
+  height: 4px;
+  border-radius: 99px;
+  background: rgb(var(--text-rgb) / 0.15);
+  overflow: hidden;
+  margin: 10px 0 6px;
+}
+.mini-bar > div {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left;
+  transform: scaleX(0);
+}
+.mini-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.mini-controls button {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+.mini-controls button:hover {
+  background: rgb(var(--text-rgb) / 0.1);
+}
+.mini-controls .mini-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.mini-controls .mini-open {
+  margin-left: auto;
+  color: var(--muted);
 }

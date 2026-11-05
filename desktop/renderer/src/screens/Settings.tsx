@@ -17,9 +17,9 @@ function PaletteGrid({ s }: { s: AppSettings }) {
       {PALETTES.map((p) => (
         <button
           key={p.id}
-          className={`pal ${s.palette === p.id && !s.coverPalette ? "active" : ""}`}
+          className={`pal ${s.palette === p.id && !s.coverColors ? "active" : ""}`}
           style={{ background: `radial-gradient(120% 90% at 20% 10%, ${p.accent}55, transparent 60%), radial-gradient(90% 90% at 90% 90%, ${p.accent2}44, transparent 60%), ${p.bg}`, color: p.text }}
-          onClick={() => updateSettings({ palette: p.id, coverPalette: false })}
+          onClick={() => updateSettings({ palette: p.id, coverColors: false })}
         >
           <span className="pal-dots">
             <i style={{ background: p.accent }} />
@@ -30,7 +30,7 @@ function PaletteGrid({ s }: { s: AppSettings }) {
           <span className="pal-vibe" style={{ color: p.muted }}>
             {p.vibe}
           </span>
-          {s.palette === p.id && !s.coverPalette && (
+          {s.palette === p.id && !s.coverColors && (
             <span className="pal-check" style={{ background: p.accent, color: p.bg }}>
               <Check size={13} strokeWidth={3} />
             </span>
@@ -133,6 +133,52 @@ function AiSection() {
       <button className="btn" style={{ marginTop: 10 }} onClick={() => window.open("https://console.anthropic.com/settings/keys", "_blank")}>
         Открыть сайт Anthropic
       </button>
+    </section>
+  );
+}
+
+function DiscordSection({ s }: { s: AppSettings }) {
+  const [st, setSt] = useState<string>("off");
+  const [id, setId] = useState(s.discord.clientId);
+  useEffect(() => {
+    const load = () => void api.discord.status().then(setSt);
+    load();
+    const t = setInterval(load, 3000);
+    return () => clearInterval(t);
+  }, []);
+  const label: Record<string, string> = {
+    off: "Выключено",
+    connecting: "Подключаюсь к Discord…",
+    on: "✓ Работает — в Discord видно, что ты слушаешь",
+    "no-discord": "Discord не запущен — подключусь, как только откроешь его",
+  };
+  return (
+    <section className="set-section glass">
+      <h3>Discord</h3>
+      <Row title="Показывать, что я слушаю" hint={label[st] ?? ""}>
+        <Toggle value={s.discord.enabled} onChange={(v) => updateSettings({ discord: { ...s.discord, enabled: v } })} />
+      </Row>
+      {s.discord.enabled && (
+        <>
+          <ol className="steps">
+            <li>
+              Открой Discord Developer Portal, нажми <b>New Application</b>, назови «Camado».
+              <button className="btn" onClick={() => window.open("https://discord.com/developers/applications", "_blank")}>
+                Открыть портал Discord
+              </button>
+            </li>
+            <li>
+              Скопируй <b>Application ID</b> и вставь сюда. (По желанию: во вкладке Rich Presence → Art Assets загрузи иконку с именем <code>camado</code>.)
+              <div className="key-row">
+                <input className="input" placeholder="Application ID, например 1234567890123456789" value={id} onChange={(e) => setId(e.target.value.replace(/\D/g, ""))} />
+                <button className="btn primary" disabled={!id || id === s.discord.clientId} onClick={() => updateSettings({ discord: { ...s.discord, clientId: id } })}>
+                  Сохранить
+                </button>
+              </div>
+            </li>
+          </ol>
+        </>
+      )}
     </section>
   );
 }
@@ -246,8 +292,8 @@ export function Settings() {
       <section className="set-section glass">
         <h3>Внешний вид</h3>
         <PaletteGrid s={s} />
-        <Row title="Цвета из обложки" hint="Интерфейс перекрашивается под каждый трек.">
-          <Toggle value={s.coverPalette} onChange={(v) => updateSettings({ coverPalette: v })} />
+        <Row title="Цвета из обложки" hint="Фон, пластинка и волны перекрашиваются под каждый трек.">
+          <Toggle value={s.coverColors} onChange={(v) => updateSettings({ coverColors: v })} />
         </Row>
         <Row title="Фон" hint="«Сияние» дышит в такт музыке.">
           <Segmented
@@ -297,9 +343,9 @@ export function Settings() {
             value={s.visualizer}
             onChange={(v) => updateSettings({ visualizer: v })}
             options={[
-              { value: "ring", label: "Кольцо" },
-              { value: "wave", label: "Волна" },
+              { value: "wave", label: "Волны" },
               { value: "bars", label: "Столбики" },
+              { value: "ring", label: "Кольцо" },
               { value: "off", label: "Выкл" },
             ]}
           />
@@ -317,14 +363,28 @@ export function Settings() {
             ]}
           />
         </Row>
+        <Row title="Плавный переход между треками" hint={s.crossfade ? `${s.crossfade} с — песни перетекают одна в другую` : "Выключен — треки сменяются сразу"}>
+          <Slider value={s.crossfade} min={0} max={12} step={1} onChange={(v) => updateSettings({ crossfade: v })} />
+        </Row>
+        <Row title="Звук" hint="Slowed + reverb — медленнее, ниже и с эхом. Nightcore — быстрее и выше.">
+          <Segmented
+            size="sm"
+            value={s.soundMode}
+            onChange={(v) => updateSettings({ soundMode: v })}
+            options={[
+              { value: "normal", label: "Обычный" },
+              { value: "slowed", label: "Slowed + reverb" },
+              { value: "nightcore", label: "Nightcore" },
+            ]}
+          />
+        </Row>
         <Row title="Размер текста">
           <Slider value={s.lyricsSize} min={0.7} max={1.4} step={0.05} onChange={(v) => updateSettings({ lyricsSize: v })} />
         </Row>
-        <Row title="Пластинка" hint="Крутится в такт, можно перематывать, вращая её мышкой.">
-          <Toggle value={s.vinyl} onChange={(v) => updateSettings({ vinyl: v })} />
-        </Row>
+        
         <div className="folders">
           <div className="set-title">Папки с музыкой</div>
+          <div className="set-hint">Камадо следит за ними: скачал трек в такую папку любым способом — через пару секунд он появится в библиотеке.</div>
           {folders.map((f) => (
             <div key={f} className="folder">
               <span>{f}</span>
@@ -370,6 +430,7 @@ export function Settings() {
         </Row>
       </section>
 
+      <DiscordSection s={s} />
       <AiSection />
       <BotSection s={s} />
 

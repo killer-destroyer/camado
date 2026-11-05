@@ -1,6 +1,6 @@
 // Библиотека музыки: папки на компьютере → список треков с обложками.
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, watch, type FSWatcher } from "node:fs";
 import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { parseFile } from "music-metadata";
@@ -28,6 +28,8 @@ export function lrcPathFor(audioPath: string): string {
 export class Library {
   private state: Saved = { folders: [], files: [], tracks: [] };
   private byId = new Map<string, Indexed>();
+  private watchers: FSWatcher[] = [];
+  private watchTimer?: NodeJS.Timeout;
   scanning = false;
 
   constructor(
@@ -94,6 +96,28 @@ export class Library {
     return this.rescan();
   }
 
+  /**
+   * Следим за папками: скачал трек любым способом (браузер, scdl, Telegram) в такую папку —
+   * через пару секунд он сам появится в библиотеке.
+   */
+  watchFolders(): void {
+    for (const w of this.watchers) w.close();
+    this.watchers = [];
+    for (const folder of this.state.folders) {
+      try {
+        const w = watch(folder, { recursive: true }, (_ev, name) => {
+          if (name && !AUDIO_EXT.has(extname(String(name)).toLowerCase()) && !String(name).endsWith(".lrc")) return;
+          clearTimeout(this.watchTimer);
+          this.watchTimer = setTimeout(() => void this.rescan(), 2500);
+        });
+        w.on("error", () => undefined);
+        this.watchers.push(w);
+      } catch {
+        // папку удалили или нет доступа — просто не следим
+      }
+    }
+  }
+
   async removeFolder(path: string): Promise<LibraryState> {
     this.state.folders = this.state.folders.filter((f) => f !== path);
     this.state.files = this.state.files.filter((f) => f !== path);
@@ -132,6 +156,7 @@ export class Library {
       this.state.tracks = next;
       this.reindex();
       await this.save();
+      this.watchFolders();
     } finally {
       this.scanning = false;
       this.onChange();

@@ -61,6 +61,11 @@ const api: CamadoApi = {
     isOpen: call("overlay.isOpen") as CamadoApi["overlay"]["isOpen"],
     push: call("overlay.push") as CamadoApi["overlay"]["push"],
   },
+  nowPlaying: {
+    push: call("nowPlaying.push") as CamadoApi["nowPlaying"]["push"],
+    action: call("nowPlaying.action") as CamadoApi["nowPlaying"]["action"],
+  },
+  discord: { status: call("discord.status") as CamadoApi["discord"]["status"] },
   updates: {
     status: call("updates.status") as CamadoApi["updates"]["status"],
     check: call("updates.check") as CamadoApi["updates"]["check"],

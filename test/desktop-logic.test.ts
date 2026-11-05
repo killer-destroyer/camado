@@ -173,3 +173,31 @@ describe("план на сегодня", async () => {
     expect(buildDayPlan([], now)).toEqual([]);
   });
 });
+
+describe("умный рандом", async () => {
+  const { pickShuffle } = await import("../desktop/shared/shuffle.js");
+  const q = [
+    { id: "a1", artist: "A" },
+    { id: "a2", artist: "A" },
+    { id: "b1", artist: "B" },
+    { id: "c1", artist: "C" },
+    { id: "d1", artist: "D" },
+    { id: "e1", artist: "E" },
+  ];
+  it("не повторяет недавние и не ставит того же исполнителя подряд", () => {
+    for (let k = 0; k < 200; k++) {
+      const i = pickShuffle(q, 0, ["c1", "a1"]);
+      expect(i).not.toBe(0);
+      expect(q[i]!.artist).not.toBe("A");
+      expect(q[i]!.id).not.toBe("c1");
+    }
+  });
+  it("если вариантов нет — берёт хоть что-то, но не текущий", () => {
+    const two = [
+      { id: "x", artist: "A" },
+      { id: "y", artist: "A" },
+    ];
+    expect(pickShuffle(two, 0, ["y"])).toBe(1);
+    expect(pickShuffle([{ id: "x", artist: "A" }], 0, [])).toBe(0);
+  });
+});

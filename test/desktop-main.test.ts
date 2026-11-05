@@ -131,3 +131,29 @@ describe("перемотка (Range)", () => {
     expect(parseRange(null, 1000)).toBeUndefined();
   });
 });
+
+describe("поиск текста по «грязным» названиям", async () => {
+  const { cleanTitle, queryVariants } = await import("../desktop/main/lyrics.js");
+  it("убирает украшения и ID, пробует разные варианты", () => {
+    expect(cleanTitle("☆⋆｡ S41L3RM4N ⊹┊۵ - ночь [2403137955]")).toBe("S41L3RM4N - ночь");
+    expect(queryVariants("Botsu 8 (The Last Dance Song)", "☆⋆｡")).toEqual([
+      { track: "Botsu 8 (The Last Dance Song)" },
+      { track: "Botsu 8" },
+    ]);
+    expect(queryVariants("Artist - Song", "uploader")[1]).toEqual({ track: "Song", artist: "Artist" });
+  });
+
+  it("исполнитель-мусор → ищет только по названию через q", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "camado-lyr-"));
+    const urls: string[] = [];
+    const impl = (async (url: string) => {
+      urls.push(url);
+      if (url.includes("q=Botsu")) return new Response(JSON.stringify([{ duration: 107, syncedLyrics: "[00:01]раз" }]));
+      return new Response("[]");
+    }) as unknown as typeof fetch;
+    const svc = new LyricsService(dir, () => undefined, impl);
+    const l = await svc.get({ title: "Botsu 8 (The Last Dance Song)", artist: "☆⋆｡", duration: 107 });
+    expect(l.lines[0]!.text).toBe("раз");
+    expect(urls.every((u) => !u.includes("artist_name=%E2%98%86"))).toBe(true);
+  });
+});

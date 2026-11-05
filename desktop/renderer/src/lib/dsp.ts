@@ -156,6 +156,8 @@ export function layoutBurst(
   width: number,
   height: number,
   baseSize: number,
+  /** Не ставить слова в центр (там раньше была обложка). */
+  centerHole = true,
 ): BurstWord[] {
   const rnd = seeded(seed * 9973 + words.length);
   const placed: { x0: number; y0: number; x1: number; y1: number }[] = [];
@@ -170,8 +172,8 @@ export function layoutBurst(
     let best: BurstWord | undefined;
     for (let attempt = 0; attempt < 40; attempt++) {
       if (attempt > 0 && attempt % 12 === 0) size *= 0.82;
-      const bw = w.text.length * size * 0.62 + 12;
-      const bh = size * 1.15;
+      const bw = w.text.length * size * 0.8 + 24; // шрифт Unbounded широкий — с запасом, чтобы слова не слипались
+      const bh = size * 1.3;
       const x = 24 + rnd() * Math.max(1, width - bw - 48);
       const y = 70 + rnd() * Math.max(1, height - bh - 160);
       const box = { x0: x, y0: y, x1: x + bw, y1: y + bh };
@@ -184,7 +186,7 @@ export function layoutBurst(
         rotate: (rnd() - 0.5) * 22,
         style: rnd() < 0.18 ? 1 : rnd() < 0.3 ? 2 : 0,
       };
-      if (!hit(box, hole) && !placed.some((p) => hit(p, box))) {
+      if (!(centerHole && hit(box, hole)) && !placed.some((p) => hit(p, box))) {
         placed.push(box);
         best = candidate;
         break;

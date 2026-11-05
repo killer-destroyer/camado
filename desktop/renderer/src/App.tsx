@@ -13,6 +13,7 @@ import { Guard } from "./components/Guard";
 import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
 import { NowPlaying } from "./components/NowPlaying";
 import { OverlayFeed } from "./components/Overlay";
+import { NowPlayingFeed } from "./components/Mini";
 import { Chat } from "./screens/Chat";
 import { Focus } from "./screens/Focus";
 import { Music } from "./screens/Music";
@@ -43,7 +44,7 @@ export function App() {
   const coverPalette = useStore(player, (s) => s.coverPalette);
   const hasTrack = useStore(player, (s) => s.index >= 0);
 
-  const palette = settings.coverPalette && coverPalette ? coverPalette : paletteById(settings.palette);
+  const palette = settings.coverColors && coverPalette ? coverPalette : paletteById(settings.palette);
 
   useEffect(() => {
     applyPalette(palette);
@@ -62,6 +63,7 @@ export function App() {
       initFocus(),
       api.on("data-changed", () => void refreshFocusStats()),
       api.on("reminder", (p) => toast(p.text, "warn")),
+      api.on("go", (screen) => go(screen as ScreenId)),
     ];
 
     const onKey = (e: KeyboardEvent) => {
@@ -139,6 +141,7 @@ export function App() {
       <Toasts />
       <UpdateBanner />
       <OverlayFeed />
+      <NowPlayingFeed />
       {settings.showFps && <FpsMeter />}
     </div>
   );

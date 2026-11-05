@@ -1,5 +1,6 @@
-// Выбор музыки: 3D-карусель обложек с инерцией. Колесо, перетаскивание, стрелки.
-// Центральная обложка — крупно и прямо, боковые разворачиваются, снизу — отражение.
+// Выбор музыки: 3D-карусель обложек с инерцией.
+// Листается свайпом/перетаскиванием влево-вправо и стрелками. Вертикальная прокрутка — для страницы.
+// Остановился на обложке — через 1.2 с включается её трек (полоска под названием показывает отсчёт).
 import { useEffect, useRef, useState } from "react";
 import { Disc3, Play } from "lucide-react";
 import type { Track } from "../../../shared/types";
@@ -7,31 +8,44 @@ import { damp } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
 
 const WINDOW = 7; // сколько обложек по сторонам держим на экране
+const AUTOPLAY_MS = 1200;
+const MAX_VEL = 9; // обложек в секунду
 
 export function CoverFlow({
   tracks,
-  playingId,
+  playingIndex,
   onPlay,
-  focusIndex,
 }: {
   tracks: Track[];
-  playingId?: string;
+  /** Индекс играющего трека в этом списке (−1, если играет что-то не отсюда). */
+  playingIndex: number;
   onPlay: (index: number) => void;
-  focusIndex?: number;
 }) {
   const root = useRef<HTMLDivElement>(null);
-  const pos = useRef(focusIndex ?? 0);
+  const countdown = useRef<HTMLDivElement>(null);
+  const pos = useRef(Math.max(0, playingIndex));
   const vel = useRef(0);
   const target = useRef<number | null>(null);
   const dragging = useRef<{ x: number; pos: number; lastX: number; lastT: number; moved: number } | null>(null);
   const items = useRef(new Map<number, HTMLDivElement>());
-  const [center, setCenter] = useState(focusIndex ?? 0);
+  const lastWritten = useRef(new Map<number, string>());
+  const userMoved = useRef(false);
+  const settledAt = useRef<number | null>(null);
+  const [center, setCenter] = useState(Math.max(0, playingIndex));
   const centerRef = useRef(center);
+  const playingRef = useRef(playingIndex);
+  playingRef.current = playingIndex;
+  const onPlayRef = useRef(onPlay);
+  onPlayRef.current = onPlay;
   const n = tracks.length;
 
+  // Трек сменился не из карусели (кнопка «дальше», список) — подъезжаем к нему, но ничего не включаем.
   useEffect(() => {
-    if (focusIndex !== undefined && focusIndex >= 0) target.current = focusIndex;
-  }, [focusIndex]);
+    if (playingIndex >= 0 && playingIndex !== centerRef.current) {
+      userMoved.current = false;
+      target.current = playingIndex;
+    }
+  }, [playingIndex]);
 
   const clamp = (v: number) => Math.max(0, Math.min(n - 1, v));
 
@@ -39,29 +53,51 @@ export function CoverFlow({
     if (n === 0) return;
     if (!dragging.current) {
       if (target.current !== null) {
-        pos.current = damp(pos.current, target.current, 10, dt);
+        pos.current = damp(pos.current, target.current, 9, dt);
         if (Math.abs(pos.current - target.current) < 0.001) {
           pos.current = target.current;
           target.current = null;
         }
       } else {
-        // инерция и мягкая «доводка» до ближайшей обложки
+        // инерция с заметным трением и мягкая доводка до ближайшей обложки
         pos.current += vel.current * dt;
-        vel.current = damp(vel.current, 0, 4, dt);
-        if (Math.abs(vel.current) < 1.2) {
-          pos.current = damp(pos.current, Math.round(pos.current), 9, dt);
-        }
+        vel.current = damp(vel.current, 0, 5.5, dt);
+        if (Math.abs(vel.current) < 1.5) pos.current = damp(pos.current, Math.round(pos.current), 10, dt);
         if (pos.current < 0 || pos.current > n - 1) {
           pos.current = damp(pos.current, clamp(pos.current), 14, dt);
           vel.current *= 0.5;
         }
+        if (Math.abs(pos.current - Math.round(pos.current)) < 0.0005 && Math.abs(vel.current) < 0.02) {
+          pos.current = Math.round(pos.current);
+          vel.current = 0;
+        }
       }
     }
+
     const c = Math.round(clamp(pos.current));
     if (c !== centerRef.current) {
       centerRef.current = c;
       setCenter(c);
     }
+
+    // Автозапуск: пользователь сам долистал до обложки и остановился.
+    const moving = dragging.current !== null || target.current !== null || vel.current !== 0 || pos.current !== Math.round(pos.current);
+    const now = performance.now();
+    let progress = 0;
+    if (moving || !userMoved.current || c === playingRef.current) {
+      settledAt.current = null;
+      if (c === playingRef.current) userMoved.current = false;
+    } else {
+      settledAt.current ??= now;
+      progress = Math.min(1, (now - settledAt.current) / AUTOPLAY_MS);
+      if (progress >= 1) {
+        userMoved.current = false;
+        settledAt.current = null;
+        onPlayRef.current(c);
+      }
+    }
+    countdown.current?.style.setProperty("transform", `scaleX(${progress.toFixed(3)})`);
+
     const w = root.current?.clientWidth ?? 1200;
     const size = Math.min(300, w * 0.24);
     root.current?.style.setProperty("--cf", `${size}px`);
@@ -73,16 +109,24 @@ export function CoverFlow({
       const rot = -Math.max(-1, Math.min(1, off)) * 62;
       const z = -Math.min(a, 6) * 110 - (a < 1 ? 0 : 60);
       const scale = a < 1 ? 1.12 - a * 0.12 : 1;
-      el.style.transform = `translate3d(${x}px, 0, ${z}px) rotateY(${rot}deg) scale(${scale})`;
-      el.style.zIndex = String(1000 - Math.round(a * 10));
-      el.style.opacity = String(Math.max(0, 1 - Math.max(0, a - 4.5) * 0.6));
-      // затемнение боковых — через прозрачность слоя, а не filter (filter перерисовывает картинку)
-      el.style.setProperty("--shade", a > 0.6 ? Math.min(0.55, a * 0.1).toFixed(3) : "0");
+      // Порядок по глубине — по индексу относительно центра: у соседей никогда не совпадает, ничего не мигает.
+      const zIndex = String(1000 - Math.abs(i - c) * 2 - (i < c ? 1 : 0));
+      const shade = a > 0.6 ? Math.min(0.55, a * 0.1).toFixed(2) : "0";
+      const opacity = Math.max(0, 1 - Math.max(0, a - 4.5) * 0.6).toFixed(2);
+      const transform = `translate3d(${x.toFixed(1)}px, 0, ${z.toFixed(1)}px) rotateY(${rot.toFixed(2)}deg) scale(${scale.toFixed(4)})`;
+      const key = `${transform}|${zIndex}|${shade}|${opacity}`;
+      if (lastWritten.current.get(i) === key) continue; // ничего не поменялось — не трогаем DOM
+      lastWritten.current.set(i, key);
+      el.style.transform = transform;
+      el.style.zIndex = zIndex;
+      el.style.opacity = opacity;
+      el.style.setProperty("--shade", shade);
     }
   }, 15);
 
   const go = (i: number) => {
     vel.current = 0;
+    userMoved.current = true;
     target.current = clamp(i);
   };
 
@@ -90,9 +134,12 @@ export function CoverFlow({
     const el = root.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // Вертикальный свайп двумя пальцами — прокрутка страницы, не трогаем.
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       e.preventDefault();
       target.current = null;
-      vel.current += (Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY) * 0.035;
+      userMoved.current = true;
+      vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, vel.current + e.deltaX * 0.012));
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
@@ -127,25 +174,34 @@ export function CoverFlow({
         onPointerMove={(e) => {
           const d = dragging.current;
           if (!d) return;
-          const size = Math.min(300, (root.current?.clientWidth ?? 1200) * 0.24) * 0.5;
+          // «Тяжёлый» свайп: одна обложка — на ширину почти целой обложки движения мышью.
+          const size = Math.min(300, (root.current?.clientWidth ?? 1200) * 0.24);
           pos.current = d.pos - (e.clientX - d.x) / size;
           const now = performance.now();
           const dtm = Math.max(1, now - d.lastT);
-          vel.current = (-(e.clientX - d.lastX) / size / dtm) * 1000;
+          vel.current = Math.max(-MAX_VEL, Math.min(MAX_VEL, (-(e.clientX - d.lastX) / size / dtm) * 1000));
           d.moved += Math.abs(e.clientX - d.lastX);
           d.lastX = e.clientX;
           d.lastT = now;
+          if (d.moved > 6) userMoved.current = true;
         }}
         onPointerUp={(e) => {
           const d = dragging.current;
           dragging.current = null;
           if (d && d.moved < 6) {
-            // это клик: по центральной — играть, по боковой — подъехать к ней
-            const hit = (e.target as HTMLElement).closest<HTMLElement>("[data-i]");
+            // Это клик. Из-за захвата мыши e.target — сама сцена, поэтому ищем, что под курсором.
+            const under = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+            const hit = under?.closest<HTMLElement>("[data-i]");
             if (hit) {
               const i = Number(hit.dataset.i);
+              userMoved.current = false;
               if (i === centerRef.current) onPlay(i);
-              else go(i);
+              else {
+                target.current = clamp(i);
+                vel.current = 0;
+                // по боковой — подъехать и сразу включить
+                setTimeout(() => onPlayRef.current(i), 380);
+              }
             }
           }
         }}
@@ -159,10 +215,14 @@ export function CoverFlow({
                 data-i={i}
                 ref={(el) => {
                   if (el) items.current.set(i, el);
-                  else items.current.delete(i);
+                  else {
+                    items.current.delete(i);
+                    lastWritten.current.delete(i);
+                  }
                 }}
-                className={`cf-item ${i === center ? "center" : ""} ${tr.id === playingId ? "playing" : ""}`}
+                className={`cf-item ${i === center ? "center" : ""} ${i === playingIndex ? "playing" : ""}`}
               >
+                {tr.cover && <div className="cf-reflect" style={{ backgroundImage: `url("${tr.cover}")` }} />}
                 <div className="cf-cover" style={tr.cover ? { backgroundImage: `url("${tr.cover}")` } : undefined}>
                   <span className="cf-shade" />
                   {!tr.cover && (
@@ -171,7 +231,7 @@ export function CoverFlow({
                       <span>{tr.title}</span>
                     </div>
                   )}
-                  {i === center && (
+                  {i === center && i !== playingIndex && (
                     <div className="cf-play">
                       <Play size={30} fill="currentColor" />
                     </div>
@@ -187,6 +247,9 @@ export function CoverFlow({
         <div className="cf-artist">
           {t.artist}
           {t.album ? ` · ${t.album}` : ""}
+        </div>
+        <div className="cf-countdown">
+          <div ref={countdown} />
         </div>
       </div>
       <div className="cf-counter">

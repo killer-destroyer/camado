@@ -4,8 +4,9 @@ import "@fontsource-variable/jetbrains-mono";
 import "./styles/global.css";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
+import { MiniWindow } from "./components/Mini";
 import { LyricsOverlay } from "./components/Overlay";
 
-// Одно и то же окно-страница: основное приложение или текст песни поверх всех окон (#overlay).
-const isOverlay = location.hash === "#overlay";
-createRoot(document.getElementById("root")!).render(isOverlay ? <LyricsOverlay /> : <App />);
+// Одна страница — три окна: приложение, текст поверх всех окон (#overlay), мини-плеер в меню-баре (#mini).
+const view = location.hash === "#overlay" ? <LyricsOverlay /> : location.hash === "#mini" ? <MiniWindow /> : <App />;
+createRoot(document.getElementById("root")!).render(view);

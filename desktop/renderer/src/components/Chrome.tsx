@@ -53,7 +53,7 @@ export function Sidebar() {
     <nav className="sidebar glass">
       <div className="logo" title="Камадо">
         <span className="logo-orb" />
-        <span className="logo-k">К</span>
+        <span className="logo-k">C</span>
       </div>
       <div className="nav-items">
         <span className="nav-pill" style={{ transform: `translateY(${pillTop}px)` }} />
@@ -207,9 +207,9 @@ export function CommandPalette() {
         label: `Палитра: ${p.name}`,
         hint: p.vibe,
         icon: PaletteIcon,
-        run: () => updateSettings({ palette: p.id, coverPalette: false }),
+        run: () => updateSettings({ palette: p.id, coverColors: false }),
       })),
-      { id: "pal-cover", label: "Палитра: из обложки трека", icon: PaletteIcon, run: () => updateSettings({ coverPalette: true }) },
+      { id: "pal-cover", label: "Палитра: из обложки трека", icon: PaletteIcon, run: () => updateSettings({ coverColors: true }) },
     ],
     [],
   );

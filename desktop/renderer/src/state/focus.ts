@@ -90,12 +90,12 @@ async function complete(): Promise<void> {
     toast("Сессия фокуса завершена — перерыв!", "ok");
     focus.set({ rounds });
     setMode(nextMode);
-    if (player.get().playing && engine.el.volume > 0.3) engine.el.volume = 0.3; // на перерыве потише
+    if (player.get().playing && engine.volume > 0.3) engine.volume = 0.3; // на перерыве потише
     void refreshFocusStats();
   } else {
     void api.notify("Перерыв окончен", "Погнали дальше 💪");
     toast("Перерыв окончен", "info");
-    engine.el.volume = app.get().settings.volume;
+    engine.volume = app.get().settings.volume;
     setMode("work");
   }
   focus.set({ startedAt: undefined });
