@@ -29,8 +29,8 @@ export class AnthropicProvider implements LLMProvider {
     private models: Record<Tier, string>,
   ) {}
 
-  static create(apiKey: string | undefined, models: Record<Tier, string>): AnthropicProvider {
-    return new AnthropicProvider(new Anthropic(apiKey ? { apiKey } : {}), models);
+  static create(apiKey: string, models: Record<Tier, string>): AnthropicProvider {
+    return new AnthropicProvider(new Anthropic({ apiKey }), models);
   }
 
   async runAgent(req: AgentRequest): Promise<AgentResult> {
@@ -116,4 +116,20 @@ function toUsage(response: Anthropic.Beta.Messages.BetaMessage): Usage {
     cacheReadTokens: u.cache_read_input_tokens ?? 0,
     cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
   };
+}
+
+/**
+ * Проверяет ключ бесплатным запросом (список моделей).
+ * true — ключ рабочий, false — ключ неверный; сетевые и прочие ошибки пробрасывает.
+ */
+export async function checkAnthropicKey(apiKey: string): Promise<boolean> {
+  try {
+    await new Anthropic({ apiKey, maxRetries: 1 }).models.list({ limit: 1 });
+    return true;
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
+      return false;
+    }
+    throw err;
+  }
 }

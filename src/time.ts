@@ -49,3 +49,28 @@ export function localParts(date: Date, timeZone: string): { ymd: string; hour: n
   const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return { ymd: `${get("year")}-${get("month")}-${get("day")}`, hour: Number(get("hour")) };
 }
+
+/** Смещение пояса в минутах (−300 для UTC−05:00). */
+export function offsetMinutes(date: Date, timeZone: string): number {
+  const m = utcOffset(date, timeZone).match(/([+-])(\d{2}):(\d{2})/)!;
+  const sign = m[1] === "-" ? -1 : 1;
+  return sign * (Number(m[2]) * 60 + Number(m[3]));
+}
+
+/** Местные дата и время в поясе → момент в UTC. Месяц — с 1. */
+export function localToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string,
+): Date {
+  const naive = Date.UTC(year, month - 1, day, hour, minute);
+  const off = offsetMinutes(new Date(naive), timeZone);
+  let ts = naive - off * 60_000;
+  // На переходе на летнее/зимнее время смещение могло поменяться — уточняем.
+  const off2 = offsetMinutes(new Date(ts), timeZone);
+  if (off2 !== off) ts = naive - off2 * 60_000;
+  return new Date(ts);
+}

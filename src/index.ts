@@ -1,9 +1,10 @@
-import { createBot } from "./bot.js";
+import { API_KEY_KV, createBot } from "./bot.js";
 import { Camado } from "./camado/brain.js";
 import { loadConfig, type Config } from "./config.js";
 import { openDb } from "./db.js";
-import { AnthropicProvider } from "./llm/anthropic.js";
+import { AnthropicProvider, checkAnthropicKey } from "./llm/anthropic.js";
 import { MeteredProvider } from "./llm/metered.js";
+import { SwitchableProvider } from "./llm/switchable.js";
 import { startReminderLoop } from "./reminders.js";
 import { Store } from "./store.js";
 
@@ -17,18 +18,21 @@ try {
 }
 const store = new Store(openDb(config.CAMADO_DB_PATH));
 
-const provider = AnthropicProvider.create(config.ANTHROPIC_API_KEY, {
+const models = {
   fast: config.CAMADO_MODEL_FAST,
   brain: config.CAMADO_MODEL_BRAIN,
   smart: config.CAMADO_MODEL_SMART,
-});
-const llm = new MeteredProvider(provider, store, config.CAMADO_MONTHLY_BUDGET_USD);
+};
+// Ключ из настроек бота (/key) важнее ключа из .env. Нет ни того ни другого — ручной режим.
+const ai = new SwitchableProvider(
+  (apiKey) => AnthropicProvider.create(apiKey, models),
+  store.getKv(API_KEY_KV) ?? config.ANTHROPIC_API_KEY,
+);
+const llm = new MeteredProvider(ai, store, config.CAMADO_MONTHLY_BUDGET_USD);
 const camado = new Camado(store, llm, config.CAMADO_TIMEZONE);
-const bot = createBot(config, store, camado, llm);
+const bot = createBot({ config, store, camado, llm, ai, checkKey: checkAnthropicKey });
 
-if (!config.ANTHROPIC_API_KEY) {
-  console.warn("ANTHROPIC_API_KEY не задан — Камадо не сможет думать, работают только команды.");
-}
+console.log(ai.enabled ? "ИИ включён." : "Ключа API нет — ручной режим. Подключить ИИ: команда /key в боте.");
 
 let stopReminders = () => {};
 const owner = config.OWNER_TELEGRAM_ID;

@@ -253,6 +253,10 @@ export class Store {
     return row ? (row.value as string) : undefined;
   }
 
+  deleteKv(key: string): void {
+    this.db.prepare("DELETE FROM kv WHERE key = ?").run(key);
+  }
+
   setKv(key: string, value: string): void {
     this.db
       .prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
