@@ -11,7 +11,7 @@ const OWNER = 111;
 const GOOD_KEY = "sk-ant-api03-" + "a".repeat(40);
 
 /** Поднимает бота с поддельным Telegram: все вызовы API записываются. */
-function setup(opts: { envKey?: string } = {}) {
+function setup(opts: { envKey?: string; owner?: () => number | undefined; pairing?: { code: () => string | undefined; done: (id: number) => void } } = {}) {
   const config = loadConfig({
     TELEGRAM_BOT_TOKEN: "123:test",
     OWNER_TELEGRAM_ID: String(OWNER),
@@ -34,6 +34,8 @@ function setup(opts: { envKey?: string } = {}) {
       checked.push(k);
       return k === GOOD_KEY;
     },
+    owner: opts.owner,
+    pairing: opts.pairing,
   });
 
   bot.botInfo = {
@@ -160,5 +162,22 @@ describe("подключение ключа", () => {
     const { ai, send } = setup({ envKey: GOOD_KEY });
     expect(ai.enabled).toBe(true);
     expect((await send("/settings")).replies[0]).toContain("ИИ включён (ключ …aaaa)");
+  });
+});
+
+describe("привязка бота кодом из приложения", () => {
+  it("чужой без кода получает подсказку, с правильным кодом — становится хозяином", async () => {
+    let owner: number | undefined;
+    const { send } = setup({
+      owner: () => owner,
+      pairing: { code: () => "482913", done: (id) => (owner = id) },
+    });
+    expect((await send("/dz", 555)).replies[0]).toContain("пришли мне код");
+    expect(owner).toBeUndefined();
+    expect((await send("482 913", 555)).replies[0]).toContain("привязан");
+    expect(owner).toBe(555);
+    // теперь только хозяин
+    expect((await send("/dz", 555)).replies[0]).toContain("Заданий нет");
+    expect((await send("/dz", 777)).replies).toHaveLength(0);
   });
 });

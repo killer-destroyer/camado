@@ -37,7 +37,12 @@ const api: CamadoApi = {
     setKey: call("ai.setKey") as CamadoApi["ai"]["setKey"],
     clearKey: call("ai.clearKey") as CamadoApi["ai"]["clearKey"],
   },
-  bot: { status: call("bot.status") as CamadoApi["bot"]["status"] },
+  bot: {
+    status: call("bot.status") as CamadoApi["bot"]["status"],
+    connect: call("bot.connect") as CamadoApi["bot"]["connect"],
+    pairingCode: call("bot.pairingCode") as CamadoApi["bot"]["pairingCode"],
+    disconnect: call("bot.disconnect") as CamadoApi["bot"]["disconnect"],
+  },
   settings: {
     get: call("settings.get") as CamadoApi["settings"]["get"],
     set: call("settings.set") as CamadoApi["settings"]["set"],

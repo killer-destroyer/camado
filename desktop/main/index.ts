@@ -16,7 +16,7 @@ import {
   Tray,
   webContents,
 } from "electron";
-import type { Bot } from "grammy";
+import { Bot } from "grammy";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -79,7 +79,17 @@ let win: BrowserWindow | undefined;
 let tray: Tray | undefined;
 let quitting = false;
 let bot: Bot | undefined;
-const botStatus: BotStatus = { configured: Boolean(config.TELEGRAM_BOT_TOKEN), running: false };
+const botStatus = { running: false } as Pick<BotStatus, "running" | "username" | "error">;
+
+// Бот настраивается прямо в приложении (токен и хозяин хранятся в базе), .env — запасной вариант.
+const TG_TOKEN_KV = "telegram_token";
+const TG_OWNER_KV = "telegram_owner";
+const botToken = () => store.getKv(TG_TOKEN_KV) ?? config.TELEGRAM_BOT_TOKEN;
+const botOwner = (): number | undefined => {
+  const v = store.getKv(TG_OWNER_KV);
+  return v ? Number(v) : config.OWNER_TELEGRAM_ID;
+};
+let pairing: { code: string; until: number } | undefined;
 
 const send = (channel: string, payload?: unknown) => {
   if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
@@ -110,9 +120,21 @@ function notify(title: string, body: string): void {
 // ---------- Telegram-бот внутри приложения ----------
 
 function startBot(): void {
-  if (bot || !config.TELEGRAM_BOT_TOKEN || !settings.runBot) return;
+  const token = botToken();
+  if (bot || !token || !settings.runBot) return;
   try {
-    bot = createCoreBot(core);
+    bot = createCoreBot(core, {
+      token,
+      owner: botOwner,
+      pairing: {
+        code: () => (pairing && Date.now() < pairing.until ? pairing.code : undefined),
+        done: (userId) => {
+          store.setKv(TG_OWNER_KV, String(userId));
+          pairing = undefined;
+          notify("Камадо", "Telegram-бот привязан к тебе 🎉");
+        },
+      },
+    });
   } catch (err) {
     botStatus.error = err instanceof Error ? err.message : String(err);
     return;
@@ -211,7 +233,36 @@ const handlers: Record<string, Handler> = {
   },
   "ai.clearKey": () => setApiKey(core, undefined),
 
-  "bot.status": () => ({ ...botStatus }),
+  "bot.status": (): BotStatus => ({ ...botStatus, configured: Boolean(botToken()), paired: Boolean(botOwner()) }),
+  "bot.connect": async (token: string) => {
+    const t = token.trim();
+    if (!/^\d+:[\w-]{30,}$/.test(t)) return { ok: false, error: "Токен выглядит так: 123456789:AAF… — скопируй его из сообщения @BotFather целиком" };
+    let username: string | undefined;
+    try {
+      username = (await new Bot(t).api.getMe()).username;
+    } catch {
+      return { ok: false, error: "Telegram не принял токен. Проверь, что скопировал его целиком, и что есть интернет." };
+    }
+    await stopBot();
+    store.setKv(TG_TOKEN_KV, t);
+    store.deleteKv(TG_OWNER_KV); // новый бот — привязываем заново
+    saveSettings({ runBot: true });
+    startBot();
+    return { ok: true, username };
+  },
+  "bot.pairingCode": () => {
+    if (!pairing || Date.now() > pairing.until) {
+      pairing = { code: String(Math.floor(100000 + Math.random() * 900000)), until: Date.now() + 15 * 60e3 };
+    }
+    return pairing.code;
+  },
+  "bot.disconnect": async () => {
+    await stopBot();
+    store.deleteKv(TG_TOKEN_KV);
+    store.deleteKv(TG_OWNER_KV);
+    botStatus.username = undefined;
+    botStatus.error = undefined;
+  },
 
   "settings.get": () => settings,
   "settings.set": async (patch: Partial<AppSettings>) => {
@@ -438,7 +489,8 @@ void app.whenReady().then(async () => {
     async (text) => {
       notify("Камадо", text);
       send("reminder", { text });
-      if (bot && config.OWNER_TELEGRAM_ID) await bot.api.sendMessage(config.OWNER_TELEGRAM_ID, text).catch(() => undefined);
+      const owner = botOwner();
+      if (bot && owner) await bot.api.sendMessage(owner, text).catch(() => undefined);
     },
     config.CAMADO_TIMEZONE,
   );

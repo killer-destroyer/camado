@@ -62,8 +62,11 @@ export interface AiStatus {
 }
 
 export interface BotStatus {
+  /** Токен бота задан (в приложении или в .env). */
   configured: boolean;
   running: boolean;
+  /** Бот знает своего хозяина. */
+  paired: boolean;
   username?: string;
   error?: string;
 }
@@ -122,6 +125,11 @@ export interface CamadoApi {
   };
   bot: {
     status(): Promise<BotStatus>;
+    /** Проверить токен от @BotFather, сохранить и запустить бота. */
+    connect(token: string): Promise<{ ok: boolean; error?: string; username?: string }>;
+    /** Код, который нужно прислать боту, чтобы он запомнил хозяина (действует 15 минут). */
+    pairingCode(): Promise<string>;
+    disconnect(): Promise<void>;
   };
   settings: {
     get(): Promise<AppSettings>;

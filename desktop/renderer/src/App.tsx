@@ -88,7 +88,9 @@ export function App() {
     // Для проверки дизайна (снимки экранов).
     window.__camadoShot = (raw: string) => {
       // «burst@20:2» — экран, перемотать на 20 с, трек №2 (для проверки дизайна)
-      const [name, at] = raw.split("@") as [string, string | undefined];
+      const [full, at] = raw.split("@") as [string, string | undefined];
+      const [name, anchor] = full.split("#") as [string, string | undefined];
+      if (anchor === "bottom") setTimeout(() => document.querySelector(".screen-wrap")?.scrollTo({ top: 1e6 }), 900);
       if (at !== undefined) {
         const [sec, idx] = at.split(":").map(Number) as [number, number | undefined];
         const tracks = player.get().library.tracks;

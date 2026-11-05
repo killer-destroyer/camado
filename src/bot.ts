@@ -76,26 +76,43 @@ export interface BotDeps {
   llm: MeteredProvider;
   ai: SwitchableProvider;
   checkKey: (apiKey: string) => Promise<boolean>;
+  /** Токен бота, если он задан не в .env (например, в приложении). */
+  token?: string;
+  /** Кто хозяин. По умолчанию — OWNER_TELEGRAM_ID из .env. */
+  owner?: () => number | undefined;
+  /** Привязка по коду из приложения: хозяин присылает боту код — и бот запоминает его. */
+  pairing?: { code: () => string | undefined; done: (userId: number) => void };
 }
 
-export function createBot({ config, store, camado, llm, ai, checkKey }: BotDeps): Bot {
-  if (!config.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN не задан: нужен токен бота от @BotFather");
-  const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
-  const owner = config.OWNER_TELEGRAM_ID;
+export function createBot({ config, store, camado, llm, ai, checkKey, token, owner, pairing }: BotDeps): Bot {
+  const botToken = token ?? config.TELEGRAM_BOT_TOKEN;
+  if (!botToken) throw new Error("Не задан токен бота от @BotFather");
+  const bot = new Bot(botToken);
+  const getOwner = owner ?? (() => config.OWNER_TELEGRAM_ID);
   const tz = config.CAMADO_TIMEZONE;
 
   bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id}`));
 
   // Камадо отвечает только хозяину. Остальных молча игнорирует.
   bot.use(async (ctx, next) => {
-    if (!owner) {
+    const current = getOwner();
+    if (!current) {
+      const code = pairing?.code();
+      const text = ctx.message?.text?.trim() ?? "";
+      if (pairing && code && ctx.from && text.replace(/\D/g, "") === code) {
+        pairing.done(ctx.from.id);
+        await ctx.reply("Готово, я привязан к тебе! 🎉 Теперь я твой Камадо. Напиши /help, чтобы узнать, что я умею.");
+        return;
+      }
       await ctx.reply(
-        `Камадо ещё не привязан к хозяину.\nТвой ID: ${ctx.from?.id}\n` +
-          "Впиши его в OWNER_TELEGRAM_ID в файле .env и перезапусти бота.",
+        pairing
+          ? "Привет! Чтобы я стал твоим, открой приложение Камадо → Настройки → Telegram и пришли мне код оттуда."
+          : `Камадо ещё не привязан к хозяину.\nТвой ID: ${ctx.from?.id}\n` +
+              "Впиши его в OWNER_TELEGRAM_ID в файле .env и перезапусти бота.",
       );
       return;
     }
-    if (ctx.from?.id !== owner) return;
+    if (ctx.from?.id !== current) return;
     await next();
   });
 

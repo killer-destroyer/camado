@@ -83,37 +83,104 @@ function AiSection() {
           {busy ? "Проверяю…" : "Подключить"}
         </button>
       </div>
-      <div className="set-hint">Ключ проверяется бесплатным запросом и хранится только у тебя на компьютере.</div>
+      <div className="set-hint">
+        Ключ берётся на сайте Anthropic: войди, пополни баланс, затем API Keys → Create Key. Он проверяется бесплатным запросом и хранится только у тебя на компьютере.
+      </div>
+      <button className="btn" style={{ marginTop: 10 }} onClick={() => window.open("https://console.anthropic.com/settings/keys", "_blank")}>
+        Открыть сайт Anthropic
+      </button>
     </section>
   );
 }
 
 function BotSection({ s }: { s: AppSettings }) {
   const [st, setSt] = useState<BotStatus | null>(null);
+  const [token, setToken] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+
   useEffect(() => {
     const load = () => void api.bot.status().then(setSt);
     load();
-    const t = setInterval(load, 3000);
+    const t = setInterval(load, 2000);
     return () => clearInterval(t);
   }, []);
+  useEffect(() => {
+    if (st?.configured && !st.paired) void api.bot.pairingCode().then(setCode);
+  }, [st?.configured, st?.paired]);
+
+  const connect = async () => {
+    setBusy(true);
+    const r = await api.bot.connect(token);
+    setBusy(false);
+    if (r.ok) {
+      setToken("");
+      toast(`Бот @${r.username} подключён`, "ok");
+      setSt(await api.bot.status());
+    } else toast(r.error ?? "Не получилось", "warn");
+  };
+
+  const open = (url: string) => window.open(url, "_blank");
+
   return (
     <section className="set-section glass">
       <h3>Telegram-бот</h3>
-      <Row
-        title="Запускать бота вместе с приложением"
-        hint={
-          !st?.configured
-            ? "Токен бота не задан в .env (TELEGRAM_BOT_TOKEN) — бот выключен, приложение работает и без него."
-            : st.running
-              ? `Работает: @${st.username}`
-              : st.error ?? "Остановлен"
-        }
-      >
-        <Toggle value={s.runBot} onChange={(v) => updateSettings({ runBot: v })} />
-      </Row>
+      <div className="set-hint" style={{ marginBottom: 14 }}>
+        Пиши Камадо с телефона и получай напоминания в Telegram. Необязательно — приложение работает и без бота.
+      </div>
+
+      {!st?.configured && (
+        <ol className="steps">
+          <li>
+            <b>Создай бота.</b> Открой @BotFather, нажми «Start», отправь <code>/newbot</code> и придумай имя — например «Мой Камадо».
+            <button className="btn" onClick={() => open("https://t.me/BotFather")}>
+              Открыть @BotFather
+            </button>
+          </li>
+          <li>
+            <b>Вставь сюда токен</b>, который пришлёт BotFather (длинная строка вида <code>123456789:AAF…</code>).
+            <div className="key-row">
+              <input className="input" placeholder="123456789:AAF…" value={token} onChange={(e) => setToken(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void connect()} />
+              <button className="btn primary" disabled={!token || busy} onClick={() => void connect()}>
+                {busy ? "Проверяю…" : "Подключить"}
+              </button>
+            </div>
+          </li>
+        </ol>
+      )}
+
+      {st?.configured && !st.paired && (
+        <div className="pairing">
+          <div>
+            <b>Последний шаг:</b> открой своего бота{st.username ? ` @${st.username}` : ""} и отправь ему этот код — так он запомнит, что ты хозяин.
+          </div>
+          <div className="pair-code">{code}</div>
+          {st.username && (
+            <button className="btn primary" onClick={() => open(`https://t.me/${st.username}`)}>
+              Открыть @{st.username}
+            </button>
+          )}
+        </div>
+      )}
+
+      {st?.configured && st.paired && (
+        <Row
+          title={st.running ? `✓ Бот @${st.username ?? ""} работает и привязан к тебе` : "Бот привязан, но сейчас остановлен"}
+          hint={st.error ?? "Напоминания приходят и сюда, и в Telegram."}
+        >
+          <Toggle value={s.runBot} onChange={(v) => updateSettings({ runBot: v })} />
+        </Row>
+      )}
+      {st?.configured && !st.paired && st.error && <div className="set-hint warn-text">{st.error}</div>}
+
       <Row title="Закрытие окна — в трей" hint="Напоминания и бот продолжат работать, пока Камадо в трее.">
         <Toggle value={s.closeToTray} onChange={(v) => updateSettings({ closeToTray: v })} />
       </Row>
+      {st?.configured && (
+        <button className="link-btn danger-link" onClick={() => void api.bot.disconnect().then(() => api.bot.status().then(setSt))}>
+          Отключить бота
+        </button>
+      )}
     </section>
   );
 }

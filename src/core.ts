@@ -1,6 +1,6 @@
 // Сборка Камадо из частей. Её используют и сервер (src/index.ts), и приложение на ПК.
 import type { Bot } from "grammy";
-import { API_KEY_KV, createBot } from "./bot.js";
+import { API_KEY_KV, createBot, type BotDeps } from "./bot.js";
 import { Camado } from "./camado/brain.js";
 import type { Config } from "./config.js";
 import { openDb } from "./db.js";
@@ -35,8 +35,8 @@ export function createCore(config: Config): CamadoCore {
   return { config, store, ai, llm, camado };
 }
 
-export function createCoreBot(core: CamadoCore): Bot {
-  return createBot({ ...core, checkKey: checkAnthropicKey });
+export function createCoreBot(core: CamadoCore, extra: Pick<BotDeps, "token" | "owner" | "pairing"> = {}): Bot {
+  return createBot({ ...core, checkKey: checkAnthropicKey, ...extra });
 }
 
 /** Сохраняет ключ API и включает ИИ. Ключ уже должен быть проверен. */
