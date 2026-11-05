@@ -1,0 +1,50 @@
+# Сборка установщиков: npm run app:dist (или автоматически на GitHub, см. .github/workflows/release.yml)
+appId: com.camado.app
+productName: Camado
+copyright: Camado
+directories:
+  output: release
+  buildResources: desktop/assets
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: desktop/assets
+    to: assets
+    filter: ["*.png"]
+asar: true
+publish: null
+
+win:
+  icon: desktop/assets/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Камадо
+  runAfterFinish: true
+  artifactName: Camado-Setup.${ext}
+
+mac:
+  icon: desktop/assets/icon.png
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [universal]
+  # Без платного сертификата Apple — подпись «для себя».
+  identity: null
+  extendInfo:
+    NSMicrophoneUsageDescription: Камадо слушает звук только для визуализатора музыки.
+dmg:
+  artifactName: Camado-mac.${ext}
+
+linux:
+  icon: desktop/assets/icon.png
+  category: Utility
+  target: [AppImage]
+appImage:
+  artifactName: Camado-linux.${ext}

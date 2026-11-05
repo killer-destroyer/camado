@@ -96,7 +96,8 @@ store.onChange = () => {
 };
 
 function iconPath(name: string): string {
-  return join(app.getAppPath(), "desktop", "assets", name);
+  // В установленной программе иконки лежат рядом с ней (resources/assets), а не внутри архива.
+  return app.isPackaged ? join(process.resourcesPath, "assets", name) : join(app.getAppPath(), "desktop", "assets", name);
 }
 
 function notify(title: string, body: string): void {

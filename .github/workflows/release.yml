@@ -1,0 +1,73 @@
+name: Установщики
+
+# Собирает Camado-Setup.exe (Windows) и Camado-mac.dmg (macOS) и выкладывает их
+# в релиз «Камадо — последняя версия». Ссылки на скачивание не меняются:
+#   https://github.com/<владелец>/<репо>/releases/latest/download/Camado-Setup.exe
+on:
+  push:
+    branches: [main, "claude/**"]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+            files: release/Camado-Setup.exe
+          - os: macos-latest
+            args: --mac
+            files: release/Camado-mac.dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npx electron-vite build
+      - run: npx electron-builder ${{ matrix.args }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    # Даже если одна из сборок упала, выкладываем то, что получилось.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Обновить релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la artifacts
+          gh release delete camado-latest --yes --cleanup-tag || true
+          gh release create camado-latest artifacts/* \
+            --target "${{ github.sha }}" \
+            --title "Камадо — последняя версия" \
+            --latest \
+            --notes "Собрано автоматически из ${GITHUB_REF_NAME} (${GITHUB_SHA::7}).
+
+          **Windows:** скачай Camado-Setup.exe и запусти. Если появится «Windows защитила ваш компьютер» — нажми «Подробнее» → «Выполнить в любом случае» (программа без платной подписи).
+
+          **Mac:** открой Camado-mac.dmg и перетащи Камадо в «Программы». Если Mac пишет, что программа повреждена, выполни в Терминале: xattr -cr /Applications/Camado.app"
