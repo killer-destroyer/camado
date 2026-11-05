@@ -35,6 +35,23 @@ export interface ChatEntry {
   content: string;
 }
 
+export interface Note {
+  id: number;
+  title: string;
+  body: string;
+  subject: string | null;
+  pinned: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FocusSession {
+  id: number;
+  subject: string | null;
+  minutes: number;
+  startedAt: string;
+}
+
 export interface UsageRecord {
   model: string;
   inputTokens: number;
@@ -62,12 +79,35 @@ function toTask(r: Row): Task {
   };
 }
 
+function toNote(r: Row): Note {
+  return {
+    id: Number(r.id),
+    title: r.title as string,
+    body: r.body as string,
+    subject: (r.subject as string | null) ?? null,
+    pinned: Number(r.pinned) === 1,
+    createdAt: r.created_at as string,
+    updatedAt: r.updated_at as string,
+  };
+}
+
 /** Всё, что Камадо хранит о тебе, — в одном месте. */
 export class Store {
+  /** Вызывается после любого изменения данных (приложение на ПК обновляет экран). */
+  onChange: () => void = () => {};
+
   constructor(
     private db: DB,
     private now: () => Date = () => new Date(),
   ) {}
+
+  private changed(): void {
+    try {
+      this.onChange();
+    } catch (err) {
+      console.error("Ошибка в onChange:", err);
+    }
+  }
 
   private ts(): string {
     return this.now().toISOString();
@@ -97,6 +137,7 @@ export class Store {
         ts,
         ts,
       );
+    this.changed();
     return this.getTask(Number(res.lastInsertRowid))!;
   }
 
@@ -133,6 +174,7 @@ export class Store {
     if (patch.dueAt !== undefined && patch.dueAt !== current.dueAt) {
       this.db.prepare("DELETE FROM reminders_sent WHERE task_id = ?").run(id);
     }
+    this.changed();
     return this.getTask(id);
   }
 
@@ -158,6 +200,7 @@ export class Store {
         .prepare("INSERT INTO subjects (name, name_key, teacher, info, updated_at) VALUES (?, ?, ?, ?, ?)")
         .run(input.name.trim(), key, input.teacher ?? null, input.info ?? null, this.ts());
     }
+    this.changed();
     const row = this.db.prepare("SELECT * FROM subjects WHERE name_key = ?").get(key) as Row;
     return {
       id: Number(row.id),
@@ -183,11 +226,14 @@ export class Store {
     const res = this.db
       .prepare("INSERT INTO memory (fact, created_at) VALUES (?, ?)")
       .run(fact, this.ts());
+    this.changed();
     return { id: Number(res.lastInsertRowid), fact };
   }
 
   forget(id: number): boolean {
-    return Number(this.db.prepare("DELETE FROM memory WHERE id = ?").run(id).changes) > 0;
+    const ok = Number(this.db.prepare("DELETE FROM memory WHERE id = ?").run(id).changes) > 0;
+    this.changed();
+    return ok;
   }
 
   listMemory(): MemoryFact[] {
@@ -244,6 +290,72 @@ export class Store {
       this.db.prepare("SELECT 1 FROM reminders_sent WHERE task_id = ? AND rule = ?").get(taskId, rule) !==
       undefined
     );
+  }
+
+  // ---------- Заметки ----------
+
+  saveNote(input: { id?: number; title: string; body?: string; subject?: string | null; pinned?: boolean }): Note {
+    const ts = this.ts();
+    if (input.id !== undefined) {
+      const current = this.getNote(input.id);
+      if (!current) throw new Error(`Заметки #${input.id} нет`);
+      this.db
+        .prepare("UPDATE notes SET title = ?, body = ?, subject = ?, pinned = ?, updated_at = ? WHERE id = ?")
+        .run(
+          input.title,
+          input.body ?? current.body,
+          input.subject === undefined ? current.subject : input.subject,
+          (input.pinned ?? current.pinned) ? 1 : 0,
+          ts,
+          input.id,
+        );
+      this.changed();
+      return this.getNote(input.id)!;
+    }
+    const res = this.db
+      .prepare("INSERT INTO notes (title, body, subject, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(input.title, input.body ?? "", input.subject ?? null, input.pinned ? 1 : 0, ts, ts);
+    this.changed();
+    return this.getNote(Number(res.lastInsertRowid))!;
+  }
+
+  getNote(id: number): Note | undefined {
+    const r = this.db.prepare("SELECT * FROM notes WHERE id = ?").get(id) as Row | undefined;
+    return r ? toNote(r) : undefined;
+  }
+
+  /** Закреплённые сверху, потом свежие. */
+  listNotes(): Note[] {
+    const rows = this.db.prepare("SELECT * FROM notes ORDER BY pinned DESC, updated_at DESC, id DESC").all() as Row[];
+    return rows.map(toNote);
+  }
+
+  deleteNote(id: number): boolean {
+    const ok = Number(this.db.prepare("DELETE FROM notes WHERE id = ?").run(id).changes) > 0;
+    this.changed();
+    return ok;
+  }
+
+  // ---------- Фокус ----------
+
+  addFocusSession(input: { subject?: string | null; minutes: number; startedAt: string }): FocusSession {
+    const res = this.db
+      .prepare("INSERT INTO focus_sessions (subject, minutes, started_at) VALUES (?, ?, ?)")
+      .run(input.subject ?? null, input.minutes, input.startedAt);
+    this.changed();
+    return { id: Number(res.lastInsertRowid), subject: input.subject ?? null, minutes: input.minutes, startedAt: input.startedAt };
+  }
+
+  listFocusSessions(since: Date): FocusSession[] {
+    const rows = this.db
+      .prepare("SELECT * FROM focus_sessions WHERE started_at >= ? ORDER BY started_at")
+      .all(since.toISOString()) as Row[];
+    return rows.map((r) => ({
+      id: Number(r.id),
+      subject: (r.subject as string | null) ?? null,
+      minutes: Number(r.minutes),
+      startedAt: r.started_at as string,
+    }));
   }
 
   // ---------- Мелкие настройки ----------

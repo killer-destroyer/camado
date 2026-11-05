@@ -64,3 +64,28 @@ describe("Store", () => {
     expect(s.spentSince(new Date("2026-11-01T00:00:00Z"))).toBeCloseTo(1.75);
   });
 });
+
+describe("заметки и фокус", () => {
+  it("заметки: создать, обновить, закрепить, удалить", () => {
+    let now = new Date("2026-11-05T15:00:00Z");
+    const s = memoryStore(() => now);
+    const a = s.saveNote({ title: "Билеты", body: "1–10", subject: "Физика" });
+    now = new Date("2026-11-05T16:00:00Z");
+    s.saveNote({ title: "Идеи" });
+    expect(s.listNotes().map((n) => n.title)).toEqual(["Идеи", "Билеты"]);
+
+    s.saveNote({ id: a.id, title: "Билеты", pinned: true });
+    expect(s.listNotes()[0]).toMatchObject({ title: "Билеты", body: "1–10", subject: "Физика", pinned: true });
+
+    expect(s.deleteNote(a.id)).toBe(true);
+    expect(s.listNotes()).toHaveLength(1);
+    expect(() => s.saveNote({ id: 99, title: "x" })).toThrow(/#99/);
+  });
+
+  it("фокус-сессии с даты", () => {
+    const s = memoryStore();
+    s.addFocusSession({ minutes: 25, startedAt: "2026-11-01T10:00:00.000Z" });
+    s.addFocusSession({ subject: "Матан", minutes: 50, startedAt: "2026-11-05T10:00:00.000Z" });
+    expect(s.listFocusSessions(new Date("2026-11-04T00:00:00Z")).map((f) => f.minutes)).toEqual([50]);
+  });
+});

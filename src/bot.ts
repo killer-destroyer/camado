@@ -79,6 +79,7 @@ export interface BotDeps {
 }
 
 export function createBot({ config, store, camado, llm, ai, checkKey }: BotDeps): Bot {
+  if (!config.TELEGRAM_BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN не задан: нужен токен бота от @BotFather");
   const bot = new Bot(config.TELEGRAM_BOT_TOKEN);
   const owner = config.OWNER_TELEGRAM_ID;
   const tz = config.CAMADO_TIMEZONE;

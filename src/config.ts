@@ -5,7 +5,8 @@ const optional = <T extends z.ZodType>(schema: T) =>
   z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
 
 const schema = z.object({
-  TELEGRAM_BOT_TOKEN: z.string().min(1, "нужен токен бота от @BotFather"),
+  // Для сервера обязателен; приложение на ПК работает и без бота.
+  TELEGRAM_BOT_TOKEN: optional(z.string().min(1)),
   OWNER_TELEGRAM_ID: optional(z.coerce.number().int().positive()),
   ANTHROPIC_API_KEY: optional(z.string()),
   CAMADO_MODEL_FAST: z.string().default("claude-haiku-5-5"),

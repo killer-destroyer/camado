@@ -65,6 +65,26 @@ const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
   `,
+  // 2: заметки и фокус-сессии (приложение на ПК)
+  `
+  CREATE TABLE notes (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL DEFAULT '',
+    subject    TEXT,
+    pinned     INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE focus_sessions (
+    id         INTEGER PRIMARY KEY,
+    subject    TEXT,
+    minutes    REAL NOT NULL,
+    started_at TEXT NOT NULL
+  );
+  CREATE INDEX focus_started ON focus_sessions (started_at);
+  `,
 ];
 
 export function openDb(path: string): DB {

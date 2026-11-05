@@ -1,12 +1,7 @@
-import { API_KEY_KV, createBot } from "./bot.js";
-import { Camado } from "./camado/brain.js";
+// Серверный режим: Telegram-бот + напоминания, без окна. Для приложения на ПК см. desktop/.
 import { loadConfig, type Config } from "./config.js";
-import { openDb } from "./db.js";
-import { AnthropicProvider, checkAnthropicKey } from "./llm/anthropic.js";
-import { MeteredProvider } from "./llm/metered.js";
-import { SwitchableProvider } from "./llm/switchable.js";
+import { createCore, createCoreBot } from "./core.js";
 import { startReminderLoop } from "./reminders.js";
-import { Store } from "./store.js";
 
 let config: Config;
 try {
@@ -16,29 +11,21 @@ try {
   console.error("Подсказка: скопируй .env.example в .env и заполни его (см. README).");
   process.exit(1);
 }
-const store = new Store(openDb(config.CAMADO_DB_PATH));
+if (!config.TELEGRAM_BOT_TOKEN) {
+  console.error("Не задан TELEGRAM_BOT_TOKEN: нужен токен бота от @BotFather (см. README).");
+  process.exit(1);
+}
 
-const models = {
-  fast: config.CAMADO_MODEL_FAST,
-  brain: config.CAMADO_MODEL_BRAIN,
-  smart: config.CAMADO_MODEL_SMART,
-};
-// Ключ из настроек бота (/key) важнее ключа из .env. Нет ни того ни другого — ручной режим.
-const ai = new SwitchableProvider(
-  (apiKey) => AnthropicProvider.create(apiKey, models),
-  store.getKv(API_KEY_KV) ?? config.ANTHROPIC_API_KEY,
-);
-const llm = new MeteredProvider(ai, store, config.CAMADO_MONTHLY_BUDGET_USD);
-const camado = new Camado(store, llm, config.CAMADO_TIMEZONE);
-const bot = createBot({ config, store, camado, llm, ai, checkKey: checkAnthropicKey });
+const core = createCore(config);
+const bot = createCoreBot(core);
 
-console.log(ai.enabled ? "ИИ включён." : "Ключа API нет — ручной режим. Подключить ИИ: команда /key в боте.");
+console.log(core.ai.enabled ? "ИИ включён." : "Ключа API нет — ручной режим. Подключить ИИ: команда /key в боте.");
 
 let stopReminders = () => {};
 const owner = config.OWNER_TELEGRAM_ID;
 if (owner) {
   stopReminders = startReminderLoop(
-    store,
+    core.store,
     (text) => bot.api.sendMessage(owner, text),
     config.CAMADO_TIMEZONE,
   );

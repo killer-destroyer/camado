@@ -14,5 +14,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+        env:
+          # Для тестов сам Electron не нужен — не качаем его.
+          ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
       - run: npm run typecheck
       - run: npm test
