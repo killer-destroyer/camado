@@ -34,9 +34,18 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npx electron-vite build
-      - run: npx electron-builder ${{ matrix.args }} --publish never
+      - name: Собрать установщик
+        shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        # electron-builder скачивает инструменты с GitHub; при временном сбое сети (504) пробуем ещё раз.
+        run: |
+          for i in 1 2 3; do
+            npx electron-builder ${{ matrix.args }} --publish never && exit 0
+            echo "Попытка $i не удалась, пробую снова через 20 с…"
+            sleep 20
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.os }}
@@ -44,9 +53,8 @@ jobs:
           if-no-files-found: error
 
   publish:
+    # Только если собрались все версии — иначе остаётся прошлый рабочий релиз.
     needs: build
-    # Даже если одна из сборок упала, выкладываем то, что получилось.
-    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
