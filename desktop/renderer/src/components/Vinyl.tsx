@@ -36,9 +36,22 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
   } | null>(null);
   const wheelEnd = useRef<number | undefined>(undefined);
 
+  // Рисуем сразу, а когда загрузится обложка — ещё раз (для пластинки-картинки и дымчатой).
+  const swatchKey = colors.swatches?.join(",") ?? "";
   useEffect(() => {
-    if (canvas.current) drawVinyl(canvas.current, trackKey, colors);
-  }, [trackKey, colors.accent, colors.accent2, colors.accent3, colors.bg]);
+    const c = canvas.current;
+    if (!c) return;
+    drawVinyl(c, trackKey, colors);
+    if (!cover) return;
+    let alive = true;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => alive && drawVinyl(c, trackKey, colors, 1024, img);
+    img.src = cover;
+    return () => {
+      alive = false;
+    };
+  }, [trackKey, cover, colors.accent, colors.accent2, colors.accent3, colors.bg, swatchKey]);
 
   useFrame((dt) => {
     const playing = player.get().playing;

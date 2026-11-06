@@ -9,6 +9,8 @@ export interface VinylColors {
   accent: string;
   accent2: string;
   accent3: string;
+  /** Настоящие цвета обложки — если есть, пластинка красится ими. */
+  swatches?: string[];
 }
 
 /** Строка → число для генератора случайностей. */
@@ -37,7 +39,19 @@ export type VinylStyle =
   | "sunburst"
   | "galaxy"
   | "spiral"
-  | "colorInColor";
+  | "colorInColor"
+  | "ripple"
+  | "stripes"
+  | "wheel"
+  | "leopard"
+  | "mesh"
+  | "zigzag"
+  | "neon"
+  | "mosaic"
+  | "watercolor"
+  | "melted"
+  | "picture"
+  | "smoke";
 
 export const VINYL_STYLES: VinylStyle[] = [
   "splatter",
@@ -50,6 +64,18 @@ export const VINYL_STYLES: VinylStyle[] = [
   "sunburst",
   "pinwheel",
   "classic",
+  "ripple",
+  "stripes",
+  "wheel",
+  "leopard",
+  "mesh",
+  "zigzag",
+  "neon",
+  "mosaic",
+  "watercolor",
+  "melted",
+  "picture",
+  "smoke",
 ];
 
 /** Какой стиль достанется треку. */
@@ -58,6 +84,8 @@ export function vinylStyleFor(seed: number): VinylStyle {
 }
 
 interface Ctx {
+  /** Обложка (для пластинки-картинки и полупрозрачной). */
+  img?: CanvasImageSource;
   g: CanvasRenderingContext2D;
   c: number;
   R: number;
@@ -135,6 +163,13 @@ function blurred(x: Ctx, px: number, paint: (x: Ctx) => void): void {
   x.g.filter = `blur(${px}px)`;
   x.g.drawImage(off, 0, 0);
   x.g.filter = "none";
+}
+
+/** Те же радиусы для резких колец неона, что и для их свечения. */
+const ringCache = new Map<number, number>();
+function seededRing(i: number, rnd: () => number): number {
+  if (!ringCache.has(i)) ringCache.set(i, rnd());
+  return ringCache.get(i)!;
 }
 
 const PAINT: Record<VinylStyle, (x: Ctx) => void> = {
@@ -317,9 +352,273 @@ const PAINT: Record<VinylStyle, (x: Ctx) => void> = {
       g.fill();
     });
   },
+  // Рябь: волны цвета расходятся кругами.
+  ripple(x) {
+    const { g, c, R, labelR, rnd, inks } = x;
+    fillDisc(x, rgba(shade(inks[0]!, -0.5), 1));
+    const k = 18 + rnd() * 30;
+    for (let r = labelR; r < R; r += 2) {
+      const t = 0.5 + 0.5 * Math.sin(r / k + Math.sin(r / (k * 3)) * 2);
+      g.strokeStyle = rgba(t > 0.5 ? inks[1 % inks.length]! : inks[0]!, 0.25 + t * 0.6);
+      g.lineWidth = 2.2;
+      g.beginPath();
+      g.arc(c + Math.sin(r / 40) * 3, c, r, 0, TAU);
+      g.stroke();
+    }
+  },
+
+  // Полосы-кольца всех цветов обложки, чёткие, как у слоёного винила.
+  stripes(x) {
+    const { g, c, R, labelR, rnd, inks } = x;
+    let r = R;
+    let i = 0;
+    while (r > labelR * 0.8) {
+      const w = 14 + rnd() * 60;
+      g.fillStyle = rgba(inks[i % inks.length]!, 1);
+      g.beginPath();
+      g.arc(c, c, r, 0, TAU);
+      g.fill();
+      r -= w;
+      i++;
+    }
+  },
+
+  // Цветовой круг: плавный переход по кругу через все цвета обложки.
+  wheel(x) {
+    const { g, c, rnd, inks } = x;
+    const grad = g.createConicGradient(rnd() * TAU, c, c);
+    inks.forEach((ink, i) => grad.addColorStop(i / inks.length, rgba(ink, 1)));
+    grad.addColorStop(1, rgba(inks[0]!, 1));
+    fillDisc(x, grad);
+    const dark = g.createRadialGradient(c, c, 0, c, c, x.R);
+    dark.addColorStop(0, "rgba(0,0,0,0.35)");
+    dark.addColorStop(0.6, "rgba(0,0,0,0)");
+    fillDisc(x, dark);
+  },
+
+  // Пятна «под леопарда»: светлая основа, пятна с тёмной каймой.
+  leopard(x) {
+    const { g, c, R, rnd, inks } = x;
+    fillDisc(x, rgba(shade(inks[0]!, 0.15), 1));
+    for (let i = 0; i < 140; i++) {
+      const a = rnd() * TAU;
+      const d = Math.sqrt(rnd()) * R;
+      const px = c + Math.cos(a) * d;
+      const py = c + Math.sin(a) * d;
+      const sz = R * (0.02 + rnd() * 0.035);
+      g.fillStyle = rgba(shade(inks[1 % inks.length]!, -0.1), 0.9);
+      g.beginPath();
+      g.ellipse(px, py, sz, sz * (0.6 + rnd() * 0.5), rnd() * TAU, 0, TAU);
+      g.fill();
+      g.strokeStyle = rgba(shade(inks[2 % inks.length]!, -0.75), 0.9);
+      g.lineWidth = sz * 0.35;
+      g.beginPath();
+      g.arc(px, py, sz * 1.1, rnd() * TAU, rnd() * TAU + 3.5);
+      g.stroke();
+    }
+  },
+
+  // Сетка точек, как на колонке: точки крупнее к краю.
+  mesh(x) {
+    const { g, c, R, inks } = x;
+    fillDisc(x, rgba(shade(inks[0]!, -0.65), 1));
+    const step = R / 26;
+    for (let yy = -R; yy <= R; yy += step) {
+      for (let xx = -R; xx <= R; xx += step) {
+        const d = Math.hypot(xx, yy) / R;
+        if (d > 1) continue;
+        g.fillStyle = rgba(d > 0.66 ? inks[1 % inks.length]! : inks[0]!, 0.5 + d * 0.4);
+        g.beginPath();
+        g.arc(c + xx, c + yy, step * (0.12 + d * 0.28), 0, TAU);
+        g.fill();
+      }
+    }
+  },
+
+  // Зигзаги-молнии по кругу.
+  zigzag(x) {
+    const { g, c, R, labelR, rnd, inks } = x;
+    fillDisc(x, rgba(x.dark, 1));
+    const rings = 5 + Math.floor(rnd() * 5);
+    for (let k = 0; k < rings; k++) {
+      const r0 = labelR + ((R - labelR) * (k + 0.5)) / rings;
+      const amp = ((R - labelR) / rings) * 0.35;
+      const teeth = 24 + Math.floor(rnd() * 30);
+      g.strokeStyle = rgba(inks[k % inks.length]!, 0.9);
+      g.lineWidth = 4 + rnd() * 10;
+      g.lineJoin = "miter";
+      g.beginPath();
+      for (let i = 0; i <= teeth * 2; i++) {
+        const a = (i / (teeth * 2)) * TAU;
+        const r = r0 + (i % 2 ? amp : -amp);
+        const px = c + Math.cos(a) * r;
+        const py = c + Math.sin(a) * r;
+        if (i === 0) g.moveTo(px, py);
+        else g.lineTo(px, py);
+      }
+      g.stroke();
+    }
+  },
+
+  // Неон: тёмный диск и светящиеся тонкие кольца.
+  neon(x) {
+    const { c, R, labelR, rnd, inks } = x;
+    fillDisc(x, "#06060a");
+    blurred(x, 14, ({ g }) => {
+      for (let i = 0; i < 6; i++) {
+        g.strokeStyle = rgba(inks[i % inks.length]!, 1);
+        g.lineWidth = 6;
+        g.beginPath();
+        g.arc(c, c, labelR + 20 + rnd() * (R - labelR - 40), 0, TAU);
+        g.stroke();
+      }
+    });
+    const g = x.g;
+    for (let i = 0; i < 6; i++) {
+      g.strokeStyle = rgba(shade(inks[i % inks.length]!, 0.6), 0.95);
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(c, c, labelR + 20 + seededRing(i, rnd) * (R - labelR - 40), 0, TAU);
+      g.stroke();
+    }
+  },
+
+  // Мозаика: осколки по кругу.
+  mosaic(x) {
+    const { g, c, R, labelR, rnd, inks } = x;
+    const rings = 7;
+    for (let k = 0; k < rings; k++) {
+      const r0 = labelR * 0.8 + ((R - labelR * 0.8) * k) / rings;
+      const r1 = labelR * 0.8 + ((R - labelR * 0.8) * (k + 1)) / rings + 1;
+      const n = 10 + k * 5;
+      const off = rnd() * TAU;
+      for (let i = 0; i < n; i++) {
+        const a0 = off + (i / n) * TAU;
+        const a1 = off + ((i + 1) / n) * TAU + 0.004;
+        g.fillStyle = rgba(shade(inks[Math.floor(rnd() * inks.length)]!, (rnd() - 0.5) * 0.5), 1);
+        g.beginPath();
+        g.arc(c, c, r1, a0, a1);
+        g.arc(c, c, r0, a1, a0, true);
+        g.closePath();
+        g.fill();
+      }
+    }
+    g.strokeStyle = "rgba(0,0,0,0.35)";
+    g.lineWidth = 2;
+    for (let k = 0; k <= rings; k++) {
+      g.beginPath();
+      g.arc(c, c, labelR * 0.8 + ((R - labelR * 0.8) * k) / rings, 0, TAU);
+      g.stroke();
+    }
+  },
+
+  // Акварель: полупрозрачные мазки с тёмным краем, как краска на бумаге.
+  watercolor(x) {
+    const { R, rnd, inks } = x;
+    fillDisc(x, rgba(shade(inks[0]!, 0.75), 1));
+    for (let i = 0; i < 9; i++) {
+      blurred(x, 8 + rnd() * 10, (y) => blob(y, inks[i % inks.length]!, 0.55, R * 0.15, R * 0.5));
+    }
+  },
+
+  // «Расплавленный»: цвет стекает от центра к краю каплями.
+  melted(x) {
+    const { g, c, R, labelR, rnd, inks } = x;
+    fillDisc(x, rgba(shade(inks[1 % inks.length]!, -0.35), 1));
+    g.fillStyle = rgba(inks[0]!, 1);
+    g.beginPath();
+    const n = 160;
+    for (let i = 0; i <= n; i++) {
+      const a = (i / n) * TAU;
+      const drip = Math.pow(Math.max(0, Math.sin(a * (5 + Math.floor(rnd() * 0)) + 1.3) * Math.sin(a * 3.7)), 3);
+      const r = labelR * 1.4 + R * 0.12 + drip * (R * 0.5) + Math.sin(a * 11) * 6;
+      const px = c + Math.cos(a) * r;
+      const py = c + Math.sin(a) * r;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    }
+    g.closePath();
+    g.fill();
+    g.fillStyle = "rgba(255,255,255,0.12)";
+    g.beginPath();
+    g.arc(c - R * 0.15, c - R * 0.2, R * 0.25, 0, TAU);
+    g.fill();
+  },
+
+  // Пластинка-картинка: обложка во весь диск (если обложки нет — цветной круг).
+  picture(x) {
+    const { g, c, R, img } = x;
+    if (!img) return PAINT.wheel(x);
+    g.drawImage(img, c - R, c - R, R * 2, R * 2);
+    const sheen = g.createRadialGradient(c, c, R * 0.3, c, c, R);
+    sheen.addColorStop(0, "rgba(0,0,0,0)");
+    sheen.addColorStop(1, "rgba(0,0,0,0.45)");
+    fillDisc(x, sheen);
+  },
+
+  // Дымчатый полупрозрачный винил: сквозь него просвечивает размытая обложка.
+  smoke(x) {
+    const { g, c, R, img, inks } = x;
+    if (img) {
+      g.filter = "blur(18px) saturate(1.3)";
+      g.drawImage(img, c - R, c - R, R * 2, R * 2);
+      g.filter = "none";
+    } else fillDisc(x, rgba(inks[0]!, 1));
+    fillDisc(x, rgba(shade(inks[0]!, -0.6), 0.45));
+    for (let i = 0; i < 12; i++) blob(x, shade(inks[i % inks.length]!, -0.5), 0.25, R * 0.1, R * 0.4);
+  },
+
 };
 
-export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: VinylColors, size = 1024): void {
+/** Лёгкие узоры поверх основы (без заливки). Пустые — чтобы часть пластинок оставалась «чистой». */
+const OVERLAYS: ((x: Ctx) => void)[] = [
+  () => undefined,
+  () => undefined,
+  () => undefined,
+  // крапинки
+  ({ g, c, R, rnd, inks }) => {
+    for (let i = 0; i < 400; i++) {
+      const a = rnd() * TAU;
+      const d = Math.sqrt(rnd()) * R;
+      g.fillStyle = rgba(rnd() < 0.3 ? [250, 248, 240] : inks[Math.floor(rnd() * inks.length)]!, 0.7);
+      g.beginPath();
+      g.arc(c + Math.cos(a) * d, c + Math.sin(a) * d, 1 + rnd() * 2.2, 0, TAU);
+      g.fill();
+    }
+  },
+  // светящиеся кольца
+  (x) =>
+    blurred(x, 10, ({ g }) => {
+      for (let i = 0; i < 3; i++) {
+        g.strokeStyle = rgba(shade(x.inks[i % x.inks.length]!, 0.3), 0.8);
+        g.lineWidth = 4;
+        g.beginPath();
+        g.arc(x.c, x.c, x.labelR + 30 + x.rnd() * (x.R - x.labelR - 60), 0, TAU);
+        g.stroke();
+      }
+    }),
+  // прожилки
+  (x) =>
+    blurred(x, 3, ({ g }) => {
+      for (let i = 0; i < 14; i++) {
+        g.strokeStyle = rgba(shade(x.inks[i % x.inks.length]!, 0.5), 0.35);
+        g.lineWidth = 1.5 + x.rnd() * 3;
+        g.beginPath();
+        let px = x.rnd() * x.R * 2;
+        let py = x.rnd() * x.R * 2;
+        g.moveTo(px, py);
+        for (let k = 0; k < 4; k++) {
+          px += (x.rnd() - 0.5) * x.R * 0.6;
+          py += (x.rnd() - 0.5) * x.R * 0.6;
+          g.quadraticCurveTo(px + (x.rnd() - 0.5) * 80, py + (x.rnd() - 0.5) * 80, px, py);
+        }
+        g.stroke();
+      }
+    }),
+];
+
+export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: VinylColors, size = 1024, img?: CanvasImageSource): void {
+  ringCache.clear();
   canvas.width = canvas.height = size;
   const g = canvas.getContext("2d")!;
   const seed = hashSeed(seedKey);
@@ -327,9 +626,14 @@ export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: Vi
   const c = size / 2;
   const R = size / 2;
   const labelR = R * 0.34;
-  const inks: RGB[] = [hexToRgb(colors.accent), hexToRgb(colors.accent2), hexToRgb(colors.accent3)];
+  // Цвета — настоящие цвета обложки (до 6), а если их нет — акценты палитры.
+  const base = colors.swatches && colors.swatches.length >= 3 ? colors.swatches : [colors.accent, colors.accent2, colors.accent3];
+  const inks: RGB[] = base.map(hexToRgb);
   // порядок цветов тоже свой у каждого трека
-  if (rnd() < 0.5) inks.reverse();
+  for (let i = inks.length - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [inks[i], inks[j]] = [inks[j]!, inks[i]!];
+  }
   const x: Ctx = {
     g,
     c,
@@ -338,6 +642,7 @@ export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: Vi
     rnd,
     inks,
     dark: shade(hexToRgb(colors.bg), -0.6),
+    img,
   };
   const style = vinylStyleFor(seed);
 
@@ -348,6 +653,8 @@ export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: Vi
   g.clip();
 
   PAINT[style](x);
+  // Иногда поверх основы — второй, лёгкий узор: так видов в разы больше.
+  if (style !== "picture") OVERLAYS[Math.floor(rnd() * OVERLAYS.length)]!(x);
 
   // Бороздки поверх цвета: тонкие кольца, цвет под ними остаётся.
   const grooveFrom = labelR + R * 0.05; // гладкая полоска у наклейки, как у настоящих

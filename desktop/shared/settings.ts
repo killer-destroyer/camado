@@ -46,6 +46,8 @@ export interface AppSettings {
     target: ShakeTarget;
   };
   vinyl: boolean;
+  /** Выбранный вид пластинки для песни (кнопка «другой вид»): номер варианта. */
+  vinylVariant: Record<string, number>;
   /** Плавный переход между треками, секунды (0 — выкл). */
   crossfade: number;
   /** Звук: обычный, slowed + reverb, nightcore. */
@@ -92,6 +94,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsSync: {},
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
+  vinylVariant: {},
   crossfade: 6,
   soundMode: "normal",
   slowedRate: 0.85,
@@ -127,6 +130,7 @@ export function mergeSettings(saved: unknown): AppSettings {
     alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },
     lyricsSync: { ...(s.lyricsSync ?? {}) },
+    vinylVariant: { ...(s.vinylVariant ?? {}) },
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
   };

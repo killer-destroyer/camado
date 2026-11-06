@@ -13,6 +13,8 @@ export interface Palette {
   accent: string;
   accent2: string;
   accent3: string;
+  /** Настоящие цвета обложки (до 6, от главного), для пластинки — «как у песни». */
+  swatches?: string[];
 }
 
 export const PALETTES: Palette[] = [
@@ -158,5 +160,27 @@ export function paletteFromPixels(data: Uint8ClampedArray | number[], base: Pale
     accent: vivid(main, 0.55, 0.68, 0.55),
     accent2: vivid(second, 0.6, 0.75, 0.45),
     accent3: vivid(third, 0.55, 0.72, 0.45),
+    swatches: coverSwatches(groups.map((g) => g.rgb), data),
   };
+}
+
+/** До 6 цветов обложки: главные оттенки как есть (чуть сочнее) + самый тёмный и самый светлый. */
+function coverSwatches(main: RGB[], data: Uint8ClampedArray | number[]): string[] {
+  const out = main.slice(0, 5).map((rgb) => {
+    const [h, s, l] = rgbToHsl(rgb);
+    return rgbToHex(hslToRgb([h, Math.min(1, s * 1.15 + 0.05), Math.min(0.85, Math.max(0.2, l))]));
+  });
+  let dark: RGB | undefined;
+  let light: RGB | undefined;
+  let dl = 1;
+  let ll = 0;
+  for (let i = 0; i + 3 < data.length; i += 16) {
+    const rgb: RGB = [data[i]!, data[i + 1]!, data[i + 2]!];
+    const l = rgbToHsl(rgb)[2];
+    if (l < dl && l > 0.03) [dl, dark] = [l, rgb];
+    if (l > ll && l < 0.98) [ll, light] = [l, rgb];
+  }
+  if (light && ll > 0.6) out.push(rgbToHex(light));
+  if (dark && dl < 0.3) out.push(rgbToHex(dark));
+  return out.slice(0, 6);
 }

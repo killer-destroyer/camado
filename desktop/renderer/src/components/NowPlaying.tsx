@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Crosshair,
+  Disc3,
   Heart,
   Moon,
   PictureInPicture2,
@@ -377,6 +378,7 @@ export function NowPlaying() {
   const meta = nowMeta();
   const track = currentTrack();
   const isFav = !!track && favorites.includes(track.id);
+  const variant = useStore(app, (s) => (track ? (s.settings.vinylVariant[track.id] ?? 0) : 0));
   const palette = settings.coverColors && coverPalette ? coverPalette : paletteById(settings.palette);
   const hasLyrics = !!lyrics && lyrics.lines.length > 0 && settings.lyricsMode !== "off";
 
@@ -417,13 +419,14 @@ export function NowPlaying() {
         {vis === "ring" && <Visualizer kind="ring-only" className="np-ring-full" ring={ring} />}
         <div ref={shakeDisc} className="np-disc-layer">
           <Vinyl
-            trackKey={track?.id ?? meta?.title ?? "camado"}
+            trackKey={`${track?.id ?? meta?.title ?? "camado"}${variant ? `#${variant}` : ""}`}
             cover={meta?.cover}
             colors={{
               bg: palette.bg2,
               accent: palette.accent,
               accent2: palette.accent2,
               accent3: palette.accent3,
+              swatches: coverPalette?.swatches ?? palette.swatches,
             }}
           />
         </div>
@@ -447,6 +450,15 @@ export function NowPlaying() {
           {hasLyrics && lyrics?.synced && track && <LyricsShift trackId={track.id} />}
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
           <Segmented size="sm" value={vis} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
+          {track && (
+            <button
+              className="icon-btn"
+              title="Другой вид пластинки (запомнится для этой песни)"
+              onClick={() => updateSettings({ vinylVariant: { ...settings.vinylVariant, [track.id]: variant + 1 } })}
+            >
+              <Disc3 size={18} />
+            </button>
+          )}
           <button className="icon-btn" title="Заставка-визуализатор на весь экран" onClick={() => startScreensaver()}>
             <Sparkles size={18} />
           </button>
