@@ -4,6 +4,9 @@ import { GeminiProvider, geminiKeyProblem, looksLikeGeminiKey, toGeminiSchema } 
 import { OpenAiCompatProvider } from "../src/llm/openai.js";
 import { buildProvider, parseAiConfig } from "../src/llm/providers.js";
 import { defineTool } from "../src/llm/tool.js";
+import { currentAiConfig, migrateGoogleAsOpenAi } from "../src/core.js";
+import { AI_CONFIG_KV, KEY_KV } from "../src/llm/providers.js";
+import { memoryStore as makeStore } from "./helpers.js";
 import type { Usage } from "../src/llm/types.js";
 
 const saved: string[] = [];
@@ -163,5 +166,23 @@ describe("1.0.2: ключи Gemini нового вида и бесплатные
     const impl = (async () => json({ error: { message: "model not found" } })) as unknown as typeof fetch;
     const p = new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 1, output: 1 } }, impl);
     await expect(p.runAgent({ tier: "brain", system: [], history: [], userMessage: "x", tools: [] })).rejects.toThrow(/model not found/);
+  });
+});
+
+describe("1.0.3: Gemini, подключённый как «другая модель»", () => {
+  it("сам переводится на родной режим Gemini, ключ переносится", () => {
+    const store = makeStore();
+    store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "openai", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", price: { input: 0.1, output: 0.1 } }));
+    store.setSecret(KEY_KV.openai, "AQ.test-key-test-key-test-key");
+    const core = { store, config: {} as never };
+    migrateGoogleAsOpenAi(core);
+    expect(currentAiConfig(core)).toEqual({ kind: "gemini", free: true });
+    expect(store.getSecret(KEY_KV.gemini)).toBe("AQ.test-key-test-key-test-key");
+  });
+  it("другие сервисы не трогает", () => {
+    const store = makeStore();
+    store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "openai", baseUrl: "https://api.deepseek.com/v1", price: { input: 1, output: 1 } }));
+    migrateGoogleAsOpenAi({ store, config: {} as never });
+    expect(currentAiConfig({ store, config: {} as never }).kind).toBe("openai");
   });
 });

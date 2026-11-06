@@ -52,8 +52,23 @@ export function aiKey(core: Pick<CamadoCore, "store" | "config">, kind: AiKind):
   return core.store.getSecret(KEY_KV[kind]) ?? env;
 }
 
+/**
+ * Gemini, когда-то подключённый как «другая модель» (адрес Google), переводим на родной режим Gemini:
+ * там работают ключи нового вида AQ. и бесплатный тариф. Ключ переносим, если в Gemini его ещё нет.
+ */
+export function migrateGoogleAsOpenAi(core: Pick<CamadoCore, "store" | "config">): void {
+  const raw = core.store.getKv(AI_CONFIG_KV);
+  if (!raw) return;
+  const cfg = parseAiConfig(raw);
+  if (cfg.kind !== "openai" || !/generativelanguage\.googleapis\.com/i.test(cfg.baseUrl ?? "")) return;
+  const key = core.store.getSecret(KEY_KV.openai);
+  if (key && !core.store.getSecret(KEY_KV.gemini)) core.store.setSecret(KEY_KV.gemini, key);
+  core.store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "gemini", free: true }));
+}
+
 /** Собрать и подключить модель по текущим настройкам. */
 export function applyAi(core: CamadoCore): void {
+  migrateGoogleAsOpenAi(core);
   const cfg = currentAiConfig(core);
   const models = { fast: core.config.CAMADO_MODEL_FAST, brain: core.config.CAMADO_MODEL_BRAIN, smart: core.config.CAMADO_MODEL_SMART };
   core.ai.setProvider(buildProvider(cfg, aiKey(core, cfg.kind), models));

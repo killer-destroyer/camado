@@ -324,7 +324,9 @@ const handlers: Record<string, Handler> = {
     } catch (err) {
       if (err instanceof BudgetExceededError) return { error: err.message };
       console.error("Ошибка чата:", err);
-      return { error: "Не получилось ответить. Проверь интернет и ключ." };
+      // Показываем настоящую причину (что ответил сервис), а не общую фразу.
+      const why = err instanceof Error && err.message ? err.message.slice(0, 300) : "";
+      return { error: why ? `Не получилось ответить: ${why}` : "Не получилось ответить — нет связи с сервисом." };
     }
   },
 
