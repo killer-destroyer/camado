@@ -71,22 +71,22 @@ function UpdatesSection() {
     idle: "Проверю обновления через пару секунд.",
     checking: "Проверяю…",
     none: "У тебя последняя версия ✓",
+    available: `Вышла версия ${u.version}. Нажми «Скачать обновление» — дальше всё само: скачаю, поставлю и перезапущусь. Задания и настройки сохранятся.`,
     downloading: `Качаю версию ${u.version ?? ""}… ${u.percent ?? 0}%`,
-    ready: `Версия ${u.version} скачана. Перезапусти — и всё обновится, задания и настройки сохранятся.`,
-    manual: `Вышла версия ${u.version}. Скачай и поставь поверх — задания и настройки сохранятся.`,
+    installing: `Ставлю версию ${u.version ?? ""} и перезапускаюсь…`,
     error: u.error ?? "Не получилось проверить обновления.",
   };
   return (
     <section className="set-section glass">
       <h3>Обновления</h3>
       <Row title={`Камадо ${u.current || ""}`} hint={text[u.state]}>
-        {u.state === "ready" || u.state === "manual" ? (
+        {u.state === "available" || (u.state === "error" && !!u.version) ? (
           <button className="btn primary" onClick={() => void api.updates.install()}>
-            <Download size={16} /> {u.state === "ready" ? "Перезапустить и обновить" : "Скачать"}
+            <Download size={16} /> {u.state === "error" ? "Попробовать снова" : "Скачать обновление"}
           </button>
         ) : (
           u.state !== "dev" && (
-            <button className="btn" disabled={busy || u.state === "checking" || u.state === "downloading"} onClick={() => void check()}>
+            <button className="btn" disabled={busy || u.state === "checking" || u.state === "downloading" || u.state === "installing"} onClick={() => void check()}>
               <RefreshCw size={16} className={u.state === "checking" ? "spin" : ""} /> Проверить
             </button>
           )
@@ -97,7 +97,7 @@ function UpdatesSection() {
           <i style={{ width: `${u.percent ?? 0}%` }} />
         </div>
       )}
-      <div className="set-hint">Камадо сам проверяет обновления при запуске и каждые 3 часа.</div>
+      <div className="set-hint">Камадо сам проверяет, нет ли новой версии (при запуске и каждые 3 часа), но качает её только по кнопке.</div>
     </section>
   );
 }

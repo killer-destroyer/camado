@@ -108,9 +108,10 @@ export interface OverlayState {
 export interface UpdateStatus {
   /**
    * dev — запущено из исходников (обновлений нет), checking — проверяю, none — последняя версия,
-   * downloading — качаю, ready — скачано, нужен перезапуск, manual — есть новая (Mac, скачать вручную), error.
+   * available — вышла новая (ждёт кнопку «Скачать обновление»), downloading — качаю,
+   * installing — ставлю и перезапускаюсь, error.
    */
-  state: "dev" | "idle" | "checking" | "none" | "downloading" | "ready" | "manual" | "error";
+  state: "dev" | "idle" | "checking" | "none" | "available" | "downloading" | "installing" | "error";
   current: string;
   version?: string;
   percent?: number;
@@ -303,7 +304,7 @@ export interface CamadoApi {
   updates: {
     status(): Promise<UpdateStatus>;
     check(): Promise<UpdateStatus>;
-    /** Перезапустить и установить (Windows) или открыть ссылку на скачивание (Mac). */
+    /** Кнопка «Скачать обновление»: скачать, установить и перезапуститься — всё само. */
     install(): Promise<void>;
   };
   system: {

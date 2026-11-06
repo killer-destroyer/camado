@@ -110,7 +110,13 @@ const send = (channel: string, payload?: unknown) => {
 };
 
 const library = new Library(dataDir, () => send("library-changed"));
-const updates = new Updates((s) => send("update-status", s));
+const updates = new Updates(
+  (s) => send("update-status", s),
+  () => {
+    // для установки программа должна правда закрыться, а не спрятаться в фон
+    quitting = true;
+  },
+);
 const discord = new DiscordPresence();
 let nowPlaying: NowPlayingState | null = null;
 const lyrics = new LyricsService(join(dataDir, "lyrics-cache"), (id) => library.trackPath(id));
@@ -551,11 +557,7 @@ const handlers: Record<string, Handler> = {
 
   "updates.status": () => updates.status,
   "updates.check": () => updates.check(),
-  "updates.install": () => {
-    // Иначе закрытие окна при установке свернуло бы его в трей, а не выключило программу.
-    quitting = true;
-    updates.install();
-  },
+  "updates.install": () => updates.download(),
 
   notify: (title: string, body: string) => notify(title, body),
 };

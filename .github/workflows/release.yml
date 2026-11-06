@@ -26,7 +26,10 @@ jobs:
               release/latest.yml
           - os: macos-latest
             args: --mac
-            files: release/Camado-mac.dmg
+            files: |
+              release/Camado-mac.dmg
+              release/Camado-mac-arm64.zip
+              release/Camado-mac-x64.zip
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

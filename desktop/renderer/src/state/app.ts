@@ -96,8 +96,9 @@ export async function initApp(): Promise<void> {
   api.on("update-status", (u) => {
     const was = app.get().update.state;
     app.set({ update: u });
-    if (u.state === "ready" && was !== "ready")
-      toast(`Новая версия ${u.version} скачана — перезапусти Камадо в Настройках или из полоски сверху.`, "ok");
+    if (u.state === "available" && was !== "available")
+      toast(`Вышла новая версия ${u.version} — нажми «Скачать обновление» в полоске сверху, дальше всё само.`, "ok");
+    if (u.state === "installing" && was !== "installing") toast("Обновление скачано — ставлю и перезапускаюсь…", "ok");
   });
   applySettings(settings);
   document.documentElement.dataset.platform = info.platform;

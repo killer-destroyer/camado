@@ -46,6 +46,10 @@ mac:
   target:
     - target: dmg
       arch: [universal]
+    # архивы под каждый процессор — их качает обновление прямо в программе
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: Camado-mac-${arch}.${ext}
   # Без платного сертификата Apple — подпись «для себя».
   identity: null
   extendInfo:

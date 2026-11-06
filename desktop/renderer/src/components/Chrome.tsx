@@ -65,7 +65,7 @@ export function Sidebar() {
         <span className="nav-pill" style={{ transform: `translateY(${pillTop}px)` }} />
         {items.map((n, i) => {
           const Icon = n.icon;
-          const dot = n.id === "settings" && (update === "ready" || update === "manual");
+          const dot = n.id === "settings" && update === "available";
           return (
             <button
               key={n.id}
@@ -147,11 +147,15 @@ export function MiniPlayer() {
 
 export function UpdateBanner() {
   const u = useStore(app, (s) => s.update);
-  if (u.state !== "ready" && u.state !== "manual") return null;
+  if (u.state !== "available" && u.state !== "downloading" && u.state !== "installing") return null;
   return (
-    <button className="update-banner" onClick={() => void api.updates.install()}>
+    <button className="update-banner" disabled={u.state !== "available"} onClick={() => void api.updates.install()}>
       <Sparkles size={15} />
-      {u.state === "ready" ? `Версия ${u.version} готова — перезапустить` : `Вышла версия ${u.version} — скачать`}
+      {u.state === "available"
+        ? `Вышла версия ${u.version} — скачать обновление`
+        : u.state === "downloading"
+          ? `Качаю обновление… ${u.percent ?? 0}%`
+          : "Ставлю обновление и перезапускаюсь…"}
     </button>
   );
 }
