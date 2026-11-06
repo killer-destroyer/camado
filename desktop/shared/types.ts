@@ -1,8 +1,10 @@
 // Общие типы для окна (renderer) и фоновой части (main) приложения.
 import type { ChatEntry, FocusSession, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus } from "../../src/store.js";
 import type { FreeAlbum } from "../main/freeMusic.js";
+import type { AiConfig } from "../../src/llm/providers.js";
 import type { AppSettings } from "./settings.js";
 
+export type { AiConfig };
 export type { ChatEntry, FocusSession, FreeAlbum, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus, AppSettings };
 
 type ImportResult =
@@ -71,6 +73,9 @@ export interface AiStatus {
   spentUsd: number;
   budgetUsd: number;
   model: string;
+  kind: AiConfig["kind"];
+  config: AiConfig;
+  presets: { id: string; name: string; baseUrl: string; hint: string; model: string }[];
 }
 
 /** Что играет — для мини-плеера в меню-баре, трея и Discord. */
@@ -191,6 +196,8 @@ export interface CamadoApi {
   ai: {
     status(): Promise<AiStatus>;
     setKey(key: string): Promise<{ ok: boolean; error?: string }>;
+    /** Выбрать нейросеть (Gemini, Claude, OpenAI-совместимая) и ключ к ней. */
+    connect(cfg: AiConfig, key?: string): Promise<{ ok: boolean; error?: string }>;
     clearKey(): Promise<void>;
   };
   bot: {

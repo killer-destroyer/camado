@@ -9,6 +9,7 @@ const schema = z.object({
   TELEGRAM_BOT_TOKEN: optional(z.string().min(1)),
   OWNER_TELEGRAM_ID: optional(z.coerce.number().int().positive()),
   ANTHROPIC_API_KEY: optional(z.string()),
+  GEMINI_API_KEY: optional(z.string()),
   CAMADO_MODEL_FAST: z.string().default("claude-haiku-5-5"),
   CAMADO_MODEL_BRAIN: z.string().default("claude-sonnet-5-5"),
   CAMADO_MODEL_SMART: z.string().default("claude-opus-5-5"),

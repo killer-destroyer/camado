@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { AlarmClock, Check, Download, FolderPlus, KeyRound, Music4, Play, RefreshCw, Shuffle, Sparkles, Square, Trash2 } from "lucide-react";
 import { SCENES } from "../lib/scenes";
 import { startScreensaver } from "../components/Screensaver";
-import type { AiStatus, BotStatus } from "../../../shared/types";
+import type { AiConfig, AiStatus, BotStatus } from "../../../shared/types";
 import type { AppSettings } from "../../../shared/settings";
 import { api } from "../lib/api";
 import { fps } from "../lib/frame";
@@ -102,28 +102,56 @@ function UpdatesSection() {
   );
 }
 
+const AI_KINDS = [
+  { value: "gemini" as const, label: "Gemini — бесплатно" },
+  { value: "anthropic" as const, label: "Claude" },
+  { value: "openai" as const, label: "Другая модель" },
+];
+
+const isLocal = (u: string) => /localhost|127\.0\.0\.1/.test(u);
+
 function AiSection() {
   const [st, setSt] = useState<AiStatus | null>(null);
+  const [kind, setKind] = useState<AiConfig["kind"]>("gemini");
   const [key, setKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [model, setModel] = useState("");
+  const [price, setPrice] = useState({ input: 0, output: 0 });
   const [busy, setBusy] = useState(false);
-  const load = () => void api.ai.status().then(setSt);
+  const load = () =>
+    void api.ai.status().then((x) => {
+      setSt(x);
+      setKind(x.kind);
+      setBaseUrl(x.config.baseUrl ?? "");
+      setModel(x.config.models?.brain ?? "");
+      setPrice(x.config.price ?? { input: 0, output: 0 });
+    });
   useEffect(load, []);
+  const current = st?.kind === kind && st.enabled;
   const save = async () => {
     setBusy(true);
-    const r = await api.ai.setKey(key);
+    const cfg: AiConfig =
+      kind === "gemini"
+        ? { kind, free: true, ...(model ? { models: { brain: model, smart: model } } : {}) }
+        : kind === "anthropic"
+          ? { kind, ...(model ? { models: { brain: model } } : {}) }
+          : { kind, baseUrl: baseUrl.trim(), price, ...(model ? { models: { fast: model, brain: model, smart: model } } : {}) };
+    const r = await api.ai.connect(cfg, key || undefined);
     setBusy(false);
     if (r.ok) {
       setKey("");
-      toast("Ключ принят — ИИ включён 🧠", "ok");
-    } else toast(r.error ?? "Ключ не подошёл", "warn");
+      toast("Готово — ИИ включён 🧠", "ok");
+    } else toast(r.error ?? "Не подошло", "warn");
     load();
   };
+  const preset = st?.presets.find((p) => baseUrl.startsWith(p.baseUrl));
+  const canSave = !busy && (!!key || current || (kind === "openai" && isLocal(baseUrl)));
   return (
     <section className="set-section glass">
-      <h3>ИИ (Claude)</h3>
+      <h3>ИИ</h3>
       <Row
-        title={st?.enabled ? `Включён, ключ ${st.keyHint ?? ""}` : "Выключен — ручной режим"}
-        hint={st ? `Потрачено в этом месяце ~$${st.spentUsd.toFixed(2)} из $${st.budgetUsd} · модель ${st.model}` : ""}
+        title={st?.enabled ? `Включён: ${AI_KINDS.find((k) => k.value === st.kind)?.label ?? ""}${st.keyHint ? `, ключ ${st.keyHint}` : ""}` : "Выключен — ручной режим"}
+        hint={st ? `Потрачено в этом месяце ~$${st.spentUsd.toFixed(2)} из $${st.budgetUsd} · модель ${st.model || "—"}` : ""}
       >
         {st?.enabled && (
           <button className="btn" onClick={() => void api.ai.clearKey().then(load)}>
@@ -131,31 +159,86 @@ function AiSection() {
           </button>
         )}
       </Row>
+      <Segmented size="sm" value={kind} options={AI_KINDS} onChange={(v) => setKind(v)} />
+
+      {kind === "gemini" && (
+        <ol className="ai-steps">
+          <li>
+            Открой <b>Google AI Studio</b> под своим Google-аккаунтом.{" "}
+            <button className="btn sm-link" onClick={() => window.open("https://aistudio.google.com/apikey")}>
+              Открыть AI Studio
+            </button>
+          </li>
+          <li>
+            Нажми <b>Create API key</b> и скопируй ключ — он начинается с <code>AIza</code>. Карта не нужна.
+          </li>
+          <li>Вставь его ниже и нажми «Подключить».</li>
+        </ol>
+      )}
+      {kind === "anthropic" && (
+        <div className="set-hint">
+          Ключ — на console.anthropic.com: войди, пополни баланс, API Keys → Create Key.{" "}
+          <button className="btn sm-link" onClick={() => window.open("https://console.anthropic.com/settings/keys")}>
+            Открыть сайт Anthropic
+          </button>
+        </div>
+      )}
+      {kind === "openai" && (
+        <div className="ai-openai">
+          <div className="chips">
+            {st?.presets.map((p) => (
+              <button
+                key={p.id}
+                className={`chip-btn ${baseUrl.startsWith(p.baseUrl) ? "on" : ""}`}
+                title={p.hint}
+                onClick={() => {
+                  setBaseUrl(p.baseUrl);
+                  setModel(p.model);
+                }}
+              >
+                {p.name}
+              </button>
+            ))}
+          </div>
+          {preset && <div className="set-hint">{preset.hint}</div>}
+          <input className="input mono" placeholder="Адрес API, например https://openrouter.ai/api/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          {!/openrouter\.ai/.test(baseUrl) && !isLocal(baseUrl) && baseUrl && (
+            <div className="ai-price">
+              <span>Цена модели, $ за 1 млн токенов:</span>
+              <input className="input sm" type="number" min={0} step={0.01} value={price.input} onChange={(e) => setPrice({ ...price, input: Number(e.target.value) })} />
+              <span>вход</span>
+              <input className="input sm" type="number" min={0} step={0.01} value={price.output} onChange={(e) => setPrice({ ...price, output: Number(e.target.value) })} />
+              <span>выход</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <input
+        className="input mono"
+        placeholder={kind === "openai" ? "Название модели (например deepseek-chat)" : "Модель — можно не трогать, по умолчанию самая подходящая"}
+        value={model}
+        onChange={(e) => setModel(e.target.value)}
+      />
       <div className="key-row">
         <KeyRound size={17} />
         <input
           className="input"
           type="password"
-          placeholder="sk-ant-… (console.anthropic.com → API Keys)"
+          placeholder={kind === "gemini" ? "AIza…" : kind === "anthropic" ? "sk-ant-…" : "Ключ сервиса (для своей модели на компьютере не нужен)"}
           value={key}
           onChange={(e) => setKey(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void save()}
+          onKeyDown={(e) => e.key === "Enter" && canSave && void save()}
         />
-        <button className="btn primary" disabled={!key || busy} onClick={() => void save()}>
-          {busy ? "Проверяю…" : "Подключить"}
+        <button className="btn primary" disabled={!canSave} onClick={() => void save()}>
+          {busy ? "Проверяю…" : current && !key ? "Сохранить" : "Подключить"}
         </button>
       </div>
       <div className="set-hint">
-        Ключ берётся на сайте Anthropic: войди, пополни баланс, затем API Keys → Create Key. Он проверяется бесплатным запросом и хранится
-        только у тебя на компьютере.
+        Ключ проверяется бесплатным запросом и хранится только у тебя на компьютере, в зашифрованном виде.
+        {kind === "gemini" &&
+          " На бесплатном тарифе Google может использовать запросы для улучшения своих моделей, и есть дневной лимит — когда он кончится, Камадо скажет и перейдёт в ручной режим до завтра."}
       </div>
-      <button
-        className="btn"
-        style={{ marginTop: 10 }}
-        onClick={() => window.open("https://console.anthropic.com/settings/keys", "_blank")}
-      >
-        Открыть сайт Anthropic
-      </button>
     </section>
   );
 }

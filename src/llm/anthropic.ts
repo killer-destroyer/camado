@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { UnsupportedAttachmentError } from "./types.js";
 import type { AgentRequest, AgentResult, LLMProvider, Tier, Usage } from "./types.js";
 
 // Насколько глубоко модель думает на каждом уровне. Меньше — дешевле и быстрее.
@@ -46,9 +47,13 @@ export class AnthropicProvider implements LLMProvider {
     // Первое сообщение обязано быть от пользователя.
     const history = [...req.history];
     while (history[0]?.role === "assistant") history.shift();
+    const images = (req.attachments ?? []).map((a) => {
+      if (!/^image\/(jpeg|png|gif|webp)$/.test(a.mime)) throw new UnsupportedAttachmentError("Claude не понимает голосовые — для голоса подключи Gemini в Настройках → ИИ.");
+      return { type: "image" as const, source: { type: "base64" as const, media_type: a.mime as "image/jpeg", data: a.data } };
+    });
     const messages: Anthropic.Beta.Messages.BetaMessageParam[] = [
       ...history.map((m) => ({ role: m.role, content: m.content })),
-      { role: "user", content: req.userMessage },
+      { role: "user", content: images.length ? [...images, { type: "text" as const, text: req.userMessage }] : req.userMessage },
     ];
 
     const maxSteps = req.maxSteps ?? 8;

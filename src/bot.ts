@@ -9,6 +9,9 @@ import { NoApiKeyError, type SwitchableProvider } from "./llm/switchable.js";
 import type { Store, TaskKind } from "./store.js";
 
 const TELEGRAM_LIMIT = 4000;
+import { checkGeminiKey, GeminiProvider } from "./llm/gemini.js";
+import { AI_CONFIG_KV, KEY_KV } from "./llm/providers.js";
+
 export const API_KEY_KV = "anthropic_api_key";
 const PAIR_TRIES = 5;
 
@@ -34,10 +37,13 @@ const AI_HELP = `Просто пиши мне обычным текстом:
 • «что у меня на завтра?»
 • «сдал лабу по химии»`;
 
-const KEY_HELP = `Как подключить ИИ:
-1. Зайди на console.anthropic.com, пополни баланс (Billing).
-2. API Keys → Create Key → скопируй ключ.
-3. Отправь мне: /key sk-ant-...
+const KEY_HELP = `Как подключить ИИ (бесплатно):
+1. Зайди на aistudio.google.com под Google-аккаунтом.
+2. Get API key → Create API key → скопируй ключ (начинается с AIza).
+3. Отправь мне: /key AIza...
+Карта не нужна: это бесплатный Gemini Flash с дневным лимитом.
+
+Хочешь Claude — ключ с console.anthropic.com: /key sk-ant-...
 Я сразу удалю сообщение с ключом из чата, проверю его и включу полный режим.
 Выключить: /key off`;
 
@@ -69,6 +75,7 @@ export function splitMessage(text: string, limit = TELEGRAM_LIMIT): string[] {
 }
 
 const looksLikeAnthropicKey = (s: string) => /^sk-ant-[\w-]{20,}$/.test(s.trim());
+const looksLikeGeminiKey = (s: string) => /^AIza[\w-]{30,}$/.test(s.trim());
 
 export interface BotDeps {
   config: Config;
@@ -219,8 +226,27 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     // Ключ не должен висеть в переписке.
     await ctx.deleteMessage().catch(() => undefined);
     const key = rawKey.trim();
+    if (looksLikeGeminiKey(key)) {
+      await ctx.replyWithChatAction("typing").catch(() => undefined);
+      let ok: boolean;
+      try {
+        ok = await checkGeminiKey(key);
+      } catch {
+        await ctx.reply("Не смог проверить ключ: нет связи с Google. Попробуй ещё раз чуть позже.");
+        return;
+      }
+      if (!ok) {
+        await ctx.reply("Google не принял этот ключ. Проверь, что скопировал его целиком.");
+        return;
+      }
+      store.setSecret(KEY_KV.gemini, key);
+      store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "gemini", free: true }));
+      ai.setProvider(new GeminiProvider(key));
+      await ctx.reply(`Ключ Gemini принят, сообщение с ним удалил. ИИ включён (бесплатный Gemini Flash)! 🧠\n\n${AI_HELP}`);
+      return;
+    }
     if (!looksLikeAnthropicKey(key)) {
-      await ctx.reply("Это не похоже на ключ Anthropic (он начинается с sk-ant-). Сообщение удалил на всякий случай.");
+      await ctx.reply("Это не похоже на ключ: Gemini начинается с AIza, Claude — с sk-ant-. Сообщение удалил на всякий случай.");
       return;
     }
     await ctx.replyWithChatAction("typing").catch(() => undefined);
@@ -237,6 +263,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       return;
     }
     store.setSecret(API_KEY_KV, key);
+    store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "anthropic" }));
     ai.setKey(key);
     await ctx.reply(`Ключ принят, сообщение с ним удалил. ИИ включён! 🧠\n\n${AI_HELP}`);
   };
@@ -249,6 +276,8 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     }
     if (arg.toLowerCase() === "off") {
       store.deleteKv(API_KEY_KV);
+      store.deleteKv(KEY_KV.gemini);
+      store.deleteKv(KEY_KV.openai);
       ai.setKey(config.ANTHROPIC_API_KEY);
       await ctx.reply(
         ai.enabled
@@ -272,7 +301,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     const text = ctx.message.text;
 
     // Прислали ключ без команды — не отдаём его модели, а ставим как ключ.
-    if (looksLikeAnthropicKey(text)) {
+    if (looksLikeAnthropicKey(text) || looksLikeGeminiKey(text)) {
       await setKey(ctx, text);
       return;
     }

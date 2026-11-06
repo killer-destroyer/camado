@@ -23,7 +23,10 @@ import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
-import { createCore, createCoreBot, setApiKey, type CamadoCore } from "../../src/core.js";
+import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
+import { checkGeminiKey, GEMINI_MODELS } from "../../src/llm/gemini.js";
+import { isLocalUrl } from "../../src/llm/openai.js";
+import { KEY_KV, OPENAI_PRESETS, type AiConfig } from "../../src/llm/providers.js";
 import { checkAnthropicKey } from "../../src/llm/anthropic.js";
 import { BudgetExceededError } from "../../src/llm/metered.js";
 import { parseTaskArgs } from "../../src/manual.js";
@@ -244,14 +247,49 @@ const handlers: Record<string, Handler> = {
   },
 
   "ai.status": () => {
-    const key = store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY;
+    const cfg = currentAiConfig(core);
+    const key = aiKey(core, cfg.kind);
+    const preset = cfg.kind === "openai" ? OPENAI_PRESETS.find((p) => cfg.baseUrl?.startsWith(p.baseUrl)) : undefined;
+    const model =
+      cfg.models?.brain ||
+      (cfg.kind === "gemini" ? GEMINI_MODELS.brain : cfg.kind === "anthropic" ? config.CAMADO_MODEL_BRAIN : (preset?.models.brain ?? ""));
     return {
       enabled: core.ai.enabled,
       keyHint: key ? `…${key.slice(-4)}` : undefined,
       spentUsd: core.llm.spentThisMonth(),
       budgetUsd: config.CAMADO_MONTHLY_BUDGET_USD,
-      model: config.CAMADO_MODEL_BRAIN,
+      model,
+      kind: cfg.kind,
+      config: cfg,
+      presets: OPENAI_PRESETS.map(({ id, name, baseUrl, hint, models }) => ({ id, name, baseUrl, hint, model: models.brain })),
     };
+  },
+  /** Подключить нейросеть: проверяем ключ, сохраняем (ключ — зашифрованным) и переключаемся. */
+  "ai.connect": async (cfg: AiConfig, rawKey?: string) => {
+    const key = rawKey?.trim() || undefined;
+    const have = key ?? aiKey(core, cfg.kind);
+    try {
+      if (cfg.kind === "anthropic") {
+        if (!have) return { ok: false, error: "Вставь ключ Anthropic (начинается с sk-ant-)" };
+        if (key && !/^sk-ant-[\w-]{20,}$/.test(key)) return { ok: false, error: "Ключ Anthropic начинается с sk-ant-" };
+        if (key && !(await checkAnthropicKey(key))) return { ok: false, error: "Anthropic не принял этот ключ" };
+      } else if (cfg.kind === "gemini") {
+        if (!have) return { ok: false, error: "Вставь ключ Gemini (начинается с AIza)" };
+        if (key && !(await checkGeminiKey(key))) return { ok: false, error: "Google не принял этот ключ" };
+      } else {
+        if (!cfg.baseUrl || !/^https?:\/\//.test(cfg.baseUrl)) return { ok: false, error: "Нужен адрес API, например https://openrouter.ai/api/v1" };
+        const local = isLocalUrl(cfg.baseUrl);
+        const reportsCost = /openrouter\.ai/i.test(cfg.baseUrl);
+        if (!local && !reportsCost && !(cfg.price && (cfg.price.input > 0 || cfg.price.output > 0)))
+          return { ok: false, error: "Укажи цену модели ($ за 1 млн токенов) — иначе не посчитать лимит трат" };
+        if (!local && !have) return { ok: false, error: "Вставь ключ этого сервиса" };
+      }
+    } catch {
+      return { ok: false, error: "Нет связи с сервисом, попробуй позже" };
+    }
+    setAiConfig(core, cfg, key);
+    if (!core.ai.enabled) return { ok: false, error: "Не получилось включить — проверь настройки" };
+    return { ok: true };
   },
   "ai.setKey": async (key: string) => {
     const k = key.trim();
@@ -264,7 +302,11 @@ const handlers: Record<string, Handler> = {
     setApiKey(core, k);
     return { ok: true };
   },
-  "ai.clearKey": () => setApiKey(core, undefined),
+  "ai.clearKey": () => {
+    const cfg = currentAiConfig(core);
+    store.deleteKv(KEY_KV[cfg.kind]);
+    applyAi(core);
+  },
 
   "bot.status": (): BotStatus => ({ ...botStatus, configured: Boolean(botToken()), paired: Boolean(botOwner()) }),
   "bot.connect": async (token: string) => {
@@ -822,7 +864,7 @@ function enableSecretStorage(): void {
       }
     },
   };
-  core.ai.setKey(store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY);
+  applyAi(core);
 }
 
 void app.whenReady().then(async () => {

@@ -19,6 +19,8 @@ export interface HistoryMessage {
 }
 
 export interface Usage {
+  /** Готовая цена запроса в $, если её знает сам сервис (OpenRouter) или она нулевая (бесплатный тариф, своя модель). */
+  costUsd?: number;
   model: string;
   inputTokens: number;
   outputTokens: number;
@@ -33,11 +35,23 @@ export interface AgentRequest {
   history: HistoryMessage[];
   userMessage: string;
   tools: ToolDef[];
+  /** Картинки и звук к сообщению пользователя (фото доски, голосовое). */
+  attachments?: Attachment[];
   /** Сколько раз модель может сходить в инструменты за один ответ. */
   maxSteps?: number;
   /** Вызывается после каждого обращения к модели — для учёта денег. */
   onUsage?: (usage: Usage) => void;
 }
+
+export interface Attachment {
+  /** image/jpeg, image/png, audio/wav, audio/ogg… */
+  mime: string;
+  /** Содержимое в base64. */
+  data: string;
+}
+
+/** Эта модель не умеет такое вложение (например, голос у Claude). */
+export class UnsupportedAttachmentError extends Error {}
 
 export interface AgentResult {
   text: string;

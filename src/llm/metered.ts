@@ -34,7 +34,7 @@ export class MeteredProvider implements LLMProvider {
     return this.inner.runAgent({
       ...req,
       onUsage: (usage) => {
-        this.store.recordUsage({ ...usage, costUsd: costOf(usage) });
+        this.store.recordUsage({ ...usage, costUsd: usage.costUsd ?? costOf(usage) });
         req.onUsage?.(usage);
       },
     });

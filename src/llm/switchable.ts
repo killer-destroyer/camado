@@ -24,6 +24,11 @@ export class SwitchableProvider implements LLMProvider {
     this.current = apiKey ? this.factory(apiKey) : undefined;
   }
 
+  /** Подключить любую модель (или выключить ИИ — undefined). */
+  setProvider(provider: LLMProvider | undefined): void {
+    this.current = provider;
+  }
+
   get enabled(): boolean {
     return this.current !== undefined;
   }
