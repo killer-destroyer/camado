@@ -389,6 +389,9 @@ function BotSection({ s }: { s: AppSettings }) {
       <Row title="Закрытие окна — в трей" hint="Напоминания и бот продолжат работать, пока Камадо в трее.">
         <Toggle value={s.closeToTray} onChange={(v) => updateSettings({ closeToTray: v })} />
       </Row>
+      <Row title="Таймер и дедлайн в меню-баре" hint="Рядом с часами: «⏱ 18:42» во время фокуса или «⚑ Матан · 5 ч», если что-то горит в ближайшие сутки.">
+        <Toggle value={s.menubar} onChange={(v) => updateSettings({ menubar: v })} />
+      </Row>
       {st?.configured && (
         <button className="link-btn danger-link" onClick={() => void api.bot.disconnect().then(() => api.bot.status().then(setSt))}>
           Отключить бота

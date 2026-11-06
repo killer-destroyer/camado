@@ -301,6 +301,8 @@ export interface CamadoApi {
   system: {
     /** Сколько секунд пользователь ничего не трогал (во всей системе). */
     idleSeconds(): Promise<number>;
+    /** Текст в меню-баре Mac (таймер фокуса, ближайший дедлайн). */
+    trayStatus(text: string): Promise<void>;
   };
   window: {
     setTitleBarColors(symbol: string): Promise<void>;

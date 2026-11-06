@@ -127,7 +127,10 @@ const api: CamadoApi = {
     check: call("updates.check") as CamadoApi["updates"]["check"],
     install: call("updates.install") as CamadoApi["updates"]["install"],
   },
-  system: { idleSeconds: call("system.idleSeconds") as CamadoApi["system"]["idleSeconds"] },
+  system: {
+    idleSeconds: call("system.idleSeconds") as CamadoApi["system"]["idleSeconds"],
+    trayStatus: call("tray.status") as CamadoApi["system"]["trayStatus"],
+  },
   window: {
     setTitleBarColors: call("window.setTitleBarColors") as CamadoApi["window"]["setTitleBarColors"],
     setFullScreen: call("window.setFullScreen") as CamadoApi["window"]["setFullScreen"],

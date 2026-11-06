@@ -5186,3 +5186,196 @@ kbd {
   flex: 1;
   min-width: 160px;
 }
+
+/* ---------- Перерыв: дыхание, разминка, глаза ---------- */
+.focus-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+.coach {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise 0.5s var(--ease) both;
+}
+.coach-breath,
+.coach-eyes {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.breath-stage {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+}
+.breath-circle {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgb(var(--accent-2-rgb) / 0.85), rgb(var(--accent-rgb) / 0.7) 55%, rgb(var(--accent-rgb) / 0.15));
+  box-shadow: 0 0 60px -10px rgb(var(--accent-rgb) / 0.8);
+  will-change: transform;
+}
+.breath-text {
+  position: relative;
+  text-align: center;
+  color: #fff;
+  text-shadow: 0 2px 12px rgb(0 0 0 / 0.4);
+}
+.breath-label {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+}
+.breath-count {
+  font-family: var(--mono);
+  font-size: 16px;
+  opacity: 0.85;
+}
+.center {
+  text-align: center;
+}
+.coach-stretch {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  gap: 16px;
+  align-items: center;
+}
+.figure {
+  width: 120px;
+  height: 160px;
+}
+.figure line,
+.figure circle {
+  stroke: var(--accent);
+  stroke-width: 7;
+  stroke-linecap: round;
+  fill: none;
+}
+.figure .head {
+  fill: rgb(var(--accent-rgb) / 0.3);
+}
+.figure g {
+  transform-box: view-box;
+}
+.move-neck .head {
+  transform-origin: 60px 42px;
+  animation: fig-neck 4s ease-in-out infinite;
+}
+@keyframes fig-neck {
+  25% {
+    transform: rotate(-22deg);
+  }
+  75% {
+    transform: rotate(22deg);
+  }
+}
+.move-shoulders .arm-l,
+.move-shoulders .arm-r {
+  transform-origin: 60px 55px;
+  animation: fig-shoulders 2.4s ease-in-out infinite;
+}
+@keyframes fig-shoulders {
+  50% {
+    transform: translateY(-9px);
+  }
+}
+.move-back .arm-l {
+  transform-origin: 60px 55px;
+  animation: fig-up-l 3s ease-in-out infinite;
+}
+.move-back .arm-r {
+  transform-origin: 60px 55px;
+  animation: fig-up-r 3s ease-in-out infinite;
+}
+@keyframes fig-up-l {
+  50% {
+    transform: rotate(118deg);
+  }
+}
+@keyframes fig-up-r {
+  50% {
+    transform: rotate(-118deg);
+  }
+}
+.move-wrists .arm-l,
+.move-wrists .arm-r {
+  transform-origin: 60px 55px;
+  animation: fig-wrists 1s ease-in-out infinite;
+}
+@keyframes fig-wrists {
+  50% {
+    transform: rotate(6deg);
+  }
+}
+.move-legs .fig {
+  transform-origin: 60px 150px;
+  animation: fig-squat 2s ease-in-out infinite;
+}
+@keyframes fig-squat {
+  50% {
+    transform: scaleY(0.8);
+  }
+}
+.stretch-name {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 700;
+}
+.stretch-text {
+  margin: 6px 0 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(var(--text-rgb) / 0.85);
+}
+.stretch-timer {
+  height: 4px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--text-rgb) / 0.08);
+}
+.stretch-timer i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: left;
+  transition: transform 1s linear;
+}
+.stretch-dots {
+  display: flex;
+  gap: 6px;
+  margin-top: 10px;
+}
+.stretch-dots button {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--text-rgb) / 0.2);
+}
+.stretch-dots button.on {
+  background: var(--accent);
+}
+.eyes-box {
+  position: relative;
+  width: 100%;
+  height: 170px;
+  border-radius: 16px;
+  background: rgb(var(--text-rgb) / 0.04);
+  display: grid;
+  place-items: center;
+}
+.eyes-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.9);
+  will-change: transform;
+}

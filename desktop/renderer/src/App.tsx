@@ -5,8 +5,8 @@ import { onFrame } from "./lib/frame";
 import { applyPalette, paletteById } from "./lib/palettes";
 import { useStore } from "./lib/store";
 import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/app";
-import { refreshData, watchData } from "./state/data";
-import { initFocus, refreshFocusStats } from "./state/focus";
+import { data, refreshData, watchData } from "./state/data";
+import { initFocus, refreshFocusStats, watchMenubar } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
@@ -74,6 +74,7 @@ export function App() {
       api.on("data-changed", () => void refreshFocusStats()),
       initAlarms(),
       watchIdle(),
+      watchMenubar(() => data.get().tasks),
       // Напоминания о сроках звенят, утренняя сводка — просто всплывает.
       api.on("reminder", (p) => (p.text.startsWith("⏰") ? ring(p.text) : toast(p.text, "warn"))),
       api.on("go", (screen) => go(screen as ScreenId)),

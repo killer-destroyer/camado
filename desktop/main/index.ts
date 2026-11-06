@@ -478,6 +478,10 @@ const handlers: Record<string, Handler> = {
 
 
   "system.idleSeconds": () => powerMonitor.getSystemIdleTime(),
+  "tray.status": (text: string) => {
+    studyStatus = String(text ?? "").slice(0, 40);
+    updateTray();
+  },
   "window.setFullScreen": (on: boolean) => {
     if (!win) return;
     if (on && !win.isVisible()) return;
@@ -721,15 +725,20 @@ function trayMenu(): Menu {
 }
 
 let lastTrayKey = "";
+/** Что показать в меню-баре от учёбы: таймер фокуса или ближайший дедлайн (присылает окно). */
+let studyStatus = "";
+
 function updateTray(): void {
   if (!tray) return;
   const np = nowPlaying;
-  const key = np ? `${np.title}|${np.playing}` : "";
+  const key = `${np ? `${np.title}|${np.playing}` : ""}|${studyStatus}`;
   if (key === lastTrayKey) return;
   lastTrayKey = key;
-  tray.setToolTip(np ? `Камадо — ${np.title} · ${np.artist}` : "Камадо");
-  // На Mac рядом с иконкой — название трека (коротко)
-  if (process.platform === "darwin") tray.setTitle(np && np.playing ? ` ${np.title.length > 22 ? np.title.slice(0, 21) + "…" : np.title}` : "");
+  const song = np ? `${np.title} · ${np.artist}` : "";
+  tray.setToolTip([studyStatus, song].filter(Boolean).join(" — ") || "Камадо");
+  // На Mac рядом с иконкой: таймер фокуса / дедлайн, а если их нет — название трека (коротко)
+  const track = np && np.playing ? (np.title.length > 22 ? np.title.slice(0, 21) + "…" : np.title) : "";
+  if (process.platform === "darwin") tray.setTitle(studyStatus || track ? ` ${studyStatus || track}` : "");
   if (process.platform !== "darwin") tray.setContextMenu(trayMenu());
 }
 

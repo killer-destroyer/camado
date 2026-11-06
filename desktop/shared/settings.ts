@@ -71,7 +71,19 @@ export interface AppSettings {
   /** Измеренная громкость песен, дБ — чтобы не мерить заново. */
   trackLoudness: Record<string, number>;
   /** preset — id пресета фокуса или "custom"; longEvery — длинный перерыв после N сессий (0 — никогда). */
-  focus: { work: number; short: number; long: number; autoMusic: boolean; preset: string; longEvery: number };
+  focus: {
+    work: number;
+    short: number;
+    long: number;
+    autoMusic: boolean;
+    preset: string;
+    longEvery: number;
+    /** Дыхание и разминка на перерыве. */
+    coach: boolean;
+    /** Плейлисты для работы и для перерыва (id; 0 — не переключать). */
+    workPlaylist: number;
+    breakPlaylist: number;
+  };
   /** Звук напоминаний: id встроенного звука или "custom"; ramp — за сколько секунд нарастает громкость (0 — сразу). */
   alarm: { sound: string; ramp: number; volume: number; customName: string; customUrl: string };
   /** Свои напоминания «напомни в 18:00». */
@@ -80,6 +92,8 @@ export interface AppSettings {
   /** Статус «Слушает в Camado» в Discord. */
   discord: { enabled: boolean; clientId: string };
   closeToTray: boolean;
+  /** Показывать таймер фокуса и ближайший дедлайн в меню-баре (Mac) / подсказке трея. */
+  menubar: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -108,12 +122,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoLevel: true,
   trackGain: {},
   trackLoudness: {},
-  focus: { work: 25, short: 5, long: 15, autoMusic: true, preset: "pomodoro", longEvery: 4 },
+  focus: { work: 25, short: 5, long: 15, autoMusic: true, preset: "pomodoro", longEvery: 4, coach: true, workPlaylist: 0, breakPlaylist: 0 },
   alarm: { sound: "marimba", ramp: 10, volume: 0.9, customName: "", customUrl: "" },
   alarms: [],
   runBot: true,
   discord: { enabled: false, clientId: "" },
   closeToTray: true,
+  menubar: true,
 };
 
 /** Аккуратно накладывает сохранённое на значения по умолчанию (новые поля не теряются). */

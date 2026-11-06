@@ -6,10 +6,12 @@ import { useFrame } from "../lib/frame";
 import { useStore } from "../lib/store";
 import { app, updateSettings } from "../state/app";
 import { data } from "../state/data";
+import { player } from "../state/player";
 import { focus, focusToday, pause, remainingMs, reset, setMode, start, type FocusMode } from "../state/focus";
 import { Segmented, Slider, Toggle } from "../components/ui";
 import { FOCUS_PRESETS, presetById } from "../../../shared/focusPresets";
 import { AmbienceMixer } from "../components/Ambience";
+import { BreakCoach } from "../components/BreakCoach";
 
 const R = 150;
 const C = 2 * Math.PI * R;
@@ -19,6 +21,7 @@ export function Focus() {
   const week = useStore(focusToday, (x) => x.week);
   const subjects = useStore(data, (x) => x.subjects);
   const cfg = useStore(app, (x) => x.settings.focus);
+  const playlists = useStore(player, (x) => x.playlists);
   const ring = useRef<SVGCircleElement>(null);
   const time = useRef<HTMLDivElement>(null);
   const glow = useRef<HTMLDivElement>(null);
@@ -58,6 +61,7 @@ export function Focus() {
       </header>
 
       <div className="focus-layout">
+        <div className="focus-left">
         <div className={`focus-timer mode-${s.mode} ${s.running ? "running" : ""}`}>
           <div ref={glow} className="focus-glow" />
           <svg viewBox="0 0 340 340" className="focus-ring">
@@ -79,6 +83,8 @@ export function Focus() {
               {s.subject || "без предмета"} · раунд {s.rounds + 1}
             </div>
           </div>
+        </div>
+        {s.mode !== "work" && cfg.coach !== false && <BreakCoach />}
         </div>
 
         <div className="focus-side">
@@ -199,6 +205,40 @@ export function Focus() {
             <AmbienceMixer />
           </div>
 
+          {playlists.length > 0 && (
+            <div className="card glass">
+              <div className="card-head">
+                <span>Музыка под режим</span>
+              </div>
+              <div className="dur-row">
+                <span>На работу</span>
+                <select className="input sm" value={cfg.workPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, workPlaylist: Number(e.target.value) } })}>
+                  <option value={0}>как играет</option>
+                  {playlists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="dur-row">
+                <span>На перерыв</span>
+                <select className="input sm" value={cfg.breakPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, breakPlaylist: Number(e.target.value) } })}>
+                  <option value={0}>как играет</option>
+                  {playlists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          <label className="inline-toggle focus-music">
+            <Toggle value={cfg.coach} onChange={(v) => updateSettings({ focus: { ...cfg, coach: v } })} />
+            дыхание и разминка на перерыве
+          </label>
           <label className="inline-toggle focus-music">
             <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
             включать музыку на старте
