@@ -1,5 +1,5 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
-import type { LibraryState, Lyrics, Track } from "../../../shared/types";
+import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
@@ -22,6 +22,8 @@ interface PlayerState {
   sleep?: { at?: number; endOfTrack?: boolean };
   /** «Поймать текст»: следующий клик по строке говорит, что её поют прямо сейчас. */
   syncLyrics?: boolean;
+  playlists: Playlist[];
+  favorites: string[];
 }
 
 export const player = createStore<PlayerState>({
@@ -32,6 +34,8 @@ export const player = createStore<PlayerState>({
   shuffle: false,
   repeat: "all",
   lyricsLoading: false,
+  playlists: [],
+  favorites: [],
 });
 
 export function currentTrack(): Track | undefined {
@@ -148,9 +152,36 @@ export async function shuffleAll(tracks: Track[]): Promise<void> {
 
 const history: string[] = [];
 
+// ---------- Плейлисты и любимое ----------
+
+export async function loadPlaylists(): Promise<void> {
+  player.set(await api.playlists.list());
+}
+
+export async function toggleFavorite(trackId: string): Promise<void> {
+  // сразу на экране, потом в базе
+  const fav = player.get().favorites;
+  player.set({ favorites: fav.includes(trackId) ? fav.filter((x) => x !== trackId) : [trackId, ...fav] });
+  await api.playlists.toggleFavorite(trackId);
+}
+
+// ---------- История прослушиваний (для «Итогов недели») ----------
+
+let listened = { id: "", seconds: 0 };
+/** Засчитываем прослушивание, если трек играл хотя бы 30 секунд. */
+function flushListened(): void {
+  const l = listened;
+  listened = { id: "", seconds: 0 };
+  if (!l.id || l.seconds < 30) return;
+  const t = player.get().library.tracks.find((x) => x.id === l.id);
+  if (t) void api.plays.add({ trackId: t.id, title: t.title, artist: t.artist, seconds: Math.round(l.seconds) });
+}
+
 async function startCurrent(fade = 0): Promise<void> {
   const t = currentTrack();
   if (!t) return;
+  flushListened();
+  listened = { id: t.id, seconds: 0 };
   history.push(t.id);
   if (history.length > 50) history.shift();
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
@@ -324,6 +355,14 @@ export function initPlayer(): () => void {
     d.addEventListener("ended", ended);
   }
 
+  // Сколько реально слушали текущий трек.
+  const listenTimer = window.setInterval(() => {
+    if (!engine.el.paused && listened.id) listened.seconds += 1;
+  }, 1000);
+  window.addEventListener("beforeunload", flushListened);
+  void loadPlaylists();
+  const offPl = api.on("data-changed", () => void loadPlaylists());
+
   // Кроссфейд: за N секунд до конца трека заранее запускаем следующий на второй деке.
   let crossedFor = "";
   const timer = window.setInterval(() => {
@@ -365,6 +404,9 @@ export function initPlayer(): () => void {
       d.removeEventListener("ended", ended);
     }
     clearInterval(timer);
+    clearInterval(listenTimer);
+    window.removeEventListener("beforeunload", flushListened);
+    offPl();
     offKeys();
   };
 }

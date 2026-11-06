@@ -380,7 +380,12 @@ export function Today() {
               : `Открыто ${tasks.length} ${plural(tasks.length, "задание", "задания", "заданий")}${hot[0] ? `, ближайшее ${countdown(hot[0].dueAt!)}` : ""}.`}
           </p>
         </div>
-        <Clock />
+        <div className="today-side">
+          <Clock />
+          <button className={`btn recap-btn ${new Date().getDay() === 1 || new Date().getDay() === 0 ? "fresh" : ""}`} onClick={() => app.set({ recap: true })}>
+            <Sparkles size={16} /> Итоги недели
+          </button>
+        </div>
       </header>
 
       <div className="today-grid">

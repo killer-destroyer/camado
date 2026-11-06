@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   ChevronDown,
   Crosshair,
+  Heart,
   Moon,
   PictureInPicture2,
   Pause,
@@ -40,6 +41,7 @@ import {
   setLyricsOffset,
   setSleep,
   setTrackGain,
+  toggleFavorite,
   togglePlay,
 } from "../state/player";
 import { Lyrics } from "./Lyrics";
@@ -329,8 +331,10 @@ export function NowPlaying() {
   const repeat = useStore(player, (s) => s.repeat);
   const coverPalette = useStore(player, (s) => s.coverPalette);
   useStore(player, (s) => s.index);
+  const favorites = useStore(player, (s) => s.favorites);
   const meta = nowMeta();
   const track = currentTrack();
+  const isFav = !!track && favorites.includes(track.id);
   const palette = settings.coverColors && coverPalette ? coverPalette : paletteById(settings.palette);
   const hasLyrics = !!lyrics && lyrics.lines.length > 0 && settings.lyricsMode !== "off";
 
@@ -401,6 +405,11 @@ export function NowPlaying() {
           {hasLyrics && lyrics?.synced && track && <LyricsShift trackId={track.id} />}
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
           <Segmented size="sm" value={vis} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
+          {track && (
+            <button className={`icon-btn ${isFav ? "active" : ""}`} title={isFav ? "Убрать из любимого" : "В любимое"} onClick={() => void toggleFavorite(track.id)}>
+              <Heart size={18} fill={isFav ? "currentColor" : "none"} />
+            </button>
+          )}
           <button
             className={`icon-btn ${overlayOn ? "active" : ""}`}
             title="Текст песни поверх всех окон"

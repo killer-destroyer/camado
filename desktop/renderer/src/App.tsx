@@ -9,6 +9,7 @@ import { refreshData, watchData } from "./state/data";
 import { initFocus, refreshFocusStats } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
 import { AlarmModal } from "./components/Alarm";
+import { RecapModal } from "./components/Recap";
 import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
@@ -20,6 +21,7 @@ import { Chat } from "./screens/Chat";
 import { Focus } from "./screens/Focus";
 import { Music } from "./screens/Music";
 import { Notes } from "./screens/Notes";
+import { Links } from "./screens/Links";
 import { Settings } from "./screens/Settings";
 import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
@@ -28,6 +30,7 @@ const SCREENS: Record<ScreenId, () => React.JSX.Element> = {
   today: Today,
   tasks: Tasks,
   notes: Notes,
+  links: Links,
   music: Music,
   focus: Focus,
   chat: Chat,
@@ -77,7 +80,7 @@ export function App() {
         return;
       }
       if (isTyping(e)) return;
-      if (e.key === "Escape") app.set({ nowPlaying: false, palette: false });
+      if (e.key === "Escape") app.set({ nowPlaying: false, palette: false, recap: false });
       else if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
@@ -85,8 +88,8 @@ export function App() {
       else if (e.key === "ArrowLeft" && e.shiftKey) prev();
       else if (e.key === "ArrowRight" && app.get().nowPlaying) seek(position() + 5);
       else if (e.key === "ArrowLeft" && app.get().nowPlaying) seek(position() - 5);
-      else if (/^[1-7]$/.test(e.key) && e.altKey) {
-        const ids: ScreenId[] = ["today", "tasks", "notes", "music", "focus", "chat", "settings"];
+      else if (/^[1-8]$/.test(e.key) && e.altKey) {
+        const ids: ScreenId[] = ["today", "tasks", "notes", "links", "music", "focus", "chat", "settings"];
         go(ids[Number(e.key) - 1]!);
       }
     };
@@ -110,6 +113,7 @@ export function App() {
       if (name === "overlay") void toggleOverlay();
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
+      else if (name === "recap") app.set({ recap: true });
       else if (name === "burst" || name === "line" || name === "flow") {
         app.set((s) => ({ nowPlaying: true, settings: { ...s.settings, lyricsMode: name } }));
       } else if (name.startsWith("pal-")) {
@@ -143,6 +147,7 @@ export function App() {
         </Guard>
       )}
       <CommandPalette />
+      <RecapModal />
       <AlarmModal />
       <Toasts />
       <UpdateBanner />

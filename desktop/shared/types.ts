@@ -1,8 +1,14 @@
 // Общие типы для окна (renderer) и фоновой части (main) приложения.
-import type { ChatEntry, FocusSession, Note, Subject, Task, TaskKind, TaskStatus } from "../../src/store.js";
+import type { ChatEntry, FocusSession, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus } from "../../src/store.js";
+import type { FreeAlbum } from "../main/freeMusic.js";
 import type { AppSettings } from "./settings.js";
 
-export type { ChatEntry, FocusSession, Note, Subject, Task, TaskKind, TaskStatus, AppSettings };
+export type { ChatEntry, FocusSession, FreeAlbum, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus, AppSettings };
+
+type ImportResult =
+  | { kind: "saved"; file: string; name: string }
+  | { kind: "choose"; links: { url: string; name: string }[] }
+  | { kind: "error"; error: string };
 
 export interface Track {
   id: string;
@@ -140,6 +146,27 @@ export interface CamadoApi {
     list(): Promise<Subject[]>;
     save(input: { name: string; teacher?: string; info?: string }): Promise<Subject>;
   };
+  links: {
+    list(): Promise<LessonLink[]>;
+    save(input: { id?: number; title: string; url: string; subject?: string | null; note?: string; pinned?: boolean }): Promise<LessonLink>;
+    remove(id: number): Promise<boolean>;
+    /** Открыть в браузере и запомнить, что открывали. */
+    open(id: number): Promise<boolean>;
+  };
+  playlists: {
+    list(): Promise<{ playlists: Playlist[]; favorites: string[] }>;
+    create(name: string, trackIds?: string[]): Promise<Playlist>;
+    rename(id: number, name: string): Promise<void>;
+    remove(id: number): Promise<void>;
+    add(id: number, trackIds: string[]): Promise<void>;
+    removeTrack(id: number, trackId: string): Promise<void>;
+    reorder(id: number, trackIds: string[]): Promise<void>;
+    toggleFavorite(trackId: string): Promise<boolean>;
+  };
+  plays: {
+    add(input: { trackId: string; title: string; artist: string; seconds: number }): Promise<void>;
+    stats(sinceIso: string, limit?: number): Promise<PlayStat[]>;
+  };
   notes: {
     list(): Promise<Note[]>;
     save(input: { id?: number; title: string; body?: string; subject?: string | null; pinned?: boolean }): Promise<Note>;
@@ -180,19 +207,24 @@ export interface CamadoApi {
   lyrics: {
     get(query: LyricsQuery): Promise<Lyrics>;
   };
+  quick: {
+    /** Закрыть окно быстрой записи. */
+    close(): Promise<void>;
+    /** Сочетание клавиш, которым оно открывается. */
+    key(): Promise<string>;
+  };
   alarm: {
     /** Выбрать свой звук для напоминаний: копируется к Камадо, возвращает название и адрес. */
     pickSound(): Promise<{ name: string; url: string } | null>;
   };
   music: {
     /** Скачать по ссылке в папку «Музыка/Камадо». Для страницы с несколькими треками вернёт список. */
-    importUrl(
-      url: string,
-    ): Promise<
-      | { kind: "saved"; file: string; name: string }
-      | { kind: "choose"; links: { url: string; name: string }[] }
-      | { kind: "error"; error: string }
-    >;
+    importUrl(url: string): Promise<ImportResult>;
+    /** Вставили код страницы (HTML) — найти в нём музыку. */
+    importHtml(html: string, baseUrl?: string): Promise<ImportResult>;
+    /** Поиск бесплатной музыки (Internet Archive). */
+    searchFree(query: string): Promise<FreeAlbum[]>;
+    freeTracks(id: string): Promise<{ url: string; name: string }[]>;
   };
   overlay: {
     /** Включить/выключить текст песни поверх всех окон. Возвращает новое состояние. */

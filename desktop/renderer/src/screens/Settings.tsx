@@ -588,7 +588,7 @@ export function Settings() {
       <BotSection s={s} />
 
       <div className="about muted small">
-        Камадо {info.version} · пояс {info.timeZone} · Ctrl+K — быстрые команды · пробел — пауза
+        Камадо {info.version} · пояс {info.timeZone} · Ctrl+K — быстрые команды · Ctrl+Shift+Пробел — записать задание из любой программы · пробел — пауза
       </div>
     </div>
   );

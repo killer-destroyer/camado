@@ -5,7 +5,7 @@ import { setFpsCap } from "../lib/frame";
 import { createStore } from "../lib/store";
 import { engine } from "../lib/audio";
 
-export type ScreenId = "today" | "tasks" | "notes" | "music" | "focus" | "chat" | "settings";
+export type ScreenId = "today" | "tasks" | "notes" | "links" | "music" | "focus" | "chat" | "settings";
 
 export interface Toast {
   id: number;
@@ -17,6 +17,8 @@ interface AppState {
   screen: ScreenId;
   nowPlaying: boolean;
   palette: boolean; // командная строка Ctrl+K
+  /** Открыты «Итоги недели». */
+  recap: boolean;
   settings: AppSettings;
   info: AppInfo;
   toasts: Toast[];
@@ -27,6 +29,7 @@ interface AppState {
 
 export const app = createStore<AppState>({
   screen: "today",
+  recap: false,
   nowPlaying: false,
   palette: false,
   settings: DEFAULT_SETTINGS,
@@ -50,7 +53,7 @@ export function toast(text: string, tone: Toast["tone"] = "info"): void {
 }
 
 export function go(screen: ScreenId): void {
-  app.set({ screen, nowPlaying: false, palette: false });
+  app.set({ screen, nowPlaying: false, palette: false, recap: false });
 }
 
 function applySettings(s: AppSettings): void {

@@ -85,6 +85,47 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX focus_started ON focus_sessions (started_at);
   `,
+  // 3: ссылки на уроки, плейлисты, любимое, история прослушиваний
+  `
+  CREATE TABLE links (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL,
+    url        TEXT NOT NULL UNIQUE,
+    subject    TEXT,
+    note       TEXT NOT NULL DEFAULT '',
+    pinned     INTEGER NOT NULL DEFAULT 0,
+    opened_at  TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE playlists (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE playlist_tracks (
+    playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    track_id    TEXT NOT NULL,
+    pos         REAL NOT NULL,
+    PRIMARY KEY (playlist_id, track_id)
+  );
+
+  CREATE TABLE favorites (
+    track_id   TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE TABLE plays (
+    id        INTEGER PRIMARY KEY,
+    track_id  TEXT NOT NULL,
+    title     TEXT NOT NULL,
+    artist    TEXT NOT NULL,
+    seconds   REAL NOT NULL,
+    played_at TEXT NOT NULL
+  );
+  CREATE INDEX plays_at ON plays (played_at);
+  `,
 ];
 
 export function openDb(path: string): DB {

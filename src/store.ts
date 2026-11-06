@@ -45,6 +45,33 @@ export interface Note {
   updatedAt: string;
 }
 
+export interface LessonLink {
+  id: number;
+  title: string;
+  url: string;
+  subject: string | null;
+  /** Пометка: «пары по вт 10:00», «пароль 1234», «сдавать сюда». */
+  note: string;
+  pinned: boolean;
+  openedAt: string | null;
+  createdAt: string;
+}
+
+export interface Playlist {
+  id: number;
+  name: string;
+  /** id треков по порядку. */
+  trackIds: string[];
+}
+
+export interface PlayStat {
+  trackId: string;
+  title: string;
+  artist: string;
+  plays: number;
+  seconds: number;
+}
+
 export interface FocusSession {
   id: number;
   subject: string | null;
@@ -89,6 +116,28 @@ function toNote(r: Row): Note {
     createdAt: r.created_at as string,
     updatedAt: r.updated_at as string,
   };
+}
+
+function toLink(r: Row): LessonLink {
+  return {
+    id: Number(r.id),
+    title: r.title as string,
+    url: r.url as string,
+    subject: (r.subject as string | null) ?? null,
+    note: (r.note as string) ?? "",
+    pinned: Number(r.pinned) === 1,
+    openedAt: (r.opened_at as string | null) ?? null,
+    createdAt: r.created_at as string,
+  };
+}
+
+/** Только обычные веб-ссылки: никаких file:, javascript: и прочего. Без схемы — считаем https. */
+export function cleanLinkUrl(raw: string): string {
+  let u = raw.trim();
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = `https://${u}`;
+  const parsed = new URL(u);
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") throw new Error("Можно сохранять только ссылки http(s)");
+  return parsed.toString();
 }
 
 /** Всё, что Камадо хранит о тебе, — в одном месте. */
@@ -334,6 +383,150 @@ export class Store {
     const ok = Number(this.db.prepare("DELETE FROM notes WHERE id = ?").run(id).changes) > 0;
     this.changed();
     return ok;
+  }
+
+  // ---------- Ссылки на уроки ----------
+
+  saveLink(input: { id?: number; title: string; url: string; subject?: string | null; note?: string; pinned?: boolean }): LessonLink {
+    const url = cleanLinkUrl(input.url);
+    const title = input.title.trim() || new URL(url).hostname.replace(/^www\./, "");
+    let id = input.id;
+    // Та же ссылка уже есть — не плодим копии, обновляем её.
+    if (id === undefined) {
+      const same = this.db.prepare("SELECT id FROM links WHERE url = ?").get(url) as Row | undefined;
+      if (same) id = Number(same.id);
+    }
+    if (id !== undefined) {
+      const cur = this.getLink(id);
+      if (!cur) throw new Error(`Ссылки #${id} нет`);
+      this.db
+        .prepare("UPDATE links SET title = ?, url = ?, subject = ?, note = ?, pinned = ? WHERE id = ?")
+        .run(
+          title,
+          url,
+          input.subject === undefined ? cur.subject : input.subject,
+          input.note ?? cur.note,
+          (input.pinned ?? cur.pinned) ? 1 : 0,
+          id,
+        );
+      this.changed();
+      return this.getLink(id)!;
+    }
+    const res = this.db
+      .prepare("INSERT INTO links (title, url, subject, note, pinned, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(title, url, input.subject ?? null, input.note ?? "", input.pinned ? 1 : 0, this.ts());
+    this.changed();
+    return this.getLink(Number(res.lastInsertRowid))!;
+  }
+
+  getLink(id: number): LessonLink | undefined {
+    const r = this.db.prepare("SELECT * FROM links WHERE id = ?").get(id) as Row | undefined;
+    return r ? toLink(r) : undefined;
+  }
+
+  listLinks(): LessonLink[] {
+    return (this.db.prepare("SELECT * FROM links ORDER BY pinned DESC, title").all() as Row[]).map(toLink);
+  }
+
+  /** Запомнить, что ссылку открывали — частые всплывают наверх. */
+  markLinkOpened(id: number): void {
+    this.db.prepare("UPDATE links SET opened_at = ? WHERE id = ?").run(this.ts(), id);
+    this.changed();
+  }
+
+  deleteLink(id: number): boolean {
+    const ok = Number(this.db.prepare("DELETE FROM links WHERE id = ?").run(id).changes) > 0;
+    this.changed();
+    return ok;
+  }
+
+  // ---------- Плейлисты и любимое ----------
+
+  listPlaylists(): Playlist[] {
+    const lists = this.db.prepare("SELECT id, name FROM playlists ORDER BY created_at, id").all() as Row[];
+    const items = this.db.prepare("SELECT playlist_id, track_id FROM playlist_tracks ORDER BY pos").all() as Row[];
+    return lists.map((l) => ({
+      id: Number(l.id),
+      name: l.name as string,
+      trackIds: items.filter((i) => Number(i.playlist_id) === Number(l.id)).map((i) => i.track_id as string),
+    }));
+  }
+
+  createPlaylist(name: string): Playlist {
+    const clean = name.trim() || "Новый плейлист";
+    const res = this.db.prepare("INSERT INTO playlists (name, created_at) VALUES (?, ?)").run(clean, this.ts());
+    this.changed();
+    return { id: Number(res.lastInsertRowid), name: clean, trackIds: [] };
+  }
+
+  renamePlaylist(id: number, name: string): void {
+    if (!name.trim()) return;
+    this.db.prepare("UPDATE playlists SET name = ? WHERE id = ?").run(name.trim(), id);
+    this.changed();
+  }
+
+  deletePlaylist(id: number): void {
+    this.db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").run(id);
+    this.db.prepare("DELETE FROM playlists WHERE id = ?").run(id);
+    this.changed();
+  }
+
+  /** Добавить треки в конец плейлиста (уже добавленные не дублируются). */
+  addToPlaylist(id: number, trackIds: string[]): void {
+    const last = this.db.prepare("SELECT MAX(pos) AS m FROM playlist_tracks WHERE playlist_id = ?").get(id) as Row;
+    let pos = Number(last.m ?? 0);
+    const ins = this.db.prepare("INSERT OR IGNORE INTO playlist_tracks (playlist_id, track_id, pos) VALUES (?, ?, ?)");
+    for (const t of trackIds) ins.run(id, t, ++pos);
+    this.changed();
+  }
+
+  removeFromPlaylist(id: number, trackId: string): void {
+    this.db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id = ?").run(id, trackId);
+    this.changed();
+  }
+
+  /** Новый порядок треков плейлиста целиком. */
+  reorderPlaylist(id: number, trackIds: string[]): void {
+    const upd = this.db.prepare("UPDATE playlist_tracks SET pos = ? WHERE playlist_id = ? AND track_id = ?");
+    trackIds.forEach((t, i) => upd.run(i + 1, id, t));
+    this.changed();
+  }
+
+  listFavorites(): string[] {
+    return (this.db.prepare("SELECT track_id FROM favorites ORDER BY created_at DESC").all() as Row[]).map((r) => r.track_id as string);
+  }
+
+  /** Поставить/снять сердечко. Возвращает новое состояние. */
+  toggleFavorite(trackId: string): boolean {
+    const had = this.db.prepare("DELETE FROM favorites WHERE track_id = ?").run(trackId).changes;
+    if (Number(had) === 0) this.db.prepare("INSERT INTO favorites (track_id, created_at) VALUES (?, ?)").run(trackId, this.ts());
+    this.changed();
+    return Number(had) === 0;
+  }
+
+  // ---------- История прослушиваний ----------
+
+  addPlay(input: { trackId: string; title: string; artist: string; seconds: number; playedAt?: string }): void {
+    this.db
+      .prepare("INSERT INTO plays (track_id, title, artist, seconds, played_at) VALUES (?, ?, ?, ?, ?)")
+      .run(input.trackId, input.title, input.artist, input.seconds, input.playedAt ?? this.ts());
+  }
+
+  /** Что слушал с даты: по трекам, от самых частых. */
+  playStats(since: Date, limit = 50): PlayStat[] {
+    const rows = this.db
+      .prepare(
+        `SELECT track_id, MAX(title) AS title, MAX(artist) AS artist, COUNT(*) AS plays, SUM(seconds) AS seconds
+         FROM plays WHERE played_at >= ? GROUP BY track_id ORDER BY plays DESC, seconds DESC LIMIT ?`,
+      )
+      .all(since.toISOString(), limit) as Row[];
+    return rows.map((r) => ({
+      trackId: r.track_id as string,
+      title: r.title as string,
+      artist: r.artist as string,
+      plays: Number(r.plays),
+      seconds: Number(r.seconds),
+    }));
   }
 
   // ---------- Фокус ----------

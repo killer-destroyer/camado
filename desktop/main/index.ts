@@ -28,7 +28,8 @@ import { startReminderLoop } from "../../src/reminders.js";
 import { mergeSettings, type AppSettings } from "../shared/settings.js";
 import type { AppInfo, BotStatus, NowPlayingState, OverlayState, TaskInput, TaskPatch } from "../shared/types.js";
 import { DiscordPresence } from "./discord.js";
-import { importFromUrl } from "./download.js";
+import { importFromHtml, importFromUrl } from "./download.js";
+import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
@@ -197,6 +198,33 @@ const handlers: Record<string, Handler> = {
   "notes.save": (input: Parameters<typeof store.saveNote>[0]) => store.saveNote(input),
   "notes.remove": (id: number) => store.deleteNote(id),
 
+  "links.list": () => store.listLinks(),
+  "links.save": (input: Parameters<typeof store.saveLink>[0]) => store.saveLink(input),
+  "links.remove": (id: number) => store.deleteLink(id),
+  "links.open": (id: number) => {
+    const l = store.getLink(id);
+    if (!l || !/^https?:\/\//.test(l.url)) return false;
+    store.markLinkOpened(id);
+    void shell.openExternal(l.url);
+    return true;
+  },
+
+  "playlists.list": () => ({ playlists: store.listPlaylists(), favorites: store.listFavorites() }),
+  "playlists.create": (name: string, trackIds?: string[]) => {
+    const p = store.createPlaylist(name);
+    if (trackIds?.length) store.addToPlaylist(p.id, trackIds);
+    return p;
+  },
+  "playlists.rename": (id: number, name: string) => store.renamePlaylist(id, name),
+  "playlists.remove": (id: number) => store.deletePlaylist(id),
+  "playlists.add": (id: number, trackIds: string[]) => store.addToPlaylist(id, trackIds),
+  "playlists.removeTrack": (id: number, trackId: string) => store.removeFromPlaylist(id, trackId),
+  "playlists.reorder": (id: number, trackIds: string[]) => store.reorderPlaylist(id, trackIds),
+  "playlists.toggleFavorite": (trackId: string) => store.toggleFavorite(trackId),
+
+  "plays.add": (input: Parameters<typeof store.addPlay>[0]) => store.addPlay(input),
+  "plays.stats": (sinceIso: string, limit?: number) => store.playStats(new Date(sinceIso), limit),
+
   "focus.add": (input: Parameters<typeof store.addFocusSession>[0]) => store.addFocusSession(input),
   "focus.list": (sinceIso: string) => store.listFocusSessions(new Date(sinceIso)),
 
@@ -301,6 +329,18 @@ const handlers: Record<string, Handler> = {
     return { name: basename(src), url: `camado-media://sound/${name}?v=${Date.now()}` };
   },
 
+  "quick.close": () => quick?.close(),
+  "quick.key": () => QUICK_KEY,
+
+  "music.importHtml": async (html: string, baseUrl?: string) => {
+    const dir = join(app.getPath("music"), "Камадо");
+    const r = await importFromHtml(html, baseUrl, dir, (p) => send("download-progress", p));
+    if (r.kind === "saved") await library.addPaths([dir]);
+    return r;
+  },
+  "music.searchFree": (query: string) => searchFree(query),
+  "music.freeTracks": (id: string) => freeTracks(id),
+
   "music.importUrl": async (url: string) => {
     const dir = join(app.getPath("music"), "Камадо");
     const r = await importFromUrl(url, dir, (p) => send("download-progress", p));
@@ -403,6 +443,47 @@ function toggleOverlay(): boolean {
   return true;
 }
 
+// ---------- Быстрая запись из любой программы (Ctrl/Cmd+Shift+Пробел) ----------
+
+const QUICK_KEY = "CommandOrControl+Shift+Space";
+let quick: BrowserWindow | undefined;
+
+function toggleQuick(): void {
+  if (quick && !quick.isDestroyed()) {
+    quick.close();
+    return;
+  }
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const width = Math.min(680, area.width - 40);
+  const height = 190;
+  quick = new BrowserWindow({
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + area.height * 0.22),
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    show: false,
+    webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+  });
+  quick.setAlwaysOnTop(true, "floating");
+  quick.setVisibleOnAllWorkspaces(true);
+  quick.once("ready-to-show", () => {
+    quick?.show();
+    quick?.focus();
+  });
+  // Щёлкнул мимо — окно само прячется.
+  quick.on("blur", () => quick?.close());
+  quick.on("closed", () => {
+    quick = undefined;
+  });
+  loadRenderer(quick, "quick");
+}
+
 // ---------- Мини-плеер в меню-баре (Mac) и меню трея ----------
 
 let mini: BrowserWindow | undefined;
@@ -457,6 +538,7 @@ function trayMenu(): Menu {
         ]
       : []),
     { label: "Открыть Камадо", click: () => showWindow() },
+    { label: "Быстрая запись…", accelerator: QUICK_KEY, click: () => toggleQuick() },
     { label: "Текст песни поверх окон", click: () => toggleOverlay() },
     { type: "separator" },
     {
@@ -701,6 +783,11 @@ void app.whenReady().then(async () => {
   if (library.view().folders.length) void library.rescan();
   createTray();
 
+  try {
+    globalShortcut.register(QUICK_KEY, toggleQuick);
+  } catch {
+    // сочетание занято другой программой
+  }
   for (const [accel, action] of [
     ["MediaPlayPause", "playpause"],
     ["MediaNextTrack", "next"],

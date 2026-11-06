@@ -88,6 +88,78 @@ function freePath(dir: string, name: string, ext: string): string {
   return p;
 }
 
+/**
+ * Ссылки «поделиться» с облаков ведут на страницу просмотра, а не на файл.
+ * Превращаем их в прямые ссылки на скачивание (только публичные файлы — без входа в чужие аккаунты).
+ */
+export async function resolveCloud(u: URL, fetchImpl: typeof fetch = fetch): Promise<URL | { links: AudioLink[] } | { error: string }> {
+  const host = u.hostname.toLowerCase().replace(/^www\./, "");
+  // Dropbox: ?dl=0 → ?dl=1
+  if (host === "dropbox.com" || host.endsWith(".dropbox.com")) {
+    const d = new URL(u);
+    d.searchParams.set("dl", "1");
+    return d;
+  }
+  // Google Диск: /file/d/ID/view, /open?id=ID, /uc?id=ID
+  if (host === "drive.google.com" || host === "docs.google.com") {
+    const id = u.pathname.match(/\/file\/d\/([\w-]{10,})/)?.[1] ?? u.searchParams.get("id");
+    if (!id) return { error: "Это папка Google Диска или документ. Открой нужный файл и скопируй ссылку на него." };
+    return new URL(`https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`);
+  }
+  // Яндекс Диск: публичная ссылка → официальный API отдаёт адрес файла (для папки — список треков)
+  if (/^(disk\.yandex\.[a-z]+|yadi\.sk)$/.test(host) || host === "cloud-api.yandex.net") {
+    const api = host === "cloud-api.yandex.net" ? u : new URL("https://cloud-api.yandex.net/v1/disk/public/resources/download");
+    if (host !== "cloud-api.yandex.net") api.searchParams.set("public_key", u.href);
+    const res = await fetchImpl(api.href, { signal: AbortSignal.timeout(15_000) }).catch(() => undefined);
+    if (res?.ok) {
+      const href = ((await res.json()) as { href?: string }).href;
+      if (href) return new URL(href);
+    }
+    // Может, это папка: смотрим, какие в ней треки.
+    const list = new URL("https://cloud-api.yandex.net/v1/disk/public/resources");
+    list.searchParams.set("public_key", api.searchParams.get("public_key") ?? u.href);
+    list.searchParams.set("limit", "200");
+    const lr = await fetchImpl(list.href, { signal: AbortSignal.timeout(15_000) }).catch(() => undefined);
+    if (!lr?.ok) return { error: "Яндекс Диск не отдал файл. Проверь, что ссылка публичная." };
+    const body = (await lr.json()) as { _embedded?: { items?: { type: string; name: string; path: string; mime_type?: string }[] } };
+    const items = (body._embedded?.items ?? []).filter(
+      (i) => i.type === "file" && (i.mime_type?.startsWith("audio/") || AUDIO_EXT.has(extname(i.name).toLowerCase())),
+    );
+    if (!items.length) return { error: "В этой папке на Яндекс Диске нет музыки." };
+    return {
+      links: items.map((i) => {
+        const d = new URL("https://cloud-api.yandex.net/v1/disk/public/resources/download");
+        d.searchParams.set("public_key", list.searchParams.get("public_key")!);
+        d.searchParams.set("path", i.path);
+        return { url: d.href, name: i.name.replace(/\.[^.]+$/, "") };
+      }),
+    };
+  }
+  return u;
+}
+
+/** Вставили не ссылку, а код страницы (HTML): ищем в нём музыку. */
+export async function importFromHtml(
+  html: string,
+  baseUrl: string | undefined,
+  destDir: string,
+  onProgress: (p: { name: string; received: number; total: number }) => void = () => {},
+  fetchImpl: typeof fetch = fetch,
+): Promise<ImportResult> {
+  const base = baseUrl?.trim() || html.match(/<base\b[^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] || html.match(/<link\b[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] || html.match(/<meta\b[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i)?.[1];
+  const links = findAudioLinks(html.slice(0, MAX_HTML), base ?? "https://camado.invalid/").filter((l) => !l.url.startsWith("https://camado.invalid/"));
+  if (!links.length) {
+    return {
+      kind: "error",
+      error: base
+        ? "В этом коде не нашлось ссылок на музыку."
+        : "В коде нет полных ссылок на музыку. Вставь лучше адрес страницы из адресной строки.",
+    };
+  }
+  if (links.length === 1) return importFromUrl(links[0]!.url, destDir, onProgress, fetchImpl);
+  return { kind: "choose", links };
+}
+
 export async function importFromUrl(
   raw: string,
   destDir: string,
@@ -109,6 +181,11 @@ export async function importFromUrl(
     };
   }
 
+  const cloud = await resolveCloud(u, fetchImpl).catch(() => u);
+  if ("error" in cloud) return { kind: "error", error: cloud.error };
+  if ("links" in cloud) return cloud.links.length === 1 ? importFromUrl(cloud.links[0]!.url, destDir, onProgress, fetchImpl) : { kind: "choose", links: cloud.links };
+  u = cloud;
+
   let res: Response;
   try {
     res = await fetchImpl(u.href, { redirect: "follow", signal: AbortSignal.timeout(30_000) });
@@ -128,7 +205,10 @@ export async function importFromUrl(
     return { kind: "choose", links };
   }
 
-  if (!type.startsWith("audio/") && !(isAudioPath(finalUrl) && /octet-stream|^$/.test(type.split(";")[0]!.trim()))) {
+  // Облака часто отдают «просто файл» (octet-stream) — тогда смотрим на имя файла в ссылке или в заголовке.
+  const cdName = res.headers.get("content-disposition")?.match(/filename\*?\s*=\s*(?:UTF-8'')?"?([^";]+)/i)?.[1] ?? "";
+  const audioByName = isAudioPath(finalUrl) || AUDIO_EXT.has(extname(decodeURIComponent(cdName)).toLowerCase());
+  if (!type.startsWith("audio/") && !(audioByName && /octet-stream|binary|^$/.test(type.split(";")[0]!.trim()))) {
     return { kind: "error", error: "По ссылке не музыка. Нужен файл mp3, flac, m4a, ogg, opus или wav." };
   }
   const total = Number(res.headers.get("content-length") ?? 0);
