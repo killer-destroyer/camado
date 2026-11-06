@@ -1,6 +1,6 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { useEffect, useState } from "react";
-import { AlarmClock, Check, Download, FolderPlus, KeyRound, Music4, Play, RefreshCw, Shuffle, Sparkles, Square, Trash2 } from "lucide-react";
+import { AlarmClock, Check, Download, FolderPlus, Image as ImageIcon, KeyRound, Music4, Play, RefreshCw, Shuffle, Sparkles, Square, Trash2 } from "lucide-react";
 import { SCENES } from "../lib/scenes";
 import { startScreensaver } from "../components/Screensaver";
 import type { AiConfig, AiStatus, BotStatus } from "../../../shared/types";
@@ -436,6 +436,39 @@ function ScreensaverSection({ s }: { s: AppSettings }) {
           </div>
         ))}
       </div>
+      <Row
+        title="Своя картинка"
+        hint={c.image ? `Сейчас: ${c.imageName ?? "картинка"}. Сцена «Своя картинка» покажет её во весь экран.` : "Любое фото или арт. Пока не выбрана — сцена «Своя картинка» показывает обложку песни."}
+      >
+        <div className="row-actions">
+          <button
+            className="btn"
+            onClick={async () => {
+              const r = await api.screensaver.pickImage();
+              if (r) set({ image: r.url, imageName: r.name, scene: "picture" });
+            }}
+          >
+            <ImageIcon size={14} /> {c.image ? "Другая" : "Выбрать"}
+          </button>
+          {c.image && (
+            <button className="btn sm-link" onClick={() => set({ image: undefined, imageName: undefined })}>
+              Убрать
+            </button>
+          )}
+        </div>
+      </Row>
+      <Row title="Поверх картинки">
+        <Segmented
+          size="sm"
+          value={c.imageFx}
+          onChange={(v) => set({ imageFx: v })}
+          options={[
+            { value: "none", label: "Ничего" },
+            { value: "dust", label: "Пылинки" },
+            { value: "rain", label: "Капли" },
+          ]}
+        />
+      </Row>
       <Row title="Текст песни на заставке">
         <Toggle value={c.lyrics} onChange={(v) => set({ lyrics: v })} />
       </Row>

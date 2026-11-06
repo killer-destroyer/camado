@@ -59,7 +59,19 @@ export interface AppSettings {
   nightcoreRate: number;
   volume: number; // 0…1 — положение ползунка; громкость «по слуху» считает движок
   /** Заставка-визуализатор: через сколько минут бездействия, какая сцена ("random" — новая на каждый трек), что показывать. */
-  screensaver: { enabled: boolean; delay: number; scene: string; lyrics: boolean; clock: boolean; fullscreen: boolean };
+  screensaver: {
+    enabled: boolean;
+    delay: number;
+    scene: string;
+    lyrics: boolean;
+    clock: boolean;
+    fullscreen: boolean;
+    /** Своя картинка для сцены «Своя картинка» (адрес camado-media://picture/…) и её имя файла. */
+    image?: string;
+    imageName?: string;
+    /** Что поверх своей картинки: ничего, пылинки, капли дождя. */
+    imageFx: "none" | "dust" | "rain";
+  };
   /** Фоновые звуки: включены ли, общая громкость, уровень каждого (0 — выкл), включать ли вместе с фокусом. */
   ambience: { on: boolean; volume: number; levels: Record<string, number>; withFocus: boolean };
   /** Эквалайзер: пресет (или "custom") и 10 полос в дБ. */
@@ -119,7 +131,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nightcoreRate: 1.15,
   volume: 0.8,
   eq: { preset: "flat", bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  screensaver: { enabled: true, delay: 2, scene: "random", lyrics: true, clock: true, fullscreen: true },
+  screensaver: { enabled: true, delay: 2, scene: "random", lyrics: true, clock: true, fullscreen: true, imageFx: "dust" },
   ambience: { on: false, volume: 0.7, levels: { rain: 0.6 }, withFocus: false },
   autoLevel: true,
   trackGain: {},

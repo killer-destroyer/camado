@@ -43,7 +43,7 @@ function compile(gl: WebGL2RenderingContext, fragBody: string): WebGLProgram | n
   return gl.getProgramParameter(p, gl.LINK_STATUS) ? p : null;
 }
 
-const UNIFORMS = ["uRes", "uTime", "uBass", "uMid", "uHigh", "uEnergy", "uPulse", "uSpin", "uHasCover", "uC1", "uC2", "uC3", "uBg", "uCover", "uBands"];
+const UNIFORMS = ["uRes", "uTime", "uBass", "uMid", "uHigh", "uEnergy", "uPulse", "uSpin", "uHasCover", "uImgAspect", "uFx", "uOwn", "uC1", "uC2", "uC3", "uBg", "uCover", "uBands"];
 
 function rgb(hex: string): [number, number, number] {
   const [r, g, b] = hexToRgb(hex);
@@ -54,7 +54,9 @@ function rgb(hex: string): [number, number, number] {
 let lastScene = "";
 export function pickScene(setting: string): string {
   if (setting !== "random") return setting;
-  const pool = SCENES.filter((s) => s.id !== lastScene);
+  // «Своя картинка» попадает в случайные, только если картинка выбрана
+  const hasImage = !!app.get().settings.screensaver.image;
+  const pool = SCENES.filter((s) => s.id !== lastScene && (s.id !== "picture" || hasImage));
   lastScene = pool[Math.floor(Math.random() * pool.length)]!.id;
   return lastScene;
 }
@@ -116,26 +118,43 @@ export function Screensaver() {
     };
   }, [active, sceneId]);
 
-  // обложка → текстура (с мипмапами: размытие «за стеклом» бесплатно)
+  // обложка (или своя картинка) → текстура (с мипмапами: размытие «за стеклом» бесплатно)
   const hasCover = useRef(0);
+  const aspect = useRef(1);
+  const picture = sceneId === "picture" ? cfg.image : undefined;
+  const src = picture ?? meta?.cover;
   useEffect(() => {
     const g = glRef.current;
     hasCover.current = 0;
-    if (!active || !g || !meta?.cover) return;
+    aspect.current = 1;
+    if (!active || !g || !src) return;
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
       const { gl, tex } = g;
+      if (glRef.current !== g) return;
+      // большие фото уменьшаем — видеокарте хватит 2048 точек по большей стороне
+      const big = Math.max(img.naturalWidth, img.naturalHeight);
+      let source: TexImageSource = img;
+      if (big > 2048) {
+        const k = 2048 / big;
+        const cv = document.createElement("canvas");
+        cv.width = Math.round(img.naturalWidth * k);
+        cv.height = Math.round(img.naturalHeight * k);
+        cv.getContext("2d")?.drawImage(img, 0, 0, cv.width, cv.height);
+        source = cv;
+      }
+      aspect.current = img.naturalWidth / Math.max(1, img.naturalHeight);
       gl.bindTexture(gl.TEXTURE_2D, tex);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
       gl.generateMipmap(gl.TEXTURE_2D);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       hasCover.current = 1;
     };
-    img.src = meta.cover;
-  }, [active, meta?.cover, sceneId]);
+    img.src = src;
+  }, [active, src, sceneId]);
 
   const bands = useRef(new Float32Array(32));
   useFrame((dt) => {
@@ -164,6 +183,9 @@ export function Screensaver() {
     gl.uniform1f(loc.uPulse!, engine.pulse);
     gl.uniform1f(loc.uSpin!, spin.current);
     gl.uniform1f(loc.uHasCover!, hasCover.current);
+    gl.uniform1f(loc.uImgAspect!, aspect.current);
+    gl.uniform1f(loc.uOwn!, picture ? 1 : 0);
+    gl.uniform1f(loc.uFx!, cfg.imageFx === "rain" ? 2 : cfg.imageFx === "none" ? 0 : 1);
     gl.uniform3f(loc.uC1!, ...rgb(palette.accent));
     gl.uniform3f(loc.uC2!, ...rgb(palette.accent2));
     gl.uniform3f(loc.uC3!, ...rgb(palette.accent3));

@@ -59,6 +59,7 @@ const api: CamadoApi = {
   lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"] },
   quick: { close: call("quick.close") as CamadoApi["quick"]["close"], key: call("quick.key") as CamadoApi["quick"]["key"] },
   alarm: { pickSound: call("alarm.pickSound") as CamadoApi["alarm"]["pickSound"] },
+  screensaver: { pickImage: call("screensaver.pickImage") as CamadoApi["screensaver"]["pickImage"] },
   music: {
     importUrl: call("music.importUrl") as CamadoApi["music"]["importUrl"],
     importHtml: call("music.importHtml") as CamadoApi["music"]["importHtml"],

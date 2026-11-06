@@ -18,7 +18,7 @@ import {
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
 import { randomInt } from "node:crypto";
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
@@ -454,6 +454,23 @@ const handlers: Record<string, Handler> = {
     const name = `custom${extname(src).toLowerCase()}`;
     await copyFile(src, join(dir, name));
     return { name: basename(src), url: `camado-media://sound/${name}?v=${Date.now()}` };
+  },
+
+  "screensaver.pickImage": async () => {
+    const res = await dialog.showOpenDialog(win!, {
+      title: "Своя картинка для заставки",
+      properties: ["openFile"],
+      filters: [{ name: "Картинка", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"] }],
+    });
+    const src = res.filePaths[0];
+    if (res.canceled || !src) return null;
+    const dir = join(dataDir, "screensaver");
+    await mkdir(dir, { recursive: true });
+    // старую картинку (другого формата) убираем, чтобы не копились
+    for (const old of await readdir(dir).catch(() => [] as string[])) if (/^picture\./.test(old)) await rm(join(dir, old), { force: true });
+    const name = `picture${extname(src).toLowerCase()}`;
+    await copyFile(src, join(dir, name));
+    return { name: basename(src), url: `camado-media://picture/${name}?v=${Date.now()}` };
   },
 
   "quick.close": () => quick?.close(),
@@ -970,7 +987,9 @@ void app.whenReady().then(async () => {
           ? library.coverPath(name)
           : url.hostname === "sound" && /^custom\.[a-z0-9]{2,5}$/.test(name)
             ? join(dataDir, "sounds", name)
-            : undefined;
+            : url.hostname === "picture" && /^picture\.[a-z0-9]{2,5}$/.test(name)
+              ? join(dataDir, "screensaver", name)
+              : undefined;
     if (!path) return new Response("not found", { status: 404 });
     return serveFile(path, req.headers.get("range"));
   });

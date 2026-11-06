@@ -5449,3 +5449,10 @@ kbd {
 .focus-left.break .focus-time {
   font-size: clamp(40px, 6vh, 64px);
 }
+
+/* Кнопки в строке настроек (своя картинка заставки) */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

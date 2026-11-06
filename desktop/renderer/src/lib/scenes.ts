@@ -13,7 +13,7 @@ export interface Scene {
 export const SHADER_HEAD = `#version 300 es
 precision highp float;
 uniform vec2 uRes;
-uniform float uTime, uBass, uMid, uHigh, uEnergy, uPulse, uSpin, uHasCover;
+uniform float uTime, uBass, uMid, uHigh, uEnergy, uPulse, uSpin, uHasCover, uImgAspect, uFx, uOwn;
 uniform vec3 uC1, uC2, uC3, uBg;
 uniform sampler2D uCover;
 uniform float uBands[32];
@@ -92,40 +92,167 @@ vec3 scene(vec2 uv, vec2 p) {
   {
     id: "blackhole",
     name: "Чёрная дыра",
+    scale: 0.55,
     body: `
-vec3 stars(vec2 p) {
-  vec2 g = p * 60.0; vec2 id = floor(g); vec2 st = fract(g) - 0.5; vec2 o = hash2(id) - 0.5;
-  float s = smoothstep(0.08, 0.0, length(st - o * 0.7)) * step(0.85, hash(id + 3.1));
-  return vec3(s) * (0.5 + 0.5 * sin(uTime * 2.0 + hash(id) * 30.0));
+// Настоящая трассировка лучей: свет летит от камеры и гнётся притяжением дыры (как в «Интерстелларе»).
+// Единицы — радиус горизонта = 1. Диск лежит в плоскости y = 0, светится сам и крутится.
+vec3 sky(vec3 d) {
+  // звёзды на сфере неба + полоса Млечного Пути
+  vec2 s = vec2(atan(d.z, d.x), asin(clamp(d.y, -1.0, 1.0)));
+  vec3 col = vec3(0.0);
+  for (float i = 0.0; i < 3.0; i++) {
+    vec2 g = s * (90.0 + i * 70.0); vec2 id = floor(g); vec2 st = fract(g) - 0.5;
+    vec2 o = hash2(id + i * 17.0) - 0.5;
+    float h = hash(id + i * 3.7);
+    float star = smoothstep(0.12 - i * 0.025, 0.0, length(st - o * 0.7)) * step(0.9 - i * 0.03, h) * (1.8 - i * 0.4);
+    col += star * mix(vec3(1.0, 0.92, 0.85), vec3(0.8, 0.88, 1.0), hash(id + 9.0)) * (0.6 + 0.4 * sin(uTime * 1.5 + h * 40.0));
+  }
+  float band = exp(-pow((d.y - 0.35 * d.x + 0.1) * 3.2, 2.0));
+  float dust = fbm(s * 5.0 + 3.0);
+  col += mix(uBg * 1.2 + 0.05, vec3(0.42, 0.38, 0.36), 0.55) * band * dust * dust * 0.9;
+  col -= vec3(0.06) * band * smoothstep(0.55, 0.75, fbm(s * 11.0));
+  return max(col, 0.0);
+}
+vec3 diskColor(vec3 hit, vec3 dir, out float a) {
+  float r = length(hit.xz);
+  float inner = 2.6, outer = 13.0;
+  a = smoothstep(inner, inner + 0.25, r) * smoothstep(outer, outer * 0.45, r);
+  if (a <= 0.0) return vec3(0.0);
+  float ang = atan(hit.z, hit.x);
+  float spin = uTime * 0.9 * pow(inner / r, 1.5);          // внутри крутится быстрее (Кеплер)
+  float lr = log(r);
+  // струи газа: вытянутые по кругу волокна
+  float fib = fbm(vec2(lr * 9.0, (ang + spin) * 2.0)) * 0.7 + fbm(vec2(lr * 20.0, (ang + spin * 1.3) * 5.0)) * 0.6;
+  fib = pow(fib, 1.8) * 1.6;
+  float dens = a * (0.35 + fib) * (0.8 + 0.6 * smoothstep(5.0, inner, r));
+  // доплер: сторона, летящая к нам, ярче и «горячее»
+  vec3 vel = normalize(vec3(-hit.z, 0.0, hit.x));
+  float dop = 1.0 + 0.6 * dot(vel, -dir) * sqrt(inner / r);
+  dop = max(dop, 0.15);
+  float heat = smoothstep(outer * 0.7, inner, r);             // внутри горячее — ближе к белому
+  vec3 tint = mix(uC2, uC1, smoothstep(0.2, 0.8, heat));
+  vec3 c = mix(tint * 0.9, vec3(1.0, 0.97, 0.92), pow(heat, 2.2) * 0.85);
+  c *= dens * pow(dop, 3.0) * (0.75 + uBass * 0.35 + uPulse * 0.45);
+  a = clamp(dens * 1.6, 0.0, 1.0);
+  return c;
 }
 vec3 scene(vec2 uv, vec2 p) {
-  float r = length(p);
-  float rs = 0.13 + uBass * 0.012;                    // горизонт событий
-  // гравитационная линза: свет звёзд гнётся вокруг дыры
-  vec2 lp = p - normalize(p) * (rs * rs * 1.2) / max(r, 1e-3);
-  vec3 col = stars(lp) * 0.8 + uBg * 0.25;
-  // аккреционный диск: наклонённое кольцо
-  float tilt = 0.28;
-  vec2 dp = vec2(p.x, p.y / tilt);
-  float dr = length(dp); float ang = atan(dp.y, dp.x);
-  float ring = smoothstep(rs * 1.4, rs * 2.0, dr) * smoothstep(rs * 4.6, rs * 2.4, dr);
-  float swirl = fbm(vec2(ang * 3.0 - uTime * 1.2, dr * 9.0 - uTime * 0.4));
-  vec3 disk = palette(dr * 1.5 - uTime * 0.05) * (0.6 + 1.4 * swirl) * ring;
-  // доплер: сторона, летящая к нам, ярче
-  disk *= 0.6 + 0.8 * (0.5 + 0.5 * cos(ang));
-  float front = step(0.0, p.y) * 0.0 + step(p.y, 0.0);
-  // задняя часть диска видна над дырой (её свет огибает дыру)
-  vec2 bp = vec2(p.x, (p.y - rs * 0.9) / 0.55);
-  float br = length(bp);
-  float back = smoothstep(rs * 1.05, rs * 1.25, br) * smoothstep(rs * 2.4, rs * 1.4, br) * step(0.0, p.y);
-  vec3 backc = palette(br * 2.0 + uTime * 0.03) * back * (0.6 + 0.8 * fbm(vec2(atan(bp.y, bp.x) * 4.0 + uTime, br * 8.0)));
-  col += backc * 1.1;
-  float hole = smoothstep(rs, rs * 0.96, r);
-  col = mix(col, vec3(0.0), hole);
-  col += disk * (front + (1.0 - front) * (1.0 - hole)) * 1.2;
-  // фотонное кольцо
-  col += uC1 * smoothstep(0.012, 0.0, abs(r - rs * 1.02)) * (1.2 + uPulse * 2.0);
-  col += uC2 * 0.25 * smoothstep(0.6, 0.0, r) * uEnergy;
+  // камера чуть выше плоскости диска, медленно покачивается
+  float t = uTime * 0.03;
+  vec3 ro = vec3(sin(t) * 3.0, 2.1 + sin(t * 1.7) * 0.35, -30.0);
+  vec3 fw = normalize(-ro + vec3(0.0, 0.2, 0.0));
+  vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
+  vec3 up = cross(fw, rt);
+  // лёгкий наклон кадра, как на постере
+  float roll = -0.12;
+  vec2 pp = p - vec2(0.0, 0.05);
+  vec2 q = vec2(pp.x * cos(roll) - pp.y * sin(roll), pp.x * sin(roll) + pp.y * cos(roll));
+  vec3 dir = normalize(fw * 1.7 + rt * q.x + up * q.y);
+  vec3 dir0 = dir;
+  vec3 pos = ro + dir * hash(gl_FragCoord.xy) * 1.0;
+  vec3 h = cross(pos, dir); float h2 = dot(h, h);
+  vec3 col = vec3(0.0); float trans = 1.0; bool fell = false;
+  for (int i = 0; i < 260; i++) {
+    float r2 = dot(pos, pos);
+    if (r2 < 1.0) { fell = true; break; }
+    float r = sqrt(r2);
+    float dt = clamp(0.09 * r, 0.03, 1.2);
+    // шаг «через середину» — точнее, без колец на фоне
+    vec3 mid = pos + dir * dt * 0.5;
+    float m2 = dot(mid, mid);
+    vec3 acc = -1.5 * h2 * mid / (m2 * m2 * sqrt(m2));
+    vec3 nd = normalize(dir + acc * dt);
+    vec3 np = pos + (dir + nd) * 0.5 * dt;
+    dir = nd;
+    if (pos.y * np.y < 0.0) {
+      vec3 hit = mix(pos, np, pos.y / (pos.y - np.y));
+      float a; vec3 dc = diskColor(hit, dir, a);
+      col += dc * trans; trans *= 1.0 - a;
+      if (trans < 0.02) break;
+    }
+    // лёгкая дымка у диска — даёт мягкое свечение, как на фото
+    float dr = length(pos.xz);
+    col += trans * mix(uC2, uC1, smoothstep(12.0, 3.0, dr)) * 0.012 * dt * exp(-abs(pos.y) * 1.2) * smoothstep(16.0, 3.0, dr) * smoothstep(1.5, 3.0, dr) * (0.8 + uEnergy);
+    pos = np;
+    if (r2 > 2500.0 && dot(pos, dir) > 0.0) break;
+  }
+  // звёзды гнём чуть слабее, чем по физике, — иначе далёкие звёзды вытягиваются в чёрточки
+  if (!fell) col += sky(normalize(mix(dir0, dir, 0.45))) * trans;
+  // мягкое свечение вокруг (как засветка объектива)
+  float rr = length(p);
+  col += uC1 * 0.05 * exp(-rr * 4.0) * (0.6 + uEnergy);
+  col = col / (1.0 + col * 0.8);
+  return pow(col, vec3(1.08));                         // мягко «сжимаем» пересветы
+}`,
+  },
+  {
+    id: "picture",
+    name: "Своя картинка",
+    body: `
+// Своя картинка (или обложка песни) во весь экран: медленно «плывёт» и приближается, пульсирует на басах.
+// Поверх — на выбор: ничего, светящиеся пылинки или капли дождя на стекле.
+vec2 picFit(vec2 uv) {
+  float S = uRes.x / uRes.y, A = max(uImgAspect, 0.05);
+  float k = max(1.0, S / A);
+  vec2 t = vec2((uv.x - 0.5) * S / (A * k), (uv.y - 0.5) / k);
+  float z = 1.07 + 0.035 * sin(uTime * 0.045) + uPulse * 0.012;
+  vec2 pan = vec2(sin(uTime * 0.031), cos(uTime * 0.026)) * 0.025;
+  return t / z + 0.5 + pan;
+}
+vec3 drops(vec2 uv, float t, float size) {
+  vec2 g = uv * size; vec2 id = floor(g); vec2 st = fract(g) - 0.5;
+  vec2 rnd = hash2(id);
+  vec2 c = (rnd - 0.5) * 0.7;
+  float life = fract(t * (0.05 + rnd.x * 0.1) + rnd.y);
+  float r = (0.12 + rnd.y * 0.18) * smoothstep(0.0, 0.1, life) * smoothstep(1.0, 0.7, life);
+  vec2 d = st - c; float m = smoothstep(r, r * 0.55, length(d));
+  return vec3(d / max(r, 1e-3), m);
+}
+vec3 scene(vec2 uv, vec2 p) {
+  vec2 tuv = picFit(uv);
+  vec3 col;
+  if (uOwn < 0.5) {
+    // своей картинки нет — обложка песни: размытая на фоне и чёткая «карточка» над текстом
+    vec3 bg = cover(tuv, 7.5) * 0.6;
+    float sz = 0.42 + uPulse * 0.006;
+    vec2 cc = vec2(0.0, 0.17 + sin(uTime * 0.4) * 0.006);
+    vec2 d = (p - cc) / sz;
+    vec2 q = abs(d) - 0.5 + 0.04;
+    float box = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - 0.04;     // скруглённый квадрат
+    float inside = smoothstep(0.004, -0.004, box);
+    float shadow = smoothstep(0.12, -0.02, box) * 0.6;
+    col = bg * (1.0 - shadow);
+    col = mix(col, cover(d + 0.5, 0.0), inside);
+    col += vec3(1.0) * 0.08 * inside * smoothstep(0.3, -0.5, d.x + d.y);  // лёгкий блик
+    return col;
+  }
+  if (uFx > 1.5) {
+    // капли: за стеклом картинка размыта, в каплях — чёткая
+    vec2 au = uv * vec2(uRes.x / uRes.y, 1.0);
+    vec3 a = drops(au, uTime, 12.0);
+    vec3 b = drops(au + 3.7, uTime * 1.3, 24.0);
+    float m = max(a.z, b.z * 0.8);
+    vec2 n = a.xy * a.z + b.xy * b.z * 0.6;
+    col = mix(cover(tuv, 4.0) * 0.7, cover(tuv - n * 0.05, 0.0), m);
+    col += m * 0.06 * (1.0 - n.y);
+  } else {
+    col = cover(tuv, 0.0);
+  }
+  if (uFx > 0.5 && uFx < 1.5) {
+    // пылинки: мягкие круги света медленно поднимаются, на ударах ярче
+    for (float k = 0.0; k < 3.0; k++) {
+      vec2 g = (uv + vec2(sin(uTime * 0.07 + k) * 0.03, -uTime * (0.01 + k * 0.006))) * vec2(uRes.x / uRes.y, 1.0) * (6.0 + k * 5.0);
+      vec2 id = floor(g);
+      vec2 o = hash2(id + k * 7.0) - 0.5;
+      float d = length(fract(g) - 0.5 - o * 0.6);
+      float on = step(0.55, hash(id + k * 3.0));
+      float tw = 0.5 + 0.5 * sin(uTime * (0.6 + k * 0.3) + hash(id) * 20.0);
+      col += mix(uC1, vec3(1.0, 0.95, 0.85), 0.5) * smoothstep(0.12 - k * 0.03, 0.0, d) * on * tw * (0.25 + 0.35 * uEnergy + uPulse * 0.3);
+    }
+  }
+  // чуть затемняем там, где текст песни и название, — чтобы читалось на любой картинке
+  col *= 1.0 - 0.35 * exp(-pow((uv.y - 0.42) * 3.5, 2.0));
+  col *= 1.0 - 0.3 * smoothstep(0.8, 1.0, uv.y);
   return col;
 }`,
   },
@@ -133,26 +260,36 @@ vec3 scene(vec2 uv, vec2 p) {
     id: "warp",
     name: "Полёт сквозь звёзды",
     body: `
-vec3 layer(vec2 p, float depth, float seed) {
-  vec2 g = p; vec2 id = floor(g); vec2 st = fract(g) - 0.5; vec2 o = hash2(id + seed) - 0.5;
-  float d = length(st - o * 0.8);
-  float b = smoothstep(0.06 + 0.05 * depth, 0.0, d) * step(0.3, hash(id + seed * 1.7));
-  return mix(vec3(1.0), palette(hash(id) * 0.6 + seed), 0.6) * b;
-}
+// Полёт сквозь звёзды: звёзды летят навстречу и вытягиваются в линии, сзади — туманность.
 vec3 scene(vec2 uv, vec2 p) {
-  vec3 col = uBg * 0.15;
-  float speed = 0.05 + uEnergy * 0.35 + uPulse * 0.15;
-  for (float i = 0.0; i < 1.0; i += 1.0 / 7.0) {
-    float depth = fract(i + uTime * speed);
-    float scale = mix(18.0, 0.6, depth);
-    float fade = depth * smoothstep(1.0, 0.85, depth);
-    // растяжение звёзд по радиусу — «варп»
-    vec2 q = p * scale;
-    float r = length(q); vec2 dir = q / max(r, 1e-3);
-    q -= dir * min(r, 1.0) * (0.25 + uEnergy) * 0.7;
-    col += layer(q + i * 453.2, depth, i) * fade * 3.2;
+  float r = length(p); float ang = atan(p.y, p.x);
+  float speed = 0.35 + uEnergy * 1.2 + uPulse * 0.6;
+  // туманность в цветах песни, медленно закручивается
+  vec2 np = p * 1.6;
+  float n1 = fbm(np * 1.2 + vec2(uTime * 0.02, 0.0) + fbm(np * 2.0 - uTime * 0.03));
+  float n2 = fbm(np * 2.5 - vec2(0.0, uTime * 0.015) + 7.0);
+  vec3 col = uBg * 0.12;
+  col += uC2 * pow(n1, 2.5) * 0.55 + uC1 * pow(n2, 3.0) * 0.4;
+  col *= 0.6 + 0.4 * smoothstep(0.9, 0.0, r);
+  // звёзды-полоски: в полярных координатах каждая звезда — отрезок вдоль луча из центра
+  for (float k = 0.0; k < 3.0; k++) {
+    float rays = 140.0 + k * 90.0;
+    float a = (ang / 6.2832 + 0.5) * rays;
+    float id = floor(a);
+    float h = hash(vec2(id, k * 13.0));
+    float h2 = hash(vec2(id, k * 13.0 + 5.0));
+    // звезда «летит» от центра: позиция растёт ускоряясь
+    float z = fract(h2 + uTime * speed * (0.08 + h * 0.06) * (1.0 + k * 0.4));
+    float pos = pow(z, 2.2) * 1.3;
+    float len = (0.01 + speed * 0.06) * (0.2 + pos * 1.6);
+    float along = smoothstep(pos - len, pos, r) * smoothstep(pos + 0.004, pos, r);
+    float across = smoothstep(0.32, 0.0, abs(fract(a) - 0.5 - (h - 0.5) * 0.3));
+    float on = step(0.45, h);
+    vec3 sc = mix(vec3(1.0), palette(h + k * 0.2), 0.35 + 0.2 * k);
+    col += sc * along * across * on * smoothstep(0.0, 0.3, z) * (1.6 - k * 0.3);
   }
-  col += uC1 * 0.12 * smoothstep(0.7, 0.0, length(p)) * (0.5 + uBass);
+  // яркое ядро впереди
+  col += mix(uC1, vec3(1.0), 0.5) * 0.25 * exp(-r * 9.0) * (0.6 + uBass);
   return col;
 }`,
   },
@@ -161,25 +298,46 @@ vec3 scene(vec2 uv, vec2 p) {
     name: "Северное сияние",
     scale: 0.75,
     body: `
-vec3 scene(vec2 uv, vec2 p) {
-  vec3 sky = mix(uBg * 0.2, vec3(0.01, 0.015, 0.04), uv.y);
-  vec2 g = uv * vec2(uRes.x / uRes.y, 1.0) * 80.0;
-  sky += vec3(step(0.995, hash(floor(g)))) * 0.7 * uv.y;
-  vec3 col = sky;
+// Северное сияние: высокие «занавеси» света над горами, отражение в озере, звёзды.
+float curtainAt(vec2 uv, float i) {
+  float x = uv.x * (1.1 + i * 0.35) + uTime * (0.012 + i * 0.006);
+  float fold = fbm(vec2(x * 1.3, i * 3.1 + uTime * 0.04));       // где проходит нижний край
+  float base = 0.3 + i * 0.06 + (fold - 0.5) * 0.3;
+  float h = uv.y - base;
+  float edge = smoothstep(-0.005, 0.02, h);                      // резкий нижний край
+  float fall = exp(-max(h, 0.0) * (1.8 + i * 0.5 - uEnergy * 0.6)); // мягко гаснет вверх
+  float rays = 0.45 + 0.55 * pow(noise(vec2(x * 40.0 + fold * 6.0, uTime * 0.4 + i)), 1.5);
+  float edgeGlow = exp(-max(h, 0.0) * 35.0) * edge * 0.8;        // яркая кромка снизу
+  float present = smoothstep(0.2, 0.6, noise(vec2(x * 0.9 + i * 5.0, uTime * 0.03 + i)));  // занавеси местами, с просветами
+  return (edge * fall * rays + edgeGlow) * present;
+}
+vec3 aurora(vec2 uv) {
+  vec3 col = vec3(0.0);
   for (float i = 0.0; i < 4.0; i++) {
-    float x = uv.x * (1.5 + i * 0.4) + uTime * (0.02 + i * 0.01);
-    float wave = fbm(vec2(x * 1.5, i * 3.1 + uTime * 0.05)) * 0.35;
-    float base = 0.32 + i * 0.06 + wave;
-    float h = uv.y - base;
-    float curtain = smoothstep(0.0, 0.03, h) * exp(-h * (3.2 - uEnergy * 1.5));
-    float rays = 0.55 + 0.45 * noise(vec2(x * 30.0, uTime * 0.6 + i));
-    col += palette(i * 0.25 + uv.x * 0.3) * curtain * rays * (0.55 + uMid * 0.8);
+    float c = curtainAt(uv, i);
+    // низ занавеси — цвет песни, верх — второй цвет (как зелёный → фиолетовый у настоящего)
+    vec3 lo = mix(uC1, vec3(0.3, 1.0, 0.65), 0.15);
+    vec3 hi = mix(uC2, uC3, 0.5);
+    col += mix(lo, hi, smoothstep(0.45, 0.95, uv.y)) * c * (0.75 - i * 0.12) * (0.8 + uMid * 0.6);
   }
-  // горы: два слоя силуэтов
-  float m1 = 0.18 + fbm(vec2(uv.x * 3.0, 1.0)) * 0.18;
-  float m2 = 0.1 + fbm(vec2(uv.x * 6.0 + 4.0, 2.0)) * 0.12;
-  col = mix(col, uBg * 0.15 + vec3(0.01), smoothstep(m1 + 0.003, m1, uv.y));
-  col = mix(col, vec3(0.005), smoothstep(m2 + 0.003, m2, uv.y));
+  return col;
+}
+vec3 scene(vec2 uv, vec2 p) {
+  float lake = 0.2;                                             // линия берега
+  vec2 su = uv;
+  bool refl = uv.y < lake;
+  if (refl) su.y = 2.0 * lake - uv.y + sin(uv.x * 80.0 + uTime) * 0.002 * (lake - uv.y) * 20.0;
+  vec3 sky = mix(uBg * 0.25 + vec3(0.0, 0.01, 0.02), vec3(0.003, 0.005, 0.015), smoothstep(lake, 1.0, su.y));
+  vec2 g = su * vec2(uRes.x / uRes.y, 1.0) * 85.0;
+  float st = smoothstep(0.14, 0.0, length(fract(g) - 0.5 - (hash2(floor(g)) - 0.5) * 0.6)) * step(0.97, hash(floor(g)));
+  sky += vec3(st) * 0.8 * (0.6 + 0.4 * sin(uTime * 2.0 + hash(floor(g)) * 30.0));
+  vec3 col = sky + aurora(su);
+  // горы: дальние светлее, ближние — силуэт
+  float m1 = lake + 0.06 + fbm(vec2(su.x * 3.0, 1.0)) * 0.16;
+  float m2 = lake + 0.01 + fbm(vec2(su.x * 7.0 + 4.0, 2.0)) * 0.09;
+  col = mix(col, uBg * 0.1 + vec3(0.01, 0.012, 0.02), smoothstep(m1 + 0.002, m1, su.y));
+  col = mix(col, vec3(0.004, 0.006, 0.01), smoothstep(m2 + 0.002, m2, su.y));
+  if (refl) col *= 0.6 * (0.85 + 0.15 * noise(vec2(uv.x * 200.0, uv.y * 30.0 + uTime)));
   return col;
 }`,
   },
@@ -249,26 +407,63 @@ vec3 scene(vec2 uv, vec2 p) {
     name: "Костёр",
     scale: 0.75,
     body: `
+// Огонь: цвета как у настоящего пламени (от тёмно-красного к белому), чуть тонированные под песню.
+vec3 flameRamp(float f) {
+  vec3 c = mix(vec3(0.0), vec3(0.55, 0.05, 0.02), smoothstep(0.0, 0.25, f));
+  c = mix(c, vec3(1.0, 0.35, 0.05), smoothstep(0.2, 0.5, f));
+  c = mix(c, vec3(1.0, 0.75, 0.25), smoothstep(0.45, 0.75, f));
+  c = mix(c, vec3(1.0, 0.97, 0.85), smoothstep(0.75, 1.0, f));
+  return c;
+}
+float flame(vec2 q, float t) {
+  // языки пламени: шум «уносится» вверх и закручивается
+  vec2 w = vec2(fbm(q * 3.0 + vec2(0.0, -t * 1.2)), fbm(q * 3.0 + vec2(5.2, -t * 1.4)));
+  float n = fbm(q * vec2(5.0, 3.0) + w * 1.6 + vec2(0.0, -t * 2.6));
+  float y = q.y + 0.42;                                   // 0 — у поленьев
+  float width = mix(0.3, 0.02, smoothstep(0.0, 0.8, y));
+  float body = 1.0 - abs(q.x + (w.x - 0.5) * 0.35 * y) / width;
+  float v = body * 0.85 + (n - 0.5) * 1.9 - y * 0.55 + 0.05 + uBass * 0.2;
+  return smoothstep(0.0, 1.0, clamp(v, 0.0, 1.0)) * smoothstep(-0.07, 0.06, y) * smoothstep(0.9, 0.55, y);
+}
 vec3 scene(vec2 uv, vec2 p) {
-  vec2 q = vec2(p.x * 1.4, uv.y);
-  float t = uTime * 1.6;
-  float n = fbm(vec2(q.x * 3.0, q.y * 3.5 - t)) + 0.5 * fbm(vec2(q.x * 7.0, q.y * 6.0 - t * 1.5));
-  float tongues = (noise(vec2(q.x * 9.0, q.y * 2.0 - t * 1.4)) - 0.5) * 0.35 * q.y;
-  float shape = (1.0 - q.y * 1.45) - abs(q.x + tongues) * (2.4 - q.y * 1.2);
-  float f = clamp(shape * 1.8 + n * 1.1 - 0.95 + uBass * 0.3, 0.0, 1.0);
-  vec3 hot = mix(uC1, vec3(1.0, 0.95, 0.8), 0.45);
-  vec3 col = mix(uBg * 0.05, mix(uC3, uC1, f), smoothstep(0.0, 0.35, f)) * smoothstep(0.0, 0.2, f);
-  col = mix(col, hot, smoothstep(0.65, 1.0, f));
-  // искры летят вверх, на ударах — больше
-  for (float i = 0.0; i < 18.0; i++) {
-    float s = hash(vec2(i, 3.0));
-    float life = fract(uTime * (0.15 + s * 0.2) + s);
-    vec2 sp = vec2((s - 0.5) * 0.5 + sin(life * 6.0 + i) * 0.05, life * 1.1 - 0.05);
-    float d = length(vec2(p.x, uv.y) - sp);
-    col += uC1 * smoothstep(0.006 + uPulse * 0.004, 0.0, d) * (1.0 - life) * 2.0;
+  float t = uTime;
+  vec2 q = p * vec2(1.0, 1.0);
+  float f = flame(q, t);
+  float f2 = flame(q * vec2(1.6, 1.25) + vec2(0.2, -0.1), t * 1.2 + 4.0) * 0.75;
+  float f3 = flame(q * vec2(1.7, 1.35) + vec2(-0.24, -0.12), t * 1.1 + 9.0) * 0.7;  // второй, меньший огонь
+  float fire = max(f, max(f2, f3));
+  vec3 tint = mix(vec3(1.0), uC1 * 1.4 + 0.3, 0.22);     // чуть-чуть цвета песни
+  vec3 col = flameRamp(pow(fire, 0.9)) * tint * smoothstep(0.0, 0.08, fire) * 1.05;
+  // тёплый отсвет на фоне и на земле
+  float glowD = length((p - vec2(0.0, -0.32)) * vec2(0.8, 1.2));
+  col += vec3(1.0, 0.35, 0.08) * tint * 0.22 * exp(-glowD * 3.5) * (0.85 + 0.3 * noise(vec2(t * 5.0, 0.0)) + uPulse * 0.5);
+  // земля
+  float ground = smoothstep(-0.4, -0.47, p.y);
+  col = mix(col, vec3(0.02, 0.012, 0.01) + vec3(1.0, 0.3, 0.05) * 0.18 * exp(-abs(p.x) * 3.0), ground * (1.0 - fire));
+  // поленья: два тёмных бревна крест-накрест, тлеют снизу
+  for (float s = -1.0; s <= 1.0; s += 2.0) {
+    vec2 lp = p - vec2(0.0, -0.43);
+    float a = s * 0.22;
+    vec2 rp = vec2(lp.x * cos(a) - lp.y * sin(a), lp.x * sin(a) + lp.y * cos(a));
+    float log_ = smoothstep(0.03, 0.024, abs(rp.y)) * smoothstep(0.3, 0.27, abs(rp.x));
+    float ember = smoothstep(0.6, 0.9, noise(rp * vec2(40.0, 12.0) + t * 0.5)) * (0.6 + 0.4 * sin(t * 3.0 + rp.x * 20.0));
+    vec3 wood = vec3(0.05, 0.025, 0.015) + vec3(1.0, 0.3, 0.03) * ember * smoothstep(0.01, -0.03, rp.y) * 1.3;
+    col = mix(col, wood, log_ * (1.0 - smoothstep(0.35, 0.7, fire)));
   }
-  // угли и отблеск
-  col += uC1 * 0.15 * exp(-length(vec2(p.x, uv.y + 0.1)) * 3.0);
+  // искры: летят вверх и петляют, на ударах — ярче
+  for (float i = 0.0; i < 28.0; i++) {
+    float s = hash(vec2(i, 3.0));
+    float life = fract(t * (0.12 + s * 0.18) + s);
+    vec2 sp = vec2((s - 0.5) * 0.35 + sin(life * 7.0 + i) * 0.06 * life, -0.3 + life * 0.95);
+    float d = length(p - sp);
+    col += vec3(1.0, 0.55, 0.15) * smoothstep(0.005 + uPulse * 0.003, 0.0, d) * (1.0 - life) * 2.5;
+  }
+  // звёздное небо над костром
+  vec2 g = uv * vec2(uRes.x / uRes.y, 1.0) * 70.0;
+  float st = smoothstep(0.12, 0.0, length(fract(g) - 0.5 - (hash2(floor(g)) - 0.5) * 0.6)) * step(0.985, hash(floor(g)));
+  col += vec3(st) * 0.6 * smoothstep(0.35, 0.9, uv.y) * (1.0 - fire) * (0.6 + 0.4 * sin(t * 2.0 + hash(floor(g)) * 30.0));
+  // где текст песни — огонь чуть приглушён, чтобы строки читались
+  col *= 1.0 - 0.4 * exp(-pow((uv.y - 0.33) * 5.0, 2.0));
   return col;
 }`,
   },
@@ -276,20 +471,36 @@ vec3 scene(vec2 uv, vec2 p) {
     id: "lava",
     name: "Лава-лампа",
     body: `
-vec3 scene(vec2 uv, vec2 p) {
-  float field = 0.0; vec3 tint = vec3(0.0);
-  for (float i = 0.0; i < 7.0; i++) {
-    vec2 c = vec2(sin(uTime * (0.11 + i * 0.03) + i * 1.7) * 0.55, sin(uTime * (0.07 + i * 0.02) + i * 2.3) * 0.38);
-    float r = 0.11 + 0.05 * sin(i * 3.1) + uBass * 0.03;
-    float v = r * r / max(dot(p - c, p - c), 1e-4);
-    field += v; tint += palette(i / 7.0) * v;
+// Лава-лампа: объёмные блестящие капли с бликом и подсветкой снизу.
+float field(vec2 p) {
+  float f = 0.0;
+  for (float i = 0.0; i < 8.0; i++) {
+    float s = hash(vec2(i, 2.0));
+    // капля медленно поднимается и опускается, чуть качаясь
+    vec2 c = vec2((s - 0.5) * 0.9 + sin(uTime * 0.13 + i * 2.1) * 0.12, sin(uTime * (0.06 + s * 0.05) + i * 1.9) * 0.42);
+    float r = 0.09 + 0.07 * s + uBass * 0.015;
+    f += exp(-dot(p - c, p - c) / (r * r)) * 1.25;   // мягкое ядро: без «дырок» в центре капель
   }
-  tint /= max(field, 1e-3);
-  float blob = smoothstep(0.95, 1.05, field);
-  float glow = smoothstep(0.2, 1.0, field) * 0.35;
-  vec3 col = uBg * 0.12 + tint * glow;
-  col = mix(col, tint * (1.0 + 0.4 * uPulse), blob);
-  col += vec3(1.0) * smoothstep(1.6, 3.0, field) * 0.12;
+  return f;
+}
+vec3 scene(vec2 uv, vec2 p) {
+  // стекло лампы: тёплый градиент снизу вверх
+  vec3 col = mix(uC3 * 0.18, uBg * 0.08, uv.y) + uC1 * 0.12 * exp(-length(p - vec2(0.0, -0.6)) * 2.5);
+  float f = field(p);
+  float e = 0.002;
+  vec2 grad = vec2(field(p + vec2(e, 0.0)) - field(p - vec2(e, 0.0)), field(p + vec2(0.0, e)) - field(p - vec2(0.0, e))) / (2.0 * e);
+  float m = smoothstep(0.42, 0.5, f);
+  vec3 n = normalize(vec3(-grad * 0.035, 1.0));
+  vec3 l = normalize(vec3(-0.4, 0.6, 0.8));
+  float diff = max(dot(n, l), 0.0);
+  float spec = pow(max(dot(reflect(-l, n), vec3(0.0, 0.0, 1.0)), 0.0), 40.0);
+  float rim = pow(1.0 - n.z, 2.0);
+  // цвет капли меняется по высоте: внизу — горячий, вверху — второй цвет
+  vec3 wax = mix(uC1, uC2, smoothstep(-0.4, 0.4, p.y));
+  vec3 blob = wax * (0.35 + 0.75 * diff) + vec3(1.0) * spec * 0.7 + mix(uC3, vec3(1.0), 0.3) * rim * 0.5;
+  blob *= 1.0 + uPulse * 0.25;
+  col = mix(col, blob, m);
+  col += wax * smoothstep(0.1, 0.46, f) * (1.0 - m) * 0.22;   // свечение вокруг капель
   return col;
 }`,
   },
@@ -297,23 +508,23 @@ vec3 scene(vec2 uv, vec2 p) {
     id: "dots",
     name: "Обложка из точек",
     body: `
+// Полутон: весь экран — сетка точек, размер каждой — яркость размытой обложки. По точкам бегут волны в такт.
 vec3 scene(vec2 uv, vec2 p) {
-  float cells = 46.0;
+  float cells = 64.0;
   vec2 g = p * cells; vec2 id = floor(g) + 0.5; vec2 st = fract(g) - 0.5;
   vec2 cp = id / cells;
   float dist = length(cp);
-  // волна от центра на каждом ударе
-  float wave = sin(dist * 18.0 - uTime * 4.0) * 0.5 + 0.5;
-  vec2 cuv = cp * 0.92 + 0.5;
-  vec3 c = cover(cuv, 1.5);
-  float lum = dot(c, vec3(0.3, 0.55, 0.15));
-  float r = 0.12 + 0.36 * lum * (0.85 + 0.3 * wave * (0.3 + uEnergy)) + uPulse * 0.06;
-  float inside = step(abs(cp.x), 0.55) * step(abs(cp.y), 0.55);
-  float dot_ = smoothstep(r, r - 0.08, length(st));
-  vec3 col = uBg * 0.08 + c * 1.15 * dot_ * inside;
-  // точки за пределами обложки — рассыпаются и гаснут
-  float outer = (1.0 - inside) * smoothstep(1.0, 0.55, max(abs(cp.x), abs(cp.y)));
-  col += palette(dist + uTime * 0.03) * dot_ * outer * 0.25 * wave;
+  float wave = sin(dist * 14.0 - uTime * 3.0) * 0.5 + 0.5;
+  // обложка медленно «плывёт» и сильно размыта — чтобы буквы с неё не мешали тексту песни
+  vec2 cuv = coverFit(cp / vec2(uRes.x / uRes.y, 1.0) + 0.5) + vec2(sin(uTime * 0.05), cos(uTime * 0.04)) * 0.05;
+  vec3 c = cover(cuv, 5.0);
+  c = mix(c, palette(dist * 0.6 + uTime * 0.02), 0.35);
+  float lum = clamp(dot(c, vec3(0.3, 0.55, 0.15)) * 1.4, 0.0, 1.0);
+  float r = 0.08 + 0.32 * lum * (0.8 + 0.35 * wave * (0.4 + uEnergy)) + uPulse * 0.05;
+  float d = smoothstep(r, r - 0.07, length(st));
+  vec3 col = uBg * 0.06 + c * 1.2 * d;
+  // посередине, где текст песни, точки тише
+  col *= 1.0 - 0.45 * exp(-pow((uv.y - 0.42) * 4.0, 2.0));
   return col;
 }`,
   },
@@ -322,29 +533,55 @@ vec3 scene(vec2 uv, vec2 p) {
     name: "Светящиеся медузы",
     scale: 0.8,
     body: `
+// Глубина океана: лучи света сверху, планктон и большие полупрозрачные медузы, которые «дышат» в такт.
 vec3 jelly(vec2 p, vec2 c, float s, float seed, vec3 tint) {
   vec2 q = (p - c) / s;
-  float pulse = 0.5 + 0.5 * sin(uTime * 1.6 + seed * 6.0);
-  q.x *= 1.0 + 0.15 * pulse;
-  float bell = smoothstep(0.03, 0.0, abs(length(q * vec2(1.0, 1.4)) - 0.5)) * step(0.0, q.y);
-  float fill = smoothstep(0.5, 0.0, length(q * vec2(1.0, 1.4))) * step(0.0, q.y) * 0.35;
+  float pulse = 0.5 + 0.5 * sin(uTime * 1.3 + seed * 6.0);
+  q.x *= 1.0 + 0.18 * pulse;                       // купол сжимается и раскрывается
+  q.y *= 1.0 - 0.1 * pulse;
+  vec2 bq = q * vec2(1.0, 1.35);
+  float bd = length(bq);
+  // нижний край купола — волнистый «подол»
+  float hem = -0.06 - 0.05 * (q.x * q.x) * 4.0 + 0.015 * sin(q.x * 40.0 + uTime * 2.0);
+  float under = smoothstep(hem - 0.02, hem + 0.02, q.y);
+  float dome = under * smoothstep(0.5, 0.46, bd);
+  float fres = dome * smoothstep(0.15, 0.5, bd);           // край купола светится сильнее (он «толще»)
+  float rim = smoothstep(0.035, 0.0, abs(bd - 0.48)) * under;
+  float inner = smoothstep(0.22, 0.0, length((q - vec2(0.0, 0.1)) * vec2(1.0, 1.6))) * under;
+  float ribs = smoothstep(0.75, 1.0, sin(atan(q.x, q.y + 0.2) * 10.0)) * dome * 0.25;
+  // бахрома и длинные щупальца
   float tent = 0.0;
-  for (float i = -2.0; i <= 2.0; i++) {
-    float x = i * 0.16 + sin(q.y * 6.0 + uTime * 2.0 + i + seed) * 0.05 * (-q.y);
-    tent += smoothstep(0.02, 0.0, abs(q.x - x)) * step(q.y, 0.0) * smoothstep(-1.4, 0.0, q.y);
+  for (float i = -3.0; i <= 3.0; i++) {
+    float x0 = i * 0.11;
+    float sway = sin(q.y * 5.0 + uTime * 1.6 + i * 1.3 + seed) * 0.06 * (-q.y);
+    float len = 1.3 + 0.4 * hash(vec2(i, seed));
+    tent += smoothstep(0.018, 0.0, abs(q.x - x0 - sway)) * step(q.y, -0.05) * smoothstep(-len, -0.05, q.y) * (0.6 + 0.4 * sin(q.y * 30.0 + uTime * 3.0));
   }
-  return tint * (bell * 2.2 + fill * 1.6 + tent * 0.9) * (0.7 + 0.6 * pulse) + tint * 0.12 * smoothstep(1.2, 0.0, length(q));
+  float glow = exp(-bd * 2.2);
+  return tint * (dome * 0.18 + fres * 0.8 + rim * 0.9 + inner * 0.8 + ribs + tent * 0.6) * (0.75 + 0.5 * pulse) + tint * 0.18 * glow;
 }
 vec3 scene(vec2 uv, vec2 p) {
-  vec3 col = mix(vec3(0.0, 0.01, 0.03), uBg * 0.3, uv.y);
-  // пылинки в воде
-  vec2 g = (uv + vec2(0.0, -uTime * 0.01)) * vec2(uRes.x / uRes.y, 1.0) * 50.0;
-  col += vec3(smoothstep(0.08, 0.0, length(fract(g) - 0.5)) * step(0.93, hash(floor(g)))) * 0.25;
-  for (float i = 0.0; i < 7.0; i++) {
+  // вода: светлее сверху, глубокая синева внизу
+  vec3 col = mix(vec3(0.0, 0.01, 0.03), mix(uBg, uC2, 0.3) * 0.45 + vec3(0.0, 0.03, 0.06), pow(uv.y, 1.6));
+  // лучи света сквозь поверхность
+  float rays = 0.0;
+  for (float i = 0.0; i < 3.0; i++) rays += smoothstep(0.55, 1.0, noise(vec2(p.x * (3.0 + i * 2.0) + p.y * 0.8 + uTime * 0.05 * (i + 1.0), i * 7.0)));
+  col += mix(uC3, vec3(0.6, 0.8, 1.0), 0.5) * rays * 0.06 * smoothstep(0.0, 1.0, uv.y);
+  // планктон
+  for (float k = 0.0; k < 2.0; k++) {
+    vec2 g = (uv + vec2(sin(uTime * 0.05 + k) * 0.02, -uTime * (0.006 + k * 0.004))) * vec2(uRes.x / uRes.y, 1.0) * (40.0 + k * 30.0);
+    vec2 id = floor(g);
+    float d = length(fract(g) - 0.5 - (hash2(id + k) - 0.5) * 0.6);
+    col += mix(uC1, vec3(0.8, 0.95, 1.0), 0.5) * smoothstep(0.09, 0.0, d) * step(0.9, hash(id + k * 5.0)) * (0.25 + 0.5 * uHigh);
+  }
+  for (float i = 0.0; i < 6.0; i++) {
     float s = hash(vec2(i, 9.0));
-    float y = fract(uTime * (0.012 + s * 0.01) + s) * 1.8 - 0.9;
-    vec2 c = vec2((s - 0.5) * 1.6 + sin(uTime * 0.2 + i) * 0.08, y);
-    col += jelly(p, c, 0.16 + s * 0.14 + uBass * 0.03, i, palette(i / 7.0 + 0.1));
+    // медузы всплывают по очереди — на экране всегда несколько
+    float y = fract(uTime * 0.012 + fract(i * 0.618 + 0.35)) * 1.9 - 0.85;
+    float lane = (i + 0.5) / 6.0 - 0.5;
+    vec2 c = vec2(lane * 1.75 + (s - 0.5) * 0.12 + sin(uTime * 0.15 + i) * 0.05, y);
+    float size = 0.17 + s * 0.15 + uBass * 0.02;
+    col += jelly(p, c, size, i, palette(i / 6.0 + 0.1) * 1.1);
   }
   return col;
 }`,

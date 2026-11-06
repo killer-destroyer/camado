@@ -268,6 +268,10 @@ export interface CamadoApi {
     /** Выбрать свой звук для напоминаний: копируется к Камадо, возвращает название и адрес. */
     pickSound(): Promise<{ name: string; url: string } | null>;
   };
+  screensaver: {
+    /** Выбрать свою картинку для заставки: копируется к Камадо, возвращает название и адрес. */
+    pickImage(): Promise<{ name: string; url: string } | null>;
+  };
   music: {
     /** Скачать по ссылке в папку «Музыка/Камадо». Для страницы с несколькими треками вернёт список. */
     importUrl(url: string): Promise<ImportResult>;

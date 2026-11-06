@@ -16,6 +16,10 @@ const MIME: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".png": "image/png",
   ".webp": "image/webp",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".bmp": "image/bmp",
+  ".avif": "image/avif",
 };
 
 /** Разбор заголовка Range: «bytes=100-» / «bytes=100-199» / «bytes=-500». */
