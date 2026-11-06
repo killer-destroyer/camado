@@ -329,6 +329,8 @@ export interface CamadoApi {
   on(event: "go", cb: (payload: string) => void): () => void;
   /** ИИ поменял настройки по просьбе. */
   on(event: "settings-changed", cb: (payload: AppSettings) => void): () => void;
+  /** Видеокарта упала — выйти из заставки. */
+  on(event: "gpu-crashed", cb: (payload?: unknown) => void): () => void;
   /** ИИ просит сделать что-то в окне: экран, музыка, фокус, заставка. */
   on(event: "ai-action", cb: (payload: unknown) => void): () => void;
 }

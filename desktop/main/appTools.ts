@@ -187,7 +187,7 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         if (i.screensaver_enabled !== undefined) (ss.enabled = i.screensaver_enabled), (ssChanged = true), done.push(`заставка ${i.screensaver_enabled ? "вкл" : "выкл"}`);
         if (i.screensaver_delay_min) (ss.delay = i.screensaver_delay_min), (ssChanged = true), done.push(`заставка через ${i.screensaver_delay_min} мин`);
         if (i.screensaver_scene) (ss.scene = i.screensaver_scene), (ssChanged = true), done.push(`сцена ${i.screensaver_scene}`);
-        if (i.screensaver_fullscreen !== undefined) (ss.fullscreen = i.screensaver_fullscreen), (ssChanged = true), done.push(`заставка ${i.screensaver_fullscreen ? "на весь экран" : "в окне"}`);
+        if (i.screensaver_fullscreen !== undefined) (ss.fullscreen = i.screensaver_fullscreen), (ss.fsChosen = true), (ssChanged = true), done.push(`заставка ${i.screensaver_fullscreen ? "на весь экран" : "в окне"}`);
         if (ssChanged) patch.screensaver = ss;
         if (i.ambience_on !== undefined) (patch.ambience = { ...s.ambience, on: i.ambience_on }), done.push(`фон ${i.ambience_on ? "вкл" : "выкл"}`);
         if (!done.length) return "Нечего менять — скажи, что именно поменять.";

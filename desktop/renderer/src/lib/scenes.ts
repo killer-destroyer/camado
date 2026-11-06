@@ -8,6 +8,8 @@ export interface Scene {
   body: string;
   /** Рисовать в уменьшенном разрешении (тяжёлые сцены). */
   scale?: number;
+  /** Тяжёлая для видеокарты: если она однажды упала, такие сцены больше не показываем. */
+  heavy?: boolean;
 }
 
 export const SHADER_HEAD = `#version 300 es
@@ -92,7 +94,8 @@ vec3 scene(vec2 uv, vec2 p) {
   {
     id: "blackhole",
     name: "Чёрная дыра",
-    scale: 0.55,
+    scale: 0.42,
+    heavy: true,
     body: `
 // Настоящая трассировка лучей: свет летит от камеры и гнётся притяжением дыры (как в «Интерстелларе»).
 // Единицы — радиус горизонта = 1. Диск лежит в плоскости y = 0, светится сам и крутится.
@@ -152,11 +155,11 @@ vec3 scene(vec2 uv, vec2 p) {
   vec3 pos = ro + dir * hash(gl_FragCoord.xy) * 1.0;
   vec3 h = cross(pos, dir); float h2 = dot(h, h);
   vec3 col = vec3(0.0); float trans = 1.0; bool fell = false;
-  for (int i = 0; i < 260; i++) {
+  for (int i = 0; i < 170; i++) {
     float r2 = dot(pos, pos);
     if (r2 < 1.0) { fell = true; break; }
     float r = sqrt(r2);
-    float dt = clamp(0.09 * r, 0.03, 1.2);
+    float dt = clamp(0.11 * r, 0.04, 1.6);
     // шаг «через середину» — точнее, без колец на фоне
     vec3 mid = pos + dir * dt * 0.5;
     float m2 = dot(mid, mid);

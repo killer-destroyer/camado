@@ -21,7 +21,7 @@ import { randomInt } from "node:crypto";
 import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { API_KEY_KV } from "../../src/bot.js";
+import { API_KEY_KV, BOT_COMMANDS } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
 import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
 import { buildAppTools } from "./appTools.js";
@@ -156,6 +156,7 @@ function startBot(): void {
   bot
     .start({
       onStart: (me) => {
+        void bot?.api.setMyCommands(BOT_COMMANDS).catch(() => undefined);
         botStatus.running = true;
         botStatus.username = me.username;
         botStatus.error = undefined;
@@ -813,6 +814,17 @@ function createWindow(): void {
     if (!quitting && settings.closeToTray && tray) {
       e.preventDefault();
       win?.hide();
+      // Вместе с окном прячем и «текст поверх окон» — иначе он висит сам по себе и непонятно, как его закрыть.
+      if (overlay && !overlay.isDestroyed()) overlay.close();
+      if (!settings.bgHintShown) {
+        saveSettings({ bgHintShown: true });
+        notify(
+          "Камадо работает в фоне",
+          process.platform === "darwin"
+            ? "Бот и напоминания работают. Выключить совсем — значок Камадо в строке меню → «Выйти» (или ⌘Q)."
+            : "Бот и напоминания работают. Выключить совсем — значок Камадо возле часов → «Выйти».",
+        );
+      }
     }
   });
   win.on("closed", () => {
@@ -985,6 +997,16 @@ core.camado.setAppTools(
 // ---------- Запуск ----------
 
 app.on("second-instance", () => showWindow());
+
+// Видеокарта не справилась (тяжёлая сцена заставки на большом экране): сообщаем окну — оно выключит заставку
+// и тяжёлые сцены, чтобы это не повторилось (иначе Chromium после нескольких падений закрывает программу).
+app.on("child-process-gone", (_e, details) => {
+  if (details.type !== "GPU") return;
+  console.error("Видеокарта упала:", details.reason);
+  saveSettings({ screensaver: { ...settings.screensaver, light: true } });
+  send("gpu-crashed");
+  send("settings-changed", settings);
+});
 
 app.on("before-quit", () => {
   quitting = true;

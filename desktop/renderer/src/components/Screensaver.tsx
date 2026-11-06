@@ -7,7 +7,7 @@ import { hexToRgb, paletteById } from "../lib/palettes";
 import { SCENES, SHADER_HEAD, SHADER_TAIL, sceneById } from "../lib/scenes";
 import { useStore } from "../lib/store";
 import { api } from "../lib/api";
-import { app } from "../state/app";
+import { app, toast } from "../state/app";
 import { currentTrack, nowMeta, player } from "../state/player";
 import { Lyrics } from "./Lyrics";
 
@@ -53,10 +53,11 @@ function rgb(hex: string): [number, number, number] {
 /** Выбор сцены: заданная или случайная (не та же, что была). */
 let lastScene = "";
 export function pickScene(setting: string): string {
-  if (setting !== "random") return setting;
+  if (setting !== "random") return app.get().settings.screensaver.light && sceneById(setting).heavy ? "rain" : setting;
   // «Своя картинка» попадает в случайные, только если картинка выбрана
   const hasImage = !!app.get().settings.screensaver.image;
-  const pool = SCENES.filter((s) => s.id !== lastScene && (s.id !== "picture" || hasImage));
+  const light = !!app.get().settings.screensaver.light;
+  const pool = SCENES.filter((s) => s.id !== lastScene && (s.id !== "picture" || hasImage) && !(light && s.heavy));
   lastScene = pool[Math.floor(Math.random() * pool.length)]!.id;
   return lastScene;
 }
@@ -259,6 +260,11 @@ export function stopScreensaver(): void {
  * Если ты работаешь в другой программе, заставка не вылезет поверх неё.
  */
 export function watchIdle(): () => void {
+  // видеокарта упала — сразу выходим из заставки (дальше тяжёлые сцены не показываем)
+  const offGpu = api.on("gpu-crashed", () => {
+    stopScreensaver();
+    toast("Видеокарта не потянула сцену заставки — выключил тяжёлые сцены, чтобы такого больше не было.", "warn");
+  });
   let moved = 0;
   const wake = (e: Event) => {
     if (!app.get().screensaver) return;
@@ -282,5 +288,6 @@ export function watchIdle(): () => void {
   return () => {
     for (const ev of events) window.removeEventListener(ev, wake, { capture: true });
     clearInterval(timer);
+    offGpu();
   };
 }

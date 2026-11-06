@@ -2,6 +2,7 @@
 import { loadConfig, type Config } from "./config.js";
 import { createCore, createCoreBot } from "./core.js";
 import { startReminderLoop } from "./reminders.js";
+import { BOT_COMMANDS } from "./bot.js";
 
 let config: Config;
 try {
@@ -41,5 +42,8 @@ process.once("SIGINT", shutdown);
 process.once("SIGTERM", shutdown);
 
 await bot.start({
-  onStart: (me) => console.log(`Камадо запущен как @${me.username}`),
+  onStart: (me) => {
+    console.log(`Камадо запущен как @${me.username}`);
+    void bot.api.setMyCommands(BOT_COMMANDS).catch(() => undefined);
+  },
 });

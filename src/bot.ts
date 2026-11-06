@@ -92,6 +92,20 @@ export interface BotDeps {
   pairing?: { code: () => string | undefined; done: (userId: number) => void };
 }
 
+/** Меню команд (кнопка «/» в Telegram) — ставит сам бот при запуске, без BotFather. */
+export const BOT_COMMANDS = [
+  { command: "dz", description: "что задано" },
+  { command: "links", description: "ссылки по предметам" },
+  { command: "add", description: "записать ДЗ" },
+  { command: "kr", description: "записать контрольную" },
+  { command: "exam", description: "записать экзамен" },
+  { command: "lab", description: "записать лабу" },
+  { command: "done", description: "отметить сделанным" },
+  { command: "subjects", description: "мои предметы" },
+  { command: "settings", description: "настройки" },
+  { command: "spend", description: "траты на ИИ" },
+];
+
 export function createBot({ config, store, camado, llm, ai, checkKey, token, owner, pairing }: BotDeps): Bot {
   const botToken = token ?? config.TELEGRAM_BOT_TOKEN;
   if (!botToken) throw new Error("Не задан токен бота от @BotFather");
@@ -287,6 +301,17 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       return;
     }
     await setKey(ctx, arg);
+  });
+
+  bot.command("links", (ctx) => {
+    const links = store.listLinks();
+    if (!links.length) return ctx.reply("Ссылок пока нет. Перешли мне сообщение препода со ссылками — разложу по предметам.");
+    const bySubject = new Map<string, string[]>();
+    for (const l of links) {
+      const k = l.subject || "Без предмета";
+      bySubject.set(k, [...(bySubject.get(k) ?? []), `• ${l.title} — ${l.url}`]);
+    }
+    return ctx.reply([...bySubject].map(([k, v]) => `${k}:\n${v.join("\n")}`).join("\n\n"), { link_preview_options: { is_disabled: true } });
   });
 
   bot.command("spend", (ctx) =>

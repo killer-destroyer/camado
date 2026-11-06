@@ -68,6 +68,10 @@ export interface AppSettings {
     lyrics: boolean;
     clock: boolean;
     fullscreen: boolean;
+    /** Владелец сам выбрал «на весь экран» (иначе заставка размер окна не трогает). */
+    fsChosen?: boolean;
+    /** Видеокарта однажды не справилась — тяжёлые сцены (чёрная дыра) не показываем. */
+    light?: boolean;
     /** Своя картинка для сцены «Своя картинка» (адрес camado-media://picture/…) и её имя файла. */
     image?: string;
     imageName?: string;
@@ -106,6 +110,8 @@ export interface AppSettings {
   /** Статус «Слушает в Camado» в Discord. */
   discord: { enabled: boolean; clientId: string };
   closeToTray: boolean;
+  /** Уже говорили, что при закрытии окна Камадо остаётся работать в фоне. */
+  bgHintShown?: boolean;
   /** Показывать таймер фокуса и ближайший дедлайн в меню-баре (Mac) / подсказке трея. */
   menubar: boolean;
   /** Открытые ачивки: id → когда. */
@@ -134,7 +140,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nightcoreRate: 1.15,
   volume: 0.8,
   eq: { preset: "flat", bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
-  screensaver: { enabled: true, delay: 2, scene: "random", lyrics: true, clock: true, fullscreen: true, imageFx: "dust" },
+  screensaver: { enabled: true, delay: 2, scene: "random", lyrics: true, clock: true, fullscreen: false, imageFx: "dust" },
   ambience: { on: false, volume: 0.7, levels: { rain: 0.6 }, withFocus: false },
   autoLevel: true,
   trackGain: {},
@@ -160,7 +166,8 @@ export function mergeSettings(saved: unknown): AppSettings {
     discord: { ...DEFAULT_SETTINGS.discord, ...(s.discord ?? {}) },
     alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
     eq: { ...DEFAULT_SETTINGS.eq, ...(s.eq ?? {}) },
-    screensaver: { ...DEFAULT_SETTINGS.screensaver, ...(s.screensaver ?? {}) },
+    // Раньше заставка по умолчанию разворачивала окно на весь экран — теперь только если владелец сам это включил.
+    screensaver: { ...DEFAULT_SETTINGS.screensaver, ...(s.screensaver ?? {}), ...(s.screensaver?.fsChosen ? {} : { fullscreen: false }) },
     ambience: { ...DEFAULT_SETTINGS.ambience, ...(s.ambience ?? {}), levels: { ...(s.ambience?.levels ?? DEFAULT_SETTINGS.ambience.levels) } },
     alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },

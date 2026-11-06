@@ -72,3 +72,33 @@ describe("пульт приложения для ИИ", () => {
     expect(seen[1]!.some((n) => n.startsWith("app_"))).toBe(false);
   });
 });
+
+describe("ИИ: ссылки и порядок в заданиях", () => {
+  it("сохраняет ссылки из сообщения, а выдуманные адреса не сохраняет", async () => {
+    const { buildTools } = await import("../src/camado/tools.js");
+    const store = memoryStore();
+    const text = "Общий чат https://t.me/+linal_chat_abc, вопросы https://docs.google.com/document/d/evm и сайт kgeorgiy.info";
+    const tools = buildTools(store, "Europe/Moscow", () => text);
+    const save = tools.find((t) => t.name === "save_links")!;
+    const r = await save.run({
+      links: [
+        { url: "https://t.me/+linal_chat_abc", title: "Общий чат", subject: "Линал" },
+        { url: "kgeorgiy.info", title: "Сайт препода" },
+        { url: "https://docs.google.com/spreadsheets/d/placeholder", title: "Таблица" },
+        { url: "https://docs.google.com/", title: "Гугл" },
+      ],
+    });
+    expect(store.listLinks().map((l) => l.url.replace(/\/$/, "")).sort()).toEqual(["https://kgeorgiy.info", "https://t.me/+linal_chat_abc"]);
+    expect(r).toMatch(/НЕ сохранено/);
+  });
+
+  it("убирает ошибочные задания по номерам", async () => {
+    const { buildTools } = await import("../src/camado/tools.js");
+    const store = memoryStore();
+    const a = store.addTask({ title: "Общий чат" });
+    const b = store.addTask({ title: "Решить №5" });
+    const tools = buildTools(store, "Europe/Moscow");
+    await tools.find((t) => t.name === "remove_tasks")!.run({ ids: [a.id] });
+    expect(store.listTasks().map((t) => t.id)).toEqual([b.id]);
+  });
+});

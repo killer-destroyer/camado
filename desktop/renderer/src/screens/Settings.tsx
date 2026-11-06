@@ -486,7 +486,7 @@ function ScreensaverSection({ s }: { s: AppSettings }) {
         <Toggle value={c.clock} onChange={(v) => set({ clock: v })} />
       </Row>
       <Row title="На весь экран">
-        <Toggle value={c.fullscreen} onChange={(v) => set({ fullscreen: v })} />
+        <Toggle value={c.fullscreen} onChange={(v) => set({ fullscreen: v, fsChosen: true })} />
       </Row>
       <button className="btn" onClick={() => startScreensaver()}>
         <Sparkles size={16} /> Показать сейчас
