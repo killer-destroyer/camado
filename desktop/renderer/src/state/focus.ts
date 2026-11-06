@@ -2,7 +2,7 @@
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { createStore } from "../lib/store";
-import { app, toast } from "./app";
+import { app, toast, updateSettings } from "./app";
 import { chimeOnce } from "./alarms";
 import { player, togglePlay } from "./player";
 
@@ -46,8 +46,15 @@ export function setMode(mode: FocusMode): void {
   focus.set({ mode, running: false, remaining: ms, total: ms });
 }
 
+/** Фоновые звуки «вместе с фокусом»: включаются на работу, выключаются на перерыв. */
+function ambienceForFocus(on: boolean): void {
+  const a = app.get().settings.ambience;
+  if (a.withFocus && a.on !== on && Object.values(a.levels).some((v) => v > 0)) updateSettings({ ambience: { ...a, on } });
+}
+
 export function start(): void {
   const s = focus.get();
+  if (s.mode === "work") ambienceForFocus(true);
   focus.set({
     running: true,
     endsAt: Date.now() + s.remaining,
@@ -63,6 +70,7 @@ export function pause(): void {
 }
 
 export function reset(): void {
+  ambienceForFocus(false);
   setMode(focus.get().mode);
   focus.set({ startedAt: undefined });
 }
@@ -78,6 +86,7 @@ async function complete(): Promise<void> {
       startedAt: s.startedAt ?? new Date().toISOString(),
     });
     const rounds = s.rounds + 1;
+    ambienceForFocus(false);
     const every = app.get().settings.focus.longEvery;
     const nextMode: FocusMode = every > 0 && rounds % every === 0 ? "long" : "short";
     void api.notify("Фокус завершён 🎉", `${Math.round(minutes)} минут${s.subject ? ` · ${s.subject}` : ""}. Время отдохнуть.`);

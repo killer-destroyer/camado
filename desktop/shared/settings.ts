@@ -54,6 +54,10 @@ export interface AppSettings {
   slowedRate: number;
   nightcoreRate: number;
   volume: number; // 0…1 — положение ползунка; громкость «по слуху» считает движок
+  /** Фоновые звуки: включены ли, общая громкость, уровень каждого (0 — выкл), включать ли вместе с фокусом. */
+  ambience: { on: boolean; volume: number; levels: Record<string, number>; withFocus: boolean };
+  /** Эквалайзер: пресет (или "custom") и 10 полос в дБ. */
+  eq: { preset: string; bands: number[] };
   /** Выравнивать громкость песен автоматически (тихие подтянуть, громкие приглушить). */
   autoLevel: boolean;
   /** Своя громкость песни, дБ (+ — громче). Поверх автовыравнивания. */
@@ -91,6 +95,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   slowedRate: 0.85,
   nightcoreRate: 1.15,
   volume: 0.8,
+  eq: { preset: "flat", bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  ambience: { on: false, volume: 0.7, levels: { rain: 0.6 }, withFocus: false },
   autoLevel: true,
   trackGain: {},
   trackLoudness: {},
@@ -112,6 +118,8 @@ export function mergeSettings(saved: unknown): AppSettings {
     focus: { ...DEFAULT_SETTINGS.focus, ...(s.focus ?? {}) },
     discord: { ...DEFAULT_SETTINGS.discord, ...(s.discord ?? {}) },
     alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
+    eq: { ...DEFAULT_SETTINGS.eq, ...(s.eq ?? {}) },
+    ambience: { ...DEFAULT_SETTINGS.ambience, ...(s.ambience ?? {}), levels: { ...(s.ambience?.levels ?? DEFAULT_SETTINGS.ambience.levels) } },
     alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },
     lyricsSync: { ...(s.lyricsSync ?? {}) },

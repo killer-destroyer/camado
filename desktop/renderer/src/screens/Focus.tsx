@@ -9,6 +9,7 @@ import { data } from "../state/data";
 import { focus, focusToday, pause, remainingMs, reset, setMode, start, type FocusMode } from "../state/focus";
 import { Segmented, Slider, Toggle } from "../components/ui";
 import { FOCUS_PRESETS, presetById } from "../../../shared/focusPresets";
+import { AmbienceMixer } from "../components/Ambience";
 
 const R = 150;
 const C = 2 * Math.PI * R;
@@ -190,6 +191,13 @@ export function Focus() {
               </div>
             </div>
           )}
+
+          <div className="card glass">
+            <div className="card-head">
+              <span>Фон для учёбы</span>
+            </div>
+            <AmbienceMixer />
+          </div>
 
           <label className="inline-toggle focus-music">
             <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />

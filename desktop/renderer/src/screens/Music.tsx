@@ -1,6 +1,6 @@
 // «Музыка»: своя библиотека (карусель + список), добавление из папки, перетаскиванием или по ссылке.
 import { useEffect, useMemo, useState } from "react";
-import { Check, Disc3, Download, Flame, Folder, FolderPlus, Globe, Heart, Link2, ListMusic, Music2, Plus, RefreshCw, Search, Shuffle, Trash2, X } from "lucide-react";
+import { Check, CloudRain, Disc3, Download, Flame, Folder, FolderPlus, Globe, Heart, Link2, ListMusic, Music2, Plus, RefreshCw, Search, Shuffle, Trash2, X } from "lucide-react";
 import type { FreeAlbum, Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { fmtTime } from "../lib/format";
@@ -8,6 +8,7 @@ import { useStore } from "../lib/store";
 import { app, toast } from "../state/app";
 import { loadPlaylists, player, playQueue, shuffleAll, toggleFavorite } from "../state/player";
 import { CoverFlow } from "../components/CoverFlow";
+import { AmbienceMixer } from "../components/Ambience";
 import { Empty } from "../components/ui";
 
 const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
@@ -179,6 +180,8 @@ export function Music() {
   const [top, setTop] = useState<string[]>([]);
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [freeOpen, setFreeOpen] = useState(false);
+  const [ambOpen, setAmbOpen] = useState(false);
+  const ambOn = useStore(app, (s) => s.settings.ambience.on && Object.values(s.settings.ambience.levels).some((v) => v > 0));
   const [dropTab, setDropTab] = useState<string | null>(null);
   const imp = useImport();
   const playingId = queue[index]?.id;
@@ -336,7 +339,10 @@ export function Music() {
               <Shuffle size={16} /> Перемешать всё
             </button>
           )}
-          <button className="icon-btn" title="Пересканировать папки" onClick={() => void api.library.rescan()}>
+          <button className={`btn ${ambOn ? "primary" : ""}`} title="Фоновые звуки: дождь, кафе, камин, шумы…" onClick={() => setAmbOpen(true)}>
+            <CloudRain size={16} /> Фон
+          </button>
+                    <button className="icon-btn" title="Пересканировать папки" onClick={() => void api.library.rescan()}>
             <RefreshCw size={17} className={library.scanning ? "spin" : ""} />
           </button>
           <button className="btn" onClick={() => void api.library.pickFolder()}>
@@ -473,6 +479,20 @@ export function Music() {
         </>
       )}
 
+      {ambOpen && (
+        <div className="cmdk-backdrop" onMouseDown={() => setAmbOpen(false)}>
+          <div className="cmdk glass amb-modal" onMouseDown={(e) => e.stopPropagation()}>
+            <div className="chooser-head">
+              <b>Фон для учёбы</b>
+              <span className="muted small">смешивай звуки — с музыкой и без</span>
+              <button className="icon-btn" onClick={() => setAmbOpen(false)}>
+                <X size={17} />
+              </button>
+            </div>
+            <AmbienceMixer />
+          </div>
+        </div>
+      )}
       {freeOpen && (
         <FreeSearch
           onClose={() => setFreeOpen(false)}

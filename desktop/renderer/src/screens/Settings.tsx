@@ -10,6 +10,7 @@ import { useStore } from "../lib/store";
 import { app, toast, updateSettings } from "../state/app";
 import { player, setAutoLevel } from "../state/player";
 import { Row, Segmented, Slider, Toggle } from "../components/ui";
+import { EqPanel } from "../components/Equalizer";
 import { ALARM_SOUNDS, alarmPlaying, startAlarm, stopAlarm } from "../lib/alarmSounds";
 import { ring } from "../state/alarms";
 
@@ -491,6 +492,13 @@ export function Settings() {
             ]}
           />
         </Row>
+        <div className="set-row eq-row">
+          <div className="set-text">
+            <div className="set-title">Эквалайзер</div>
+            <div className="set-hint">Пресеты или свои ползунки. Двойной щелчок по ползунку — обратно в ноль. Есть и в плеере.</div>
+          </div>
+          <EqPanel />
+        </div>
         <Row
           title="Выравнивать громкость песен"
           hint="Скачанные треки записаны по-разному. Камадо измеряет каждую песню: тихие подтягивает, громкие приглушает. Подстроить одну песню — кнопка с ползунками в плеере."

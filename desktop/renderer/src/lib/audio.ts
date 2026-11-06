@@ -18,6 +18,20 @@ const MODES: Record<SoundMode, { rate: number; wet: number }> = {
  * прямой ползунок ведёт себя как горячий кран: чуть сдвинул — уже орёт.
  * Кубическая кривая делает шаги ползунка равными на слух.
  */
+/** Полосы эквалайзера, Гц. */
+export const EQ_BANDS = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+export const EQ_PRESETS: { id: string; name: string; bands: number[] }[] = [
+  { id: "flat", name: "Ровно", bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { id: "bass", name: "Бас", bands: [6, 5, 4, 2, 0, 0, 0, 0, 0, 0] },
+  { id: "vocal", name: "Вокал", bands: [-2, -2, -1, 0, 2, 3, 3, 2, 0, -1] },
+  { id: "calm", name: "Спокойно", bands: [1, 1, 0, 0, 0, -1, -2, -3, -4, -5] },
+  { id: "headphones", name: "Наушники", bands: [3, 2, 1, 0, -1, 0, 1, 2, 3, 2] },
+  { id: "night", name: "Ночью тихо", bands: [4, 3, 2, 0, 0, 0, 0, 1, 2, 3] },
+  { id: "bright", name: "Ярко", bands: [-1, -1, 0, 0, 0, 1, 2, 3, 4, 4] },
+  { id: "club", name: "Клуб", bands: [5, 4, 2, 0, -1, -1, 0, 2, 3, 3] },
+];
+
 export const dbToGain = (db: number) => 10 ** (Math.max(-24, Math.min(24, db)) / 20);
 
 export const volumeCurve = (v: number) => Math.max(0, Math.min(1, v)) ** 3;
@@ -46,6 +60,10 @@ export class AudioEngine {
   private ctx?: AudioContext;
   private analyser?: AnalyserNode;
   private deckGains: GainNode[] = [];
+  /** Эквалайзер: 10 фильтров подряд, перед ними — запас, чтобы подъём полос не перегружал звук. */
+  private eq: BiquadFilterNode[] = [];
+  private eqPre?: GainNode;
+  private eqBands: number[] = EQ_PRESETS[0]!.bands;
   /** Громкость каждой песни отдельно (дБ → множитель), своя у каждой деки — переходы не прыгают. */
   private trims: GainNode[] = [];
   private master?: GainNode;
@@ -117,6 +135,21 @@ export class AudioEngine {
     return this.master!;
   }
 
+  /** Эквалайзер: усиление полос в дБ (−12…+12). */
+  setEq(bands: number[]): void {
+    this.eqBands = EQ_BANDS.map((_, i) => Math.max(-12, Math.min(12, bands[i] ?? 0)));
+    this.applyEq();
+  }
+
+  private applyEq(): void {
+    if (!this.ctx || !this.eqPre) return;
+    const now = this.ctx.currentTime;
+    this.eq.forEach((b, i) => b.gain.setTargetAtTime(this.eqBands[i]!, now, 0.05));
+    // Подняли полосы — чуть убавляем общий уровень, чтобы не хрипело.
+    const peak = Math.max(0, ...this.eqBands);
+    this.eqPre.gain.setTargetAtTime(dbToGain(-peak * 0.6), now, 0.05);
+  }
+
   /** Поменять громкость текущей песни (дБ), плавно. */
   setTrim(db: number): void {
     if (!this.ctx || !this.trims.length) return;
@@ -143,8 +176,21 @@ export class AudioEngine {
       convolver.buffer = impulse(ctx);
       this.wetGain = ctx.createGain();
       this.wetGain.gain.value = MODES[this.mode].wet;
-      fxIn.connect(this.analyser);
-      fxIn.connect(convolver).connect(this.wetGain).connect(this.analyser);
+      // сухой звук + эхо → эквалайзер → анализатор
+      this.eqPre = ctx.createGain();
+      this.eq = EQ_BANDS.map((f, i) => {
+        const b = ctx.createBiquadFilter();
+        b.type = i === 0 ? "lowshelf" : i === EQ_BANDS.length - 1 ? "highshelf" : "peaking";
+        b.frequency.value = f;
+        b.Q.value = 1.1;
+        return b;
+      });
+      fxIn.connect(this.eqPre);
+      fxIn.connect(convolver).connect(this.wetGain).connect(this.eqPre);
+      let node: AudioNode = this.eqPre;
+      for (const b of this.eq) node = node.connect(b);
+      node.connect(this.analyser);
+      this.applyEq();
       this.master = ctx.createGain();
       this.master.gain.value = volumeCurve(this.volumeValue);
       this.analyser.connect(this.master).connect(ctx.destination);

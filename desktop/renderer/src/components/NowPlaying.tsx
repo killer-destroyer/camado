@@ -15,6 +15,7 @@ import {
   SkipBack,
   SkipForward,
   SlidersHorizontal,
+  SlidersVertical,
   Vibrate,
   Volume1,
   Volume2,
@@ -49,6 +50,7 @@ import {
 import { Lyrics } from "./Lyrics";
 import { Segmented, Slider, Toggle } from "./ui";
 import { autoTrim } from "../lib/loudness";
+import { EqPanel } from "./Equalizer";
 import { discGeometry, Vinyl } from "./Vinyl";
 import { Visualizer } from "./Visualizer";
 
@@ -254,6 +256,25 @@ export function VolumeControl() {
         <Icon size={18} />
       </button>
       <Slider value={volume} step={0.005} onChange={(v) => updateSettings({ volume: v })} label="Громкость" />
+    </div>
+  );
+}
+
+/** Эквалайзер в плеере. */
+function EqButton() {
+  const preset = useStore(app, (s) => s.settings.eq.preset);
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="sleep">
+      <button className={`icon-btn ${preset !== "flat" ? "active" : ""}`} title="Эквалайзер" onClick={() => setOpen(!open)}>
+        <SlidersVertical size={17} />
+      </button>
+      {open && (
+        <div className="sleep-menu eq-menu glass">
+          <div className="level-title">Эквалайзер</div>
+          <EqPanel />
+        </div>
+      )}
     </div>
   );
 }
@@ -475,6 +496,7 @@ export function NowPlaying() {
             </button>
           </div>
           <div className="np-side right">
+            <EqButton />
             {track && <TrackLevel trackId={track.id} />}
             <VolumeControl />
           </div>

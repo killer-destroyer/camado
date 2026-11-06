@@ -4,6 +4,7 @@ import { api } from "../lib/api";
 import { setFpsCap } from "../lib/frame";
 import { createStore } from "../lib/store";
 import { engine } from "../lib/audio";
+import { ambiencePlaying, setAmbience, setAmbienceVolume } from "../lib/ambience";
 
 export type ScreenId = "today" | "tasks" | "notes" | "links" | "music" | "focus" | "chat" | "settings";
 
@@ -67,6 +68,11 @@ function applySettings(s: AppSettings): void {
   engine.beat.sensitivity = s.shake.sensitivity;
   engine.volume = s.volume;
   engine.setRates(s.slowedRate, s.nightcoreRate);
+  engine.setEq(s.eq.bands);
+  if (s.ambience.on || ambiencePlaying()) {
+    setAmbienceVolume(s.ambience.volume);
+    setAmbience(s.ambience.on ? s.ambience.levels : {});
+  }
   engine.setMode(s.soundMode);
   document.documentElement.dataset.blur = s.blur ? "1" : "0";
   document.documentElement.style.setProperty("--lyrics-scale", String(s.lyricsSize));
