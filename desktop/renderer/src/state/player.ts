@@ -1,7 +1,7 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
-import { approximateTimes, nextSync } from "../../../shared/lrc";
+import { addAnchor, approximateTimes, lyricsSlope, mapLyricsTime } from "../../../shared/lrc";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
@@ -72,13 +72,12 @@ export function lyricsSyncOf(id: string | undefined): LyricsSync {
 
 /** То, что сейчас слышно (для текста): с поправкой на задержку звука и подгонку текста под этот трек. */
 export function lyricsTime(): number {
-  const sync = lyricsSyncOf(currentTrack()?.id);
-  return sync.s * engine.audibleTime + sync.o;
+  return mapLyricsTime(lyricsSyncOf(currentTrack()?.id), engine.audibleTime);
 }
 
 /** Сколько секунд текста проходит за секунду реального времени (для поверх-окна). */
 export function lyricsRate(): number {
-  return lyricsSyncOf(currentTrack()?.id).s * (engine.el.playbackRate || 1);
+  return lyricsSlope(lyricsSyncOf(currentTrack()?.id), engine.audibleTime) * (engine.el.playbackRate || 1);
 }
 
 function saveSync(id: string, sync: LyricsSync | undefined): void {
@@ -86,7 +85,7 @@ function saveSync(id: string, sync: LyricsSync | undefined): void {
   const copy = { ...st.lyricsSync };
   const offsets = { ...st.lyricsOffsets };
   delete offsets[id]; // старый формат больше не нужен
-  if (!sync || (Math.abs(sync.s - 1) < 0.0005 && Math.abs(sync.o) < 0.01 && sync.t1 === undefined)) delete copy[id];
+  if (!sync || (Math.abs(sync.s - 1) < 0.0005 && Math.abs(sync.o) < 0.01 && sync.t1 === undefined && !sync.anchors?.length)) delete copy[id];
   else copy[id] = sync;
   updateSettings({ lyricsSync: copy, lyricsOffsets: offsets });
 }
@@ -96,6 +95,7 @@ export function setLyricsOffset(trackId: string, seconds: number): void {
   const cur = lyricsSyncOf(trackId);
   const o = Math.round(Math.max(-30, Math.min(30, seconds)) * 20) / 20;
   saveSync(trackId, { ...cur, o, t1: undefined, l1: undefined });
+  // при точках «−/+» двигают весь текст поверх ломаной — o работает как общий сдвиг
 }
 
 /** Сбросить всю подгонку текста трека. */
@@ -113,13 +113,21 @@ export function catchLyricsLine(lineTime: number): void {
   player.set({ syncLyrics: false });
   if (!id) return;
   const cur = lyricsSyncOf(id);
-  const next = nextSync(cur, engine.audibleTime, lineTime);
-  saveSync(id, next);
-  if (next.t1 === cur.t1 && cur.t1 !== undefined) {
-    toast(Math.abs(next.s - 1) < 0.003 ? "Текст подогнан — скорость и так совпадала" : `Подогнал и скорость текста (×${next.s.toFixed(3)}) — теперь не разъедется`, "ok");
+  // Старая подгонка (сдвиг/скорость) → считаем, что сейчас текст верен по ней, и начинаем точки с чистого листа.
+  const base = cur.anchors?.length ? cur : { s: 1, o: 0 };
+  const next = addAnchor(base, engine.audibleTime, lineTime);
+  if (!next) {
+    toast("Похоже, это не та строка — текст бы слишком растянулся. Попробуй ещё раз.", "warn");
     return;
   }
-  toast("Поймал! Если ближе к концу текст снова разъедется — поймай ещё одну строку, подгоню и скорость.", "ok");
+  saveSync(id, next);
+  const n = next.anchors!.length;
+  toast(
+    n === 1
+      ? "Поймал! Если дальше текст снова разъедется — нажми ⌖ ещё раз там, где разъехался. Ловить можно сколько угодно раз."
+      : `Подогнал по ${n} точкам — между ними текст растягивается сам.`,
+    "ok",
+  );
 }
 
 // ---------- Громкость каждой песни ----------

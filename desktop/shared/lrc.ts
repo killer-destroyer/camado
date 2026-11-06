@@ -135,11 +135,53 @@ export function approximateTimes(lines: LyricsLine[], duration: number): LyricsL
 
 /** Минимум секунд песни между двумя «пойманными» строками, чтобы по ним считать скорость. */
 export const SYNC_SPAN = 20;
+const MIN_SLOPE = 0.7;
+const MAX_SLOPE = 1.4;
 
 /**
- * Новая подгонка текста после «поймать»: строка с временем lineT звучит в момент песни audioT.
- * Есть первая точка и прошло ≥ SYNC_SPAN — считаем по двум точкам и сдвиг, и скорость (время текста = s·T + o).
+ * Время текста для момента песни T.
+ * Без точек — s·T + o. С точками — по ломаной через все «пойманные» строки: между соседними точками
+ * свой темп. Так лечится и чуть ускоренная копия, и вырезанный/вставленный кусок посередине.
  */
+export function mapLyricsTime(sync: LyricsSync, T: number): number {
+  const a = sync.anchors;
+  if (!a?.length) return sync.s * T + sync.o;
+  if (a.length === 1) return T - a[0]!.t + a[0]!.l + sync.o;
+  let i = 0;
+  while (i < a.length - 2 && T > a[i + 1]!.t) i++;
+  const p = a[i]!;
+  const q = a[i + 1]!;
+  const k = (q.l - p.l) / (q.t - p.t);
+  return p.l + (T - p.t) * k + sync.o;
+}
+
+/** Темп текста в момент T (сколько секунд текста за секунду песни). */
+export function lyricsSlope(sync: LyricsSync, T: number): number {
+  const a = sync.anchors;
+  if (!a?.length) return sync.s;
+  if (a.length === 1) return 1;
+  let i = 0;
+  while (i < a.length - 2 && T > a[i + 1]!.t) i++;
+  return (a[i + 1]!.l - a[i]!.l) / (a[i + 1]!.t - a[i]!.t);
+}
+
+/**
+ * «Поймать» строку: в момент песни audioT поют строку с временем lineT.
+ * Добавляет точку (рядом с уже пойманной — заменяет её). Нелепую точку (темп между соседями вне 0.7–1.4)
+ * не принимает — значит, нажали не ту строку. Возвращает null, если точка отклонена.
+ */
+export function addAnchor(cur: LyricsSync, audioT: number, lineT: number): LyricsSync | null {
+  const old = (cur.anchors ?? []).filter((a) => Math.abs(a.t - audioT) > 5);
+  // старая подгонка без точек (кнопки ±, прошлая версия) → превращаем текущую поправку в точку «здесь и сейчас»
+  const list = [...old, { t: audioT, l: lineT }].sort((a, b) => a.t - b.t);
+  for (let i = 1; i < list.length; i++) {
+    const k = (list[i]!.l - list[i - 1]!.l) / (list[i]!.t - list[i - 1]!.t);
+    if (list[i]!.t - list[i - 1]!.t >= 3 && (k < MIN_SLOPE || k > MAX_SLOPE)) return null;
+  }
+  return { s: 1, o: 0, anchors: list };
+}
+
+/** Старый расчёт по двум точкам (оставлен для совместимости и тестов). */
 export function nextSync(cur: LyricsSync, audioT: number, lineT: number): LyricsSync {
   if (cur.t1 !== undefined && cur.l1 !== undefined && Math.abs(audioT - cur.t1) >= SYNC_SPAN) {
     const s = Math.max(0.75, Math.min(1.33, (lineT - cur.l1) / (audioT - cur.t1)));

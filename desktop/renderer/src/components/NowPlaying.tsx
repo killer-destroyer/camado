@@ -121,8 +121,9 @@ function LyricsShift({ trackId }: { trackId: string }) {
   const lyrics = useStore(player, (s) => s.lyrics);
   const sync = lyricsSyncOf(trackId);
   const v = sync.o;
+  const pts = sync.anchors?.length ?? 0;
   const stretched = Math.abs(sync.s - 1) >= 0.0005;
-  const adjusted = stretched || Math.abs(v) >= 0.01;
+  const adjusted = pts > 0 || stretched || Math.abs(v) >= 0.01;
   // Подсказать «поймай строку», если текст, скорее всего, разъедется: он от версии другой длины или расставлен примерно.
   const dur = duration();
   const suspicious = !adjusted && !!lyrics && (lyrics.approx || (!lyrics.scaled && !!lyrics.versionDuration && dur > 0 && Math.abs(lyrics.versionDuration - dur) > 1.5));
@@ -130,12 +131,12 @@ function LyricsShift({ trackId }: { trackId: string }) {
     ? "У этой песни в базе текст без отметок времени — строки расставлены примерно."
     : "Текст в базе сделан под версию песни другой длины — к концу может разъехаться.";
   const label = syncing
-    ? sync.t1 !== undefined
-      ? "ещё строку, ближе к концу"
-      : "нажми строку, которую поют"
+    ? "нажми строку, которую поют"
     : !adjusted
       ? "текст"
-      : `${v > 0 ? "+" : ""}${v.toFixed(1)} с${stretched ? ` ×${sync.s.toFixed(3)}` : ""}`;
+      : pts > 0
+        ? `подогнан: ${pts} ${pts === 1 ? "точка" : pts < 5 ? "точки" : "точек"}${Math.abs(v) >= 0.05 ? ` ${v > 0 ? "+" : ""}${v.toFixed(1)} с` : ""}`
+        : `${v > 0 ? "+" : ""}${v.toFixed(1)} с${stretched ? ` ×${sync.s.toFixed(3)}` : ""}`;
   return (
     <div className={`lyr-shift ${syncing ? "syncing" : ""}`} title="Если текст спешит или опаздывает — подвинь его или «поймай» строку">
       <button onClick={() => setLyricsOffset(trackId, v - 0.25)}>−</button>
@@ -145,7 +146,7 @@ function LyricsShift({ trackId }: { trackId: string }) {
       <button onClick={() => setLyricsOffset(trackId, v + 0.25)}>+</button>
       <button
         className={`catch ${suspicious ? "hint" : ""}`}
-        title={`${suspicious ? why + " " : ""}Поймать: нажми, потом нажми строку, которую поют прямо сейчас. Второй раз ближе к концу — подгоню и скорость.`}
+        title={`${suspicious ? why + " " : ""}Поймать: нажми ⌖, потом строку, которую поют прямо сейчас. Разъехалось снова — поймай ещё раз в этом месте, точек можно сколько угодно.`}
         onClick={() => player.set({ syncLyrics: !syncing })}
       >
         <Crosshair size={14} />

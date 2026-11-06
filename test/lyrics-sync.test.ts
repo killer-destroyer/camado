@@ -77,3 +77,30 @@ describe("текст без отметок времени", () => {
     expect(lines[2]!.time).toBeLessThan(180);
   });
 });
+
+describe("подгонка по многим точкам", () => {
+  it("вырезанный кусок посередине: две части с разным сдвигом", async () => {
+    const { addAnchor, mapLyricsTime } = await import("../desktop/shared/lrc.js");
+    // В копии вырезано 6 секунд на 90-й секунде песни: до — сдвиг 0, после — текст на 6 с «позже».
+    const truth = (T: number) => (T < 90 ? T : T + 6);
+    let s = addAnchor({ s: 1, o: 0 }, 20, truth(20))!;
+    s = addAnchor(s, 80, truth(80))!;
+    s = addAnchor(s, 100, truth(100))!;
+    s = addAnchor(s, 170, truth(170))!;
+    for (const T of [30, 60, 120, 160]) expect(mapLyricsTime(s, T)).toBeCloseTo(truth(T), 1);
+    expect(s.anchors).toHaveLength(4);
+  });
+
+  it("не та строка (слишком большой скачок) — точка не принимается", async () => {
+    const { addAnchor } = await import("../desktop/shared/lrc.js");
+    const s = addAnchor({ s: 1, o: 0 }, 20, 20)!;
+    expect(addAnchor(s, 40, 80)).toBeNull();
+  });
+
+  it("точка рядом с уже пойманной заменяет её", async () => {
+    const { addAnchor } = await import("../desktop/shared/lrc.js");
+    let s = addAnchor({ s: 1, o: 0 }, 20, 21)!;
+    s = addAnchor(s, 22, 22.5)!;
+    expect(s.anchors).toHaveLength(1);
+  });
+});

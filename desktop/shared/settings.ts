@@ -9,6 +9,8 @@ export interface LyricsSync {
   o: number;
   t1?: number;
   l1?: number;
+  /** «Пойманные» строки: в момент песни t звучала строка текста l. Между точками текст растягивается. */
+  anchors?: { t: number; l: number }[];
 }
 
 export interface AlarmItem {

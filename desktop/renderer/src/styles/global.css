@@ -4491,3 +4491,38 @@ html.quick-root #root {
   text-align: left;
   font: inherit;
 }
+
+/* Нет текста: название — сверху справа, на мягкой тёмной подложке, чтобы читалось поверх кольца и волн.
+   «Без текста» — нет и названия: только пластинка и визуализатор. */
+.np-right.no-lyrics {
+  justify-content: flex-start;
+  align-items: flex-end;
+  text-align: right;
+}
+.np-right.no-lyrics .np-meta {
+  position: relative;
+  padding: 18px 26px 22px;
+  max-width: min(720px, 100%);
+}
+.np-right.no-lyrics .np-meta::before {
+  content: "";
+  position: absolute;
+  inset: -30px -40px;
+  z-index: -1;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgb(var(--bg-rgb) / 0.72), rgb(var(--bg-rgb) / 0.35) 60%, transparent);
+  pointer-events: none;
+}
+.np-right.no-lyrics .np-title {
+  font-size: clamp(34px, 4vw, 64px);
+  font-weight: 800;
+  text-shadow:
+    0 2px 4px rgb(0 0 0 / 0.35),
+    0 8px 48px rgb(0 0 0 / 0.55);
+}
+.np-right.no-lyrics .np-artist {
+  color: rgb(var(--text-rgb) / 0.75);
+}
+.np-right.mode-off .np-meta {
+  display: none;
+}
