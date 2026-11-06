@@ -3,19 +3,23 @@ import { useEffect, useRef, useState } from "react";
 import type { OverlayState } from "../../../shared/types";
 import { activeLineIndex, timedWords } from "../../../shared/lrc";
 import { api } from "../lib/api";
-import { onFrame, useFrame } from "../lib/frame";
+import { useFrame } from "../lib/frame";
 import { useStore } from "../lib/store";
 import { app } from "../state/app";
-import { duration, lyricsTime, player } from "../state/player";
+import { duration, lyricsRate, lyricsTime, player } from "../state/player";
 
-/** В главном окне: пока поверх-окно открыто, шлёт ему текущую строку ~8 раз в секунду. */
+/**
+ * В главном окне: пока поверх-окно открыто, шлёт ему текущую строку ~8 раз в секунду.
+ * Именно по таймеру, а не по кадрам: когда Камадо свёрнут или закрыт другой программой, кадры
+ * не рисуются — а поверх-окно нужно как раз тогда.
+ */
 export function OverlayFeed() {
   const open = useStore(app, (s) => s.overlay);
   const last = useRef({ at: 0, key: "" });
 
   useEffect(() => {
     if (!open) return;
-    return onFrame(() => {
+    const timer = window.setInterval(() => {
       const s = player.get();
       const lyrics = s.lyrics;
       const t = lyricsTime();
@@ -35,7 +39,7 @@ export function OverlayFeed() {
       // Нет текста с таймингом — ничего не показываем (раньше тут было название трека).
       const now = Date.now();
       const key = `${text}|${s.playing}`;
-      if (key === last.current.key && now - last.current.at < 125) return;
+      if (key === last.current.key && now - last.current.at < 240) return;
       last.current = { at: now, key };
       const cs = getComputedStyle(document.documentElement);
       void api.overlay.push({
@@ -44,6 +48,7 @@ export function OverlayFeed() {
         words,
         lineEnd,
         position: t,
+        rate: lyricsRate(),
         playing: s.playing,
         sentAt: now,
         colors: {
@@ -52,7 +57,8 @@ export function OverlayFeed() {
           accent2: cs.getPropertyValue("--accent-2").trim(),
         },
       });
-    }, 50);
+    }, 120);
+    return () => clearInterval(timer);
   }, [open]);
 
   return null;
@@ -76,7 +82,7 @@ export function LyricsOverlay() {
     const s = stRef.current;
     const el = line.current;
     if (!s || !el) return;
-    const t = s.position + (s.playing ? (Date.now() - s.sentAt) / 1000 : 0) + 0.04;
+    const t = s.position + (s.playing ? ((Date.now() - s.sentAt) / 1000) * (s.rate || 1) : 0) + 0.04;
     const spans = el.children;
     for (let i = 0; i < spans.length; i++) {
       const w = s.words[i];

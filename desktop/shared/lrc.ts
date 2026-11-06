@@ -1,5 +1,6 @@
 // Разбор текстов песен в формате LRC: [мм:сс.xx] строка.
 // Поддерживает несколько меток на строку, [offset:±мс] и пословные метки <мм:сс.xx>.
+import type { LyricsSync } from "./settings.js";
 import type { Lyrics, LyricsLine, LyricsWord } from "./types.js";
 
 const LINE_TIME = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
@@ -92,4 +93,57 @@ export function timedWords(lines: LyricsLine[], index: number, trackDuration = 0
     acc += weights[i]!;
     return { time, text: w };
   });
+}
+
+/** Растянуть/сжать тайминги в k раз (текст от обычной версии → под nightcore/slowed). */
+export function scaleLyrics(l: Lyrics, k: number): Lyrics {
+  return {
+    ...l,
+    scaled: k,
+    lines: l.lines.map((x) => ({
+      ...x,
+      time: x.time * k,
+      ...(x.words ? { words: x.words.map((w) => ({ ...w, time: w.time * k })) } : {}),
+    })),
+  };
+}
+
+/** Признак ускоренной или замедленной версии в названии. */
+export function speedHint(title: string): "fast" | "slow" | undefined {
+  if (/nightcore|sped\s*up|speed\s*up|ускорен/i.test(title)) return "fast";
+  if (/slowed|daycore|замедлен/i.test(title)) return "slow";
+  return undefined;
+}
+
+/**
+ * Текст без отметок времени → примерные отметки: строки равномерно по песне,
+ * длинные строки звучат дольше. Пение обычно начинается после вступления и кончается до концовки.
+ */
+export function approximateTimes(lines: LyricsLine[], duration: number): LyricsLine[] {
+  if (!lines.length || !(duration > 0)) return lines;
+  const start = Math.min(20, duration * 0.08);
+  const end = duration * 0.94;
+  const weights = lines.map((l) => l.text.length + 10);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let acc = 0;
+  return lines.map((l, i) => {
+    const time = start + ((end - start) * acc) / total;
+    acc += weights[i]!;
+    return { time, text: l.text };
+  });
+}
+
+/** Минимум секунд песни между двумя «пойманными» строками, чтобы по ним считать скорость. */
+export const SYNC_SPAN = 20;
+
+/**
+ * Новая подгонка текста после «поймать»: строка с временем lineT звучит в момент песни audioT.
+ * Есть первая точка и прошло ≥ SYNC_SPAN — считаем по двум точкам и сдвиг, и скорость (время текста = s·T + o).
+ */
+export function nextSync(cur: LyricsSync, audioT: number, lineT: number): LyricsSync {
+  if (cur.t1 !== undefined && cur.l1 !== undefined && Math.abs(audioT - cur.t1) >= SYNC_SPAN) {
+    const s = Math.max(0.75, Math.min(1.33, (lineT - cur.l1) / (audioT - cur.t1)));
+    return { s, o: cur.l1 - s * cur.t1, t1: cur.t1, l1: cur.l1 };
+  }
+  return { s: cur.s, o: lineT - cur.s * audioT, t1: audioT, l1: lineT };
 }

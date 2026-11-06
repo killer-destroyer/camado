@@ -42,6 +42,12 @@ export interface Lyrics {
   synced: boolean;
   lines: LyricsLine[];
   source: "file" | "tags" | "lrclib" | "none";
+  /** Длина той версии песни, под которую сделан текст (из базы). Сильно отличается от файла — текст может разъезжаться. */
+  versionDuration?: number;
+  /** Текст растянут под ускоренную/замедленную версию (nightcore, sped up, slowed) — во сколько раз. */
+  scaled?: number;
+  /** Тайминг примерный: в базе был только текст без отметок, строки расставлены по песне. */
+  approx?: boolean;
 }
 
 export interface LyricsQuery {
@@ -85,6 +91,8 @@ export interface OverlayState {
   words: LyricsWord[];
   lineEnd: number;
   position: number;
+  /** На сколько секунд текста сдвигается позиция за секунду (скорость песни × подгонка текста). */
+  rate: number;
   playing: boolean;
   /** Date.now() в момент отправки — чтобы плавно досчитывать позицию между обновлениями. */
   sentAt: number;

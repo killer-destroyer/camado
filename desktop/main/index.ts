@@ -445,10 +445,13 @@ function toggleOverlay(): boolean {
     overlay.close();
     return false;
   }
-  const area = screen.getPrimaryDisplay().workArea;
+  // На том экране, где сейчас мышь, а не всегда на основном.
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
   const width = Math.min(1100, area.width - 80);
   const height = 170;
   overlay = new BrowserWindow({
+    // На Mac «панель» умеет висеть и поверх программ, развёрнутых на весь экран.
+    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
     width,
     height,
     x: Math.round(area.x + (area.width - width) / 2),
@@ -467,7 +470,7 @@ function toggleOverlay(): boolean {
   });
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.setIgnoreMouseEvents(true); // клики проходят сквозь текст
-  overlay.setVisibleOnAllWorkspaces(true);
+  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlay.once("ready-to-show", () => overlay?.showInactive());
   overlay.on("closed", () => {
     overlay = undefined;

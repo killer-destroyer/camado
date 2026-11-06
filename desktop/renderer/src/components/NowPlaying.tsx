@@ -38,6 +38,8 @@ import {
   prev,
   seek,
   setAutoLevel,
+  lyricsSyncOf,
+  resetLyricsSync,
   setLyricsOffset,
   setSleep,
   setTrackGain,
@@ -109,19 +111,36 @@ export function Progress({ big = false }: { big?: boolean }) {
 
 /** Сдвиг текста для трека, где тайминг в базе кривой: «−» раньше, «+» позже, ⌖ — «поймать» строку. */
 function LyricsShift({ trackId }: { trackId: string }) {
-  const offsets = useStore(app, (s) => s.settings.lyricsOffsets);
+  useStore(app, (s) => s.settings.lyricsSync[trackId] ?? s.settings.lyricsOffsets[trackId]);
   const syncing = useStore(player, (s) => !!s.syncLyrics);
-  const v = offsets[trackId] ?? 0;
+  const lyrics = useStore(player, (s) => s.lyrics);
+  const sync = lyricsSyncOf(trackId);
+  const v = sync.o;
+  const stretched = Math.abs(sync.s - 1) >= 0.0005;
+  const adjusted = stretched || Math.abs(v) >= 0.01;
+  // Подсказать «поймай строку», если текст, скорее всего, разъедется: он от версии другой длины или расставлен примерно.
+  const dur = duration();
+  const suspicious = !adjusted && !!lyrics && (lyrics.approx || (!lyrics.scaled && !!lyrics.versionDuration && dur > 0 && Math.abs(lyrics.versionDuration - dur) > 1.5));
+  const why = lyrics?.approx
+    ? "У этой песни в базе текст без отметок времени — строки расставлены примерно."
+    : "Текст в базе сделан под версию песни другой длины — к концу может разъехаться.";
+  const label = syncing
+    ? sync.t1 !== undefined
+      ? "ещё строку, ближе к концу"
+      : "нажми строку, которую поют"
+    : !adjusted
+      ? "текст"
+      : `${v > 0 ? "+" : ""}${v.toFixed(1)} с${stretched ? ` ×${sync.s.toFixed(3)}` : ""}`;
   return (
-    <div className={`lyr-shift ${syncing ? "syncing" : ""}`} title="Если текст спешит или опаздывает — подвинь его">
+    <div className={`lyr-shift ${syncing ? "syncing" : ""}`} title="Если текст спешит или опаздывает — подвинь его или «поймай» строку">
       <button onClick={() => setLyricsOffset(trackId, v - 0.25)}>−</button>
-      <span onClick={() => setLyricsOffset(trackId, 0)}>
-        {syncing ? "нажми строку, которую поют" : v === 0 ? "текст" : `${v > 0 ? "+" : ""}${v.toFixed(2)} с`}
+      <span title={adjusted ? "Нажми, чтобы сбросить подгонку" : undefined} onClick={() => resetLyricsSync(trackId)}>
+        {label}
       </span>
       <button onClick={() => setLyricsOffset(trackId, v + 0.25)}>+</button>
       <button
-        className="catch"
-        title="Поймать: нажми, потом нажми строку, которую поют прямо сейчас — весь текст встанет в такт"
+        className={`catch ${suspicious ? "hint" : ""}`}
+        title={`${suspicious ? why + " " : ""}Поймать: нажми, потом нажми строку, которую поют прямо сейчас. Второй раз ближе к концу — подгоню и скорость.`}
         onClick={() => player.set({ syncLyrics: !syncing })}
       >
         <Crosshair size={14} />

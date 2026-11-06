@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { parseFile } from "music-metadata";
-import { parseLrc, plainLines } from "../shared/lrc.js";
+import { parseLrc, plainLines, scaleLyrics, speedHint } from "../shared/lrc.js";
 import type { Lyrics, LyricsQuery } from "../shared/types.js";
 import { lrcPathFor } from "./library.js";
 
@@ -56,6 +56,17 @@ export function queryVariants(title: string, artist: string): { track: string; a
   // без уточнения в скобках: «Botsu 8 (The Last Dance Song)» → «Botsu 8»
   const bare = t.replace(/\s*[([][^)\]]*[)\]]\s*/g, " ").trim();
   if (bare !== t) add(bare);
+  // «nightcore - He is a Monster», «Song (sped up)» → ищем оригинал, текст потом растянем под скорость
+  const plain = bare
+    .replace(/\b(nightcore|daycore|sped\s*up|speed\s*up|slowed(\s*(\+|and|&)\s*reverb)?|reverb)\b/gi, " ")
+    .replace(/\s*[-–—|]\s*(?=[-–—|]|$)/g, " ")
+    .replace(/^[\s\-–—|]+|[\s\-–—|]+$/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  if (plain && plain !== bare) {
+    if (hasLetters(a) && !/^неизвестный исполнитель$/i.test(a)) add(plain, a);
+    add(plain);
+  }
   return out;
 }
 
@@ -69,8 +80,9 @@ interface LrclibRecord {
 }
 
 function fromRecord(r: LrclibRecord): Lyrics {
-  if (r.syncedLyrics) return { ...parseLrc(r.syncedLyrics), synced: true, source: "lrclib" };
-  if (r.plainLyrics) return { synced: false, lines: plainLines(r.plainLyrics), source: "lrclib" };
+  const versionDuration = r.duration || undefined;
+  if (r.syncedLyrics) return { ...parseLrc(r.syncedLyrics), synced: true, source: "lrclib", versionDuration };
+  if (r.plainLyrics) return { synced: false, lines: plainLines(r.plainLyrics), source: "lrclib", versionDuration };
   return NONE;
 }
 
@@ -88,8 +100,8 @@ export class LyricsService {
 
     await mkdir(this.cacheDir, { recursive: true });
     const key = createHash("sha1")
-      // v3: после улучшения поиска старые результаты больше не действуют
-      .update(`v3|${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
+      // v4: после улучшения поиска старые результаты больше не действуют
+      .update(`v4|${q.artist}|${q.title}|${Math.round(q.duration ?? 0)}`.toLowerCase())
       .digest("hex");
     const cacheFile = join(this.cacheDir, `${key}.json`);
     if (existsSync(cacheFile)) {
@@ -149,7 +161,14 @@ export class LyricsService {
   }
 
   private async fromLrclib(q: LyricsQuery): Promise<Lyrics> {
-    const near = (r: LrclibRecord) => !q.duration || !r.duration || Math.abs(r.duration - q.duration) <= 5;
+    // nightcore / sped up / slowed: текст обычно есть только для оригинала — он длиннее или короче
+    const hint = speedHint(q.title);
+    const speedOk = (r: LrclibRecord) => {
+      if (!hint || !q.duration || !r.duration) return false;
+      const k = r.duration / q.duration;
+      return hint === "fast" ? k >= 1.05 && k <= 1.5 : k >= 0.6 && k <= 0.95;
+    };
+    const near = (r: LrclibRecord) => !q.duration || !r.duration || Math.abs(r.duration - q.duration) <= 5 || speedOk(r);
     const pick = (list: LrclibRecord[]) => {
       // Одну песню в базу часто заливают много раз с разной длиной — берём ту, что ближе всего к нашему файлу.
       const diff = (r: LrclibRecord) => (q.duration && r.duration ? Math.abs(r.duration - q.duration) : 0);
@@ -160,6 +179,10 @@ export class LyricsService {
     let plain: Lyrics | undefined;
     const take = (l: Lyrics | undefined): Lyrics | undefined => {
       if (!l?.lines.length) return undefined;
+      // Текст от оригинала, а играет ускоренная/замедленная версия — растягиваем тайминги под неё.
+      if (l.synced && hint && q.duration && l.versionDuration && Math.abs(l.versionDuration / q.duration - 1) > 0.04) {
+        return scaleLyrics(l, q.duration / l.versionDuration);
+      }
       if (l.synced) return l;
       plain ??= l; // запомним простой текст, но поищем ещё с таймингом
       return undefined;

@@ -1,5 +1,7 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
+import type { LyricsSync } from "../../../shared/settings";
+import { approximateTimes, nextSync } from "../../../shared/lrc";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
@@ -61,11 +63,63 @@ export function position(): number {
   return engine.el.currentTime || 0;
 }
 
-/** То, что сейчас слышно (для текста): с поправкой на задержку звука и ручной сдвиг трека. */
+/** Подгонка текста трека: время текста = s × время песни + o (старый ручной сдвиг — это o при s = 1). */
+export function lyricsSyncOf(id: string | undefined): LyricsSync {
+  if (!id) return { s: 1, o: 0 };
+  const st = app.get().settings;
+  return st.lyricsSync[id] ?? { s: 1, o: st.lyricsOffsets[id] ?? 0 };
+}
+
+/** То, что сейчас слышно (для текста): с поправкой на задержку звука и подгонку текста под этот трек. */
 export function lyricsTime(): number {
+  const sync = lyricsSyncOf(currentTrack()?.id);
+  return sync.s * engine.audibleTime + sync.o;
+}
+
+/** Сколько секунд текста проходит за секунду реального времени (для поверх-окна). */
+export function lyricsRate(): number {
+  return lyricsSyncOf(currentTrack()?.id).s * (engine.el.playbackRate || 1);
+}
+
+function saveSync(id: string, sync: LyricsSync | undefined): void {
+  const st = app.get().settings;
+  const copy = { ...st.lyricsSync };
+  const offsets = { ...st.lyricsOffsets };
+  delete offsets[id]; // старый формат больше не нужен
+  if (!sync || (Math.abs(sync.s - 1) < 0.0005 && Math.abs(sync.o) < 0.01 && sync.t1 === undefined)) delete copy[id];
+  else copy[id] = sync;
+  updateSettings({ lyricsSync: copy, lyricsOffsets: offsets });
+}
+
+/** Кнопки «−/+»: сдвинуть текст трека, секунды (+ — текст позже). */
+export function setLyricsOffset(trackId: string, seconds: number): void {
+  const cur = lyricsSyncOf(trackId);
+  const o = Math.round(Math.max(-30, Math.min(30, seconds)) * 20) / 20;
+  saveSync(trackId, { ...cur, o, t1: undefined, l1: undefined });
+}
+
+/** Сбросить всю подгонку текста трека. */
+export function resetLyricsSync(trackId: string): void {
+  saveSync(trackId, undefined);
+}
+
+/**
+ * «Поймать» строку: её поют прямо сейчас.
+ * Первый раз — сдвигаем весь текст. Второй раз (хотя бы через 20 с песни) — по двум точкам считаем
+ * ещё и скорость: так лечится текст, сделанный под чуть ускоренную/замедленную версию песни.
+ */
+export function catchLyricsLine(lineTime: number): void {
   const id = currentTrack()?.id;
-  const shift = id ? (app.get().settings.lyricsOffsets[id] ?? 0) : 0;
-  return engine.audibleTime + shift;
+  player.set({ syncLyrics: false });
+  if (!id) return;
+  const cur = lyricsSyncOf(id);
+  const next = nextSync(cur, engine.audibleTime, lineTime);
+  saveSync(id, next);
+  if (next.t1 === cur.t1 && cur.t1 !== undefined) {
+    toast(Math.abs(next.s - 1) < 0.003 ? "Текст подогнан — скорость и так совпадала" : `Подогнал и скорость текста (×${next.s.toFixed(3)}) — теперь не разъедется`, "ok");
+    return;
+  }
+  toast("Поймал! Если ближе к концу текст снова разъедется — поймай ещё одну строку, подгоню и скорость.", "ok");
 }
 
 // ---------- Громкость каждой песни ----------
@@ -102,24 +156,6 @@ export function setAutoLevel(on: boolean): void {
   if (!t) return;
   engine.setTrim(trackTrim(t.id));
   if (on) void levelTrack(t.id, `camado-media://track/${t.id}`);
-}
-
-/** Сдвиг текста для трека, секунды (+ — текст позже). */
-export function setLyricsOffset(trackId: string, seconds: number): void {
-  const v = Math.round(Math.max(-30, Math.min(30, seconds)) * 20) / 20;
-  const copy = { ...app.get().settings.lyricsOffsets };
-  if (Math.abs(v) < 0.01) delete copy[trackId];
-  else copy[trackId] = v;
-  updateSettings({ lyricsOffsets: copy });
-}
-
-/** Пользователь нажал строку, которую поют сейчас: подгоняем весь текст трека под неё. */
-export function catchLyricsLine(lineTime: number): void {
-  const id = currentTrack()?.id;
-  player.set({ syncLyrics: false });
-  if (!id) return;
-  setLyricsOffset(id, lineTime - engine.audibleTime);
-  toast("Текст подогнан под эту строку", "ok");
 }
 
 export function duration(): number {
@@ -314,7 +350,11 @@ export async function loadLyrics(): Promise<void> {
       duration: meta.duration || undefined,
       trackId: t?.id,
     });
-    if (id === lyricsReq) player.set({ lyrics, lyricsLoading: false });
+    // Текст без отметок времени — расставляем строки по песне примерно: так работают «Взрыв», «Строка» и поверх-окно.
+    const dur = meta.duration || engine.el.duration;
+    const ready: Lyrics =
+      !lyrics.synced && lyrics.lines.length && dur > 0 ? { ...lyrics, synced: true, approx: true, lines: approximateTimes(lyrics.lines, dur) } : lyrics;
+    if (id === lyricsReq) player.set({ lyrics: ready, lyricsLoading: false });
   } catch {
     if (id === lyricsReq) player.set({ lyricsLoading: false });
   }

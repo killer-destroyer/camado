@@ -4,6 +4,13 @@ export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
 export type LyricsMode = "flow" | "burst" | "line" | "off";
 export type ShakeTarget = "scene" | "cover" | "lyrics";
 
+export interface LyricsSync {
+  s: number;
+  o: number;
+  t1?: number;
+  l1?: number;
+}
+
 export interface AlarmItem {
   id: string;
   at: string; // ISO
@@ -25,6 +32,11 @@ export interface AppSettings {
   lyricsSize: number; // 0.7…1.4
   /** Ручной сдвиг текста по трекам, секунды (+ — текст позже). */
   lyricsOffsets: Record<string, number>;
+  /**
+   * Подгонка текста по трекам: время текста = s × время песни + o.
+   * s ≠ 1 — текст сделан под версию с другим темпом. t1/l1 — первая «пойманная» строка (время песни и текста).
+   */
+  lyricsSync: Record<string, LyricsSync>;
   shake: {
     enabled: boolean;
     intensity: number; // 0…1
@@ -71,6 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsMode: "flow",
   lyricsSize: 1,
   lyricsOffsets: {},
+  lyricsSync: {},
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
   crossfade: 6,
@@ -101,6 +114,7 @@ export function mergeSettings(saved: unknown): AppSettings {
     alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
     alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },
+    lyricsSync: { ...(s.lyricsSync ?? {}) },
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
   };
