@@ -5670,3 +5670,49 @@ kbd {
     gap: 6px;
   }
 }
+
+/* 1.0.5: у сообщений своя прокрутка, поле ввода — внизу экрана, над мини-плеером (он снизу: 16px + 78px) */
+.screen.chat {
+  height: 100%;
+  overflow: hidden;
+  padding-bottom: 24px;
+}
+.has-player .screen.chat {
+  padding-bottom: 112px;
+}
+.screen.chat .chat-log {
+  min-height: 0;
+  overflow-y: auto;
+  max-width: 900px;
+  padding: 0 20px 16px;
+}
+.screen.chat .chat-input {
+  position: relative;
+  bottom: auto;
+  flex-shrink: 0;
+}
+
+/* 1.0.5: быстрый чат на главной — одна строка, Enter → чат «Камадо» */
+.quick-ask {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 6px 6px 16px;
+  border-radius: 18px;
+  margin: -12px 0 22px;
+  max-width: 760px;
+  color: var(--muted);
+}
+.quick-ask input {
+  flex: 1;
+  height: 38px;
+  border: 0;
+  outline: 0;
+  background: none;
+  font-size: 15px;
+  color: var(--text);
+}
+.quick-ask:focus-within {
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgb(var(--accent-rgb) / 0.45);
+}

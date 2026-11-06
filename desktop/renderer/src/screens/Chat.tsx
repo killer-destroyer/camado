@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { KeyRound, SendHorizontal, Sparkles } from "lucide-react";
 import type { ChatEntry } from "../../../shared/types";
 import { api } from "../lib/api";
-import { go } from "../state/app";
+import { app, go } from "../state/app";
 import { Empty } from "../components/ui";
 
 const SUGGEST = ["Что у меня на этой неделе?", "Составь план на сегодня", "По матану задали №5–12 к пятнице", "Что горит?"];
@@ -15,16 +15,25 @@ export function Chat() {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [aiOn, setAiOn] = useState<boolean | null>(null);
-  const end = useRef<HTMLDivElement>(null);
+  const log = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     void api.ai.status().then((s) => setAiOn(s.enabled));
-    void api.chat.history().then(setItems);
+    void api.chat.history().then((h) => {
+      setItems(h);
+      // Пришли из быстрого чата на главной — сразу отправляем написанное.
+      const pending = app.get().chatPending;
+      if (pending) {
+        app.set({ chatPending: undefined });
+        void send(pending);
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    // Фигурные скобки важны: scrollIntoView в новом Chromium возвращает промис,
-    // а React принял бы его за функцию очистки и упал.
-    void end.current?.scrollIntoView({ behavior: "smooth" });
+    // У сообщений своя прокрутка — листаем её к последнему сообщению (фигурные скобки важны, см. CLAUDE.md).
+    const el = log.current;
+    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [items, busy]);
 
   const send = async (msg = text) => {
@@ -44,7 +53,7 @@ export function Chat() {
         <header className="screen-head">
           <h1 className="display">Камадо</h1>
         </header>
-        <Empty icon={<KeyRound size={30} />} title="ИИ пока выключен" text="Вставь ключ Anthropic в настройках — и Камадо будет понимать обычный текст, разбирать задания и строить планы.">
+        <Empty icon={<KeyRound size={30} />} title="ИИ пока выключен" text="Вставь бесплатный ключ Gemini в Настройках → ИИ — и Камадо будет понимать обычный текст, фото и голос, разбирать задания и строить планы.">
           <button className="btn primary" onClick={() => go("settings")}>
             Открыть настройки
           </button>
@@ -58,7 +67,7 @@ export function Chat() {
       <header className="screen-head">
         <h1 className="display">Камадо</h1>
       </header>
-      <div className="chat-log">
+      <div ref={log} className="chat-log">
         {items.length === 0 && (
           <div className="chat-hello">
             <Sparkles size={26} />
@@ -84,7 +93,6 @@ export function Chat() {
             <i />
           </div>
         )}
-        <div ref={end} />
       </div>
       <div className="chat-input glass">
         <input

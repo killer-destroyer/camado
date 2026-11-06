@@ -1,6 +1,6 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
 import { useEffect, useState } from "react";
-import { AlarmClock, ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
+import { AlarmClock, ArrowRight, Check, Flame, ListChecks, MessageCircle, Music2, NotebookPen, Play, SendHorizontal, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
 import { MediaButtons } from "../components/MediaButtons";
 import { LevelBadge } from "../components/Achievements";
@@ -350,6 +350,27 @@ function FirstSteps() {
   );
 }
 
+/** Быстрый чат: одна строка — Enter — и ты в «Камадо», где уже идёт ответ. */
+function QuickAsk() {
+  const [text, setText] = useState("");
+  const send = () => {
+    const t = text.trim();
+    if (!t) return;
+    setText("");
+    app.set({ chatPending: t });
+    go("chat");
+  };
+  return (
+    <div className="quick-ask glass">
+      <MessageCircle size={18} />
+      <input value={text} placeholder="Спроси Камадо или скажи, что задали…" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} />
+      <button className="play-btn sm" onClick={send} disabled={!text.trim()} title="Отправить и открыть чат">
+        <SendHorizontal size={16} />
+      </button>
+    </div>
+  );
+}
+
 export function Today() {
   const tasks = useStore(data, (s) => s.tasks);
   const notes = useStore(data, (s) => s.notes);
@@ -391,6 +412,8 @@ export function Today() {
           </button>
         </div>
       </header>
+
+      <QuickAsk />
 
       <div className="today-grid">
         <FirstSteps />

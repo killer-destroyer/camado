@@ -29,6 +29,8 @@ interface AppState {
   update: UpdateStatus;
   /** Открыт ли текст песни поверх окон. */
   overlay: boolean;
+  /** Написали в быстрый чат на главной — чат «Камадо» отправит это сразу, как откроется. */
+  chatPending?: string;
 }
 
 export const app = createStore<AppState>({
