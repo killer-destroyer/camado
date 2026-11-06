@@ -42,8 +42,6 @@ nsis:
 
 mac:
   icon: desktop/assets/icon.png
-  extendInfo:
-    NSMicrophoneUsageDescription: "Камадо слушает микрофон только когда ты нажимаешь кнопку голоса — чтобы записать задание голосом."
   category: public.app-category.productivity
   target:
     - target: dmg
@@ -51,7 +49,7 @@ mac:
   # Без платного сертификата Apple — подпись «для себя».
   identity: null
   extendInfo:
-    NSMicrophoneUsageDescription: Камадо слушает звук только для визуализатора музыки.
+    NSMicrophoneUsageDescription: "Камадо слушает микрофон только когда ты нажимаешь кнопку голоса — чтобы записать задание голосом."
 dmg:
   artifactName: Camado-mac.${ext}
 
