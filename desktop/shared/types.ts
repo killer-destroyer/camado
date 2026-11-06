@@ -255,8 +255,13 @@ export interface CamadoApi {
     /** Перезапустить и установить (Windows) или открыть ссылку на скачивание (Mac). */
     install(): Promise<void>;
   };
+  system: {
+    /** Сколько секунд пользователь ничего не трогал (во всей системе). */
+    idleSeconds(): Promise<number>;
+  };
   window: {
     setTitleBarColors(symbol: string): Promise<void>;
+    setFullScreen(on: boolean): Promise<void>;
   };
   notify(title: string, body: string): Promise<void>;
   /** Путь к файлу, перетащенному в окно. */

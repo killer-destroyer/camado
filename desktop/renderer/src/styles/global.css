@@ -4384,3 +4384,110 @@ html.quick-root #root {
 .amb-modal .chooser-head .icon-btn {
   margin-left: auto;
 }
+
+/* ---------- Заставка ---------- */
+.screensaver {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: #000;
+  cursor: none;
+  animation: ss-in 1.2s var(--ease) both;
+}
+@keyframes ss-in {
+  from {
+    opacity: 0;
+  }
+}
+.ss-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.ss-ui {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 44px 56px 36px;
+  pointer-events: none;
+  color: #fff;
+  text-shadow: 0 2px 24px rgb(0 0 0 / 0.6);
+}
+.ss-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+.ss-track {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 50%;
+}
+.ss-track b {
+  font-family: var(--display);
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.ss-track span {
+  font-size: 14px;
+  opacity: 0.7;
+}
+.ss-clock {
+  font-family: var(--display);
+  font-size: 64px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  opacity: 0.85;
+}
+.ss-lyrics {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 6vh;
+  --lyrics-scale: 1.25;
+}
+.ss-lyrics .lyrics-line {
+  width: 100%;
+  text-align: center;
+  align-items: center;
+}
+.ss-scene {
+  align-self: center;
+  font-size: 12px;
+  opacity: 0.45;
+  letter-spacing: 0.06em;
+}
+.ss-scenes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+  margin: 14px 0 8px;
+}
+.ss-scene-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 14px;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 650;
+  text-align: left;
+  background: rgb(var(--text-rgb) / 0.05);
+  border: 1px solid rgb(var(--text-rgb) / 0.08);
+}
+.ss-scene-btn.on {
+  border-color: rgb(var(--accent-rgb) / 0.7);
+  background: rgb(var(--accent-rgb) / 0.12);
+}
+.ss-pick {
+  flex: 1;
+  text-align: left;
+  font: inherit;
+}

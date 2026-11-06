@@ -54,6 +54,8 @@ export interface AppSettings {
   slowedRate: number;
   nightcoreRate: number;
   volume: number; // 0…1 — положение ползунка; громкость «по слуху» считает движок
+  /** Заставка-визуализатор: через сколько минут бездействия, какая сцена ("random" — новая на каждый трек), что показывать. */
+  screensaver: { enabled: boolean; delay: number; scene: string; lyrics: boolean; clock: boolean; fullscreen: boolean };
   /** Фоновые звуки: включены ли, общая громкость, уровень каждого (0 — выкл), включать ли вместе с фокусом. */
   ambience: { on: boolean; volume: number; levels: Record<string, number>; withFocus: boolean };
   /** Эквалайзер: пресет (или "custom") и 10 полос в дБ. */
@@ -96,6 +98,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   nightcoreRate: 1.15,
   volume: 0.8,
   eq: { preset: "flat", bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  screensaver: { enabled: true, delay: 2, scene: "random", lyrics: true, clock: true, fullscreen: true },
   ambience: { on: false, volume: 0.7, levels: { rain: 0.6 }, withFocus: false },
   autoLevel: true,
   trackGain: {},
@@ -119,6 +122,7 @@ export function mergeSettings(saved: unknown): AppSettings {
     discord: { ...DEFAULT_SETTINGS.discord, ...(s.discord ?? {}) },
     alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
     eq: { ...DEFAULT_SETTINGS.eq, ...(s.eq ?? {}) },
+    screensaver: { ...DEFAULT_SETTINGS.screensaver, ...(s.screensaver ?? {}) },
     ambience: { ...DEFAULT_SETTINGS.ambience, ...(s.ambience ?? {}), levels: { ...(s.ambience?.levels ?? DEFAULT_SETTINGS.ambience.levels) } },
     alarms: Array.isArray(s.alarms) ? s.alarms : [],
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },

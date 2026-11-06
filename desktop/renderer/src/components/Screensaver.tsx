@@ -1,0 +1,249 @@
+// Заставка-визуализатор: пока играет музыка и ничего не трогаешь — экран превращается в живую сцену
+// в цветах обложки и в такт музыке, с крупным текстом песни. Любое движение — выход.
+import { useEffect, useRef, useState } from "react";
+import { engine } from "../lib/audio";
+import { useFrame } from "../lib/frame";
+import { hexToRgb, paletteById } from "../lib/palettes";
+import { SCENES, SHADER_HEAD, SHADER_TAIL, sceneById } from "../lib/scenes";
+import { useStore } from "../lib/store";
+import { api } from "../lib/api";
+import { app } from "../state/app";
+import { currentTrack, nowMeta, player } from "../state/player";
+import { Lyrics } from "./Lyrics";
+
+const VERT = `#version 300 es
+in vec2 a; void main() { gl_Position = vec4(a, 0.0, 1.0); }`;
+
+interface Gl {
+  gl: WebGL2RenderingContext;
+  prog: WebGLProgram;
+  loc: Record<string, WebGLUniformLocation | null>;
+  tex: WebGLTexture;
+}
+
+function compile(gl: WebGL2RenderingContext, fragBody: string): WebGLProgram | null {
+  const sh = (type: number, src: string) => {
+    const s = gl.createShader(type)!;
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error("Сцена не собралась:", gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  };
+  const v = sh(gl.VERTEX_SHADER, VERT);
+  const f = sh(gl.FRAGMENT_SHADER, SHADER_HEAD + fragBody + SHADER_TAIL);
+  if (!v || !f) return null;
+  const p = gl.createProgram()!;
+  gl.attachShader(p, v);
+  gl.attachShader(p, f);
+  gl.bindAttribLocation(p, 0, "a");
+  gl.linkProgram(p);
+  return gl.getProgramParameter(p, gl.LINK_STATUS) ? p : null;
+}
+
+const UNIFORMS = ["uRes", "uTime", "uBass", "uMid", "uHigh", "uEnergy", "uPulse", "uSpin", "uHasCover", "uC1", "uC2", "uC3", "uBg", "uCover", "uBands"];
+
+function rgb(hex: string): [number, number, number] {
+  const [r, g, b] = hexToRgb(hex);
+  return [r / 255, g / 255, b / 255];
+}
+
+/** Выбор сцены: заданная или случайная (не та же, что была). */
+let lastScene = "";
+export function pickScene(setting: string): string {
+  if (setting !== "random") return setting;
+  const pool = SCENES.filter((s) => s.id !== lastScene);
+  lastScene = pool[Math.floor(Math.random() * pool.length)]!.id;
+  return lastScene;
+}
+
+function Clock() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 5000);
+    return () => clearInterval(t);
+  }, []);
+  return <div className="ss-clock">{now.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}</div>;
+}
+
+export function Screensaver() {
+  const active = useStore(app, (s) => s.screensaver);
+  const cfg = useStore(app, (s) => s.settings.screensaver);
+  const settings = useStore(app, (s) => s.settings);
+  const coverPalette = useStore(player, (s) => s.coverPalette);
+  const lyrics = useStore(player, (s) => s.lyrics);
+  const index = useStore(player, (s) => s.index);
+  const canvas = useRef<HTMLCanvasElement>(null);
+  const glRef = useRef<Gl | null>(null);
+  const spin = useRef(0);
+  const t0 = useRef(performance.now());
+  const preview = useStore(app, (s) => s.screensaverScene);
+  const [sceneId, setSceneId] = useState(() => preview ?? pickScene(cfg.scene));
+  const meta = nowMeta();
+  const palette = settings.coverColors && coverPalette ? coverPalette : paletteById(settings.palette);
+
+  // новая песня — новая сцена (если «случайная»)
+  useEffect(() => {
+    if (active) setSceneId(app.get().screensaverScene ?? pickScene(app.get().settings.screensaver.scene));
+  }, [index, active, preview, cfg.scene]);
+
+  // WebGL: собираем сцену заново, когда она меняется
+  useEffect(() => {
+    const c = canvas.current;
+    if (!active || !c) return;
+    const gl = c.getContext("webgl2", { antialias: false, alpha: false, powerPreference: "high-performance" });
+    if (!gl) return;
+    const prog = compile(gl, sceneById(sceneId).body) ?? compile(gl, SCENES[0]!.body);
+    if (!prog) return;
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+    const loc: Gl["loc"] = {};
+    for (const u of UNIFORMS) loc[u] = gl.getUniformLocation(prog, u);
+    const tex = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([40, 40, 60, 255]));
+    glRef.current = { gl, prog, loc, tex };
+    return () => {
+      gl.deleteProgram(prog);
+      gl.deleteTexture(tex);
+      gl.deleteBuffer(buf);
+      glRef.current = null;
+    };
+  }, [active, sceneId]);
+
+  // обложка → текстура (с мипмапами: размытие «за стеклом» бесплатно)
+  const hasCover = useRef(0);
+  useEffect(() => {
+    const g = glRef.current;
+    hasCover.current = 0;
+    if (!active || !g || !meta?.cover) return;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const { gl, tex } = g;
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl.generateMipmap(gl.TEXTURE_2D);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      hasCover.current = 1;
+    };
+    img.src = meta.cover;
+  }, [active, meta?.cover, sceneId]);
+
+  const bands = useRef(new Float32Array(32));
+  useFrame((dt) => {
+    const g = glRef.current;
+    const c = canvas.current;
+    if (!active || !g || !c) return;
+    const scale = (sceneById(sceneId).scale ?? 1) * Math.min(window.devicePixelRatio || 1, 1.5);
+    const w = Math.round(c.clientWidth * scale);
+    const h = Math.round(c.clientHeight * scale);
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    const { gl, prog, loc } = g;
+    gl.viewport(0, 0, w, h);
+    gl.useProgram(prog);
+    const src = engine.smooth;
+    for (let i = 0; i < 32; i++) bands.current[i] = Math.min(1, (src[Math.floor((i / 32) * src.length)] ?? 0) * 1.2);
+    spin.current += dt * (player.get().playing ? 0.9 : 0) * (1 + engine.bass * 0.4);
+    gl.uniform2f(loc.uRes!, w, h);
+    gl.uniform1f(loc.uTime!, (performance.now() - t0.current) / 1000);
+    gl.uniform1f(loc.uBass!, engine.bass);
+    gl.uniform1f(loc.uMid!, engine.mid);
+    gl.uniform1f(loc.uHigh!, engine.high);
+    gl.uniform1f(loc.uEnergy!, engine.energy);
+    gl.uniform1f(loc.uPulse!, engine.pulse);
+    gl.uniform1f(loc.uSpin!, spin.current);
+    gl.uniform1f(loc.uHasCover!, hasCover.current);
+    gl.uniform3f(loc.uC1!, ...rgb(palette.accent));
+    gl.uniform3f(loc.uC2!, ...rgb(palette.accent2));
+    gl.uniform3f(loc.uC3!, ...rgb(palette.accent3));
+    gl.uniform3f(loc.uBg!, ...rgb(palette.bg2));
+    gl.uniform1i(loc.uCover!, 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, g.tex);
+    gl.uniform1fv(loc.uBands!, bands.current);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }, -5);
+
+  if (!active) return null;
+  const track = currentTrack();
+  const showLyrics = cfg.lyrics && !!lyrics?.synced && lyrics.lines.length > 0;
+  return (
+    <div className="screensaver" onPointerDown={stopScreensaver}>
+      <canvas ref={canvas} className="ss-canvas" />
+      <div className="ss-ui">
+        <div className="ss-top">
+          <div className="ss-track">
+            <b>{meta?.title ?? ""}</b>
+            <span>{meta?.artist ?? ""}</span>
+          </div>
+          {cfg.clock && <Clock />}
+        </div>
+        {showLyrics && (
+          <div className="ss-lyrics">
+            <Lyrics lyrics={lyrics} mode="line" />
+          </div>
+        )}
+        <div className="ss-scene">
+          {sceneById(sceneId).name}
+          {track ? " · любое движение — выйти" : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Включение и выход ----------
+
+/** Включить заставку. scene — показать конкретную сцену (кнопка «посмотреть» в Настройках). */
+export function startScreensaver(scene?: string): void {
+  app.set({ screensaver: true, screensaverScene: scene });
+  if (app.get().settings.screensaver.fullscreen) void api.window.setFullScreen(true);
+}
+
+export function stopScreensaver(): void {
+  if (!app.get().screensaver) return;
+  app.set({ screensaver: false, screensaverScene: undefined });
+  if (app.get().settings.screensaver.fullscreen) void api.window.setFullScreen(false);
+}
+
+/**
+ * Следим за бездействием: играет музыка, окно Камадо в фокусе и ничего не трогали N минут — включаем.
+ * Если ты работаешь в другой программе, заставка не вылезет поверх неё.
+ */
+export function watchIdle(): () => void {
+  let moved = 0;
+  const wake = (e: Event) => {
+    if (!app.get().screensaver) return;
+    // мелкое дрожание мыши не считается
+    if (e instanceof PointerEvent && e.type === "pointermove") {
+      moved += Math.abs(e.movementX) + Math.abs(e.movementY);
+      if (moved < 12) return;
+    }
+    moved = 0;
+    stopScreensaver();
+  };
+  const events = ["pointermove", "keydown", "wheel", "pointerdown"] as const;
+  for (const ev of events) window.addEventListener(ev, wake, { capture: true });
+  const timer = window.setInterval(async () => {
+    const st = app.get();
+    const cfg = st.settings.screensaver;
+    if (!cfg.enabled || st.screensaver || !player.get().playing || !document.hasFocus()) return;
+    const idle = await api.system.idleSeconds();
+    if (idle >= cfg.delay * 60) startScreensaver();
+  }, 4000);
+  return () => {
+    for (const ev of events) window.removeEventListener(ev, wake, { capture: true });
+    clearInterval(timer);
+  };
+}

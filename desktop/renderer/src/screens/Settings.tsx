@@ -1,6 +1,8 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { useEffect, useState } from "react";
-import { AlarmClock, Check, Download, FolderPlus, KeyRound, Music4, Play, RefreshCw, Square, Trash2 } from "lucide-react";
+import { AlarmClock, Check, Download, FolderPlus, KeyRound, Music4, Play, RefreshCw, Shuffle, Sparkles, Square, Trash2 } from "lucide-react";
+import { SCENES } from "../lib/scenes";
+import { startScreensaver } from "../components/Screensaver";
 import type { AiStatus, BotStatus } from "../../../shared/types";
 import type { AppSettings } from "../../../shared/settings";
 import { api } from "../lib/api";
@@ -313,6 +315,57 @@ function BotSection({ s }: { s: AppSettings }) {
   );
 }
 
+/** Заставка-визуализатор: сцены, через сколько включаться, что показывать. */
+function ScreensaverSection({ s }: { s: AppSettings }) {
+  const c = s.screensaver;
+  const set = (patch: Partial<AppSettings["screensaver"]>) => updateSettings({ screensaver: { ...c, ...patch } });
+  return (
+    <section className="set-section glass">
+      <h3>Заставка</h3>
+      <div className="set-hint">Играет музыка, а ты ничего не трогаешь — экран превращается в живую сцену в цветах песни, с текстом. Любое движение — выход.</div>
+      <Row title="Включать заставку">
+        <Toggle value={c.enabled} onChange={(v) => set({ enabled: v })} />
+      </Row>
+      <Row title="Через сколько" hint="Считается, только когда окно Камадо открыто и в фокусе — поверх других программ не вылезет.">
+        <Segmented
+          size="sm"
+          value={c.delay}
+          onChange={(v) => set({ delay: v })}
+          options={[1, 2, 5, 10].map((m) => ({ value: m, label: `${m} мин` }))}
+        />
+      </Row>
+      <div className="ss-scenes">
+        <button className={`ss-scene-btn ${c.scene === "random" ? "on" : ""}`} onClick={() => set({ scene: "random" })}>
+          <Shuffle size={18} />
+          <span>Случайная на каждый трек</span>
+        </button>
+        {SCENES.map((x) => (
+          <div key={x.id} className={`ss-scene-btn ${c.scene === x.id ? "on" : ""}`}>
+            <button className="ss-pick" onClick={() => set({ scene: x.id })}>
+              <span>{x.name}</span>
+            </button>
+            <button className="icon-btn" title="Посмотреть" onClick={() => startScreensaver(x.id)}>
+              <Play size={14} fill="currentColor" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <Row title="Текст песни на заставке">
+        <Toggle value={c.lyrics} onChange={(v) => set({ lyrics: v })} />
+      </Row>
+      <Row title="Часы">
+        <Toggle value={c.clock} onChange={(v) => set({ clock: v })} />
+      </Row>
+      <Row title="На весь экран">
+        <Toggle value={c.fullscreen} onChange={(v) => set({ fullscreen: v })} />
+      </Row>
+      <button className="btn" onClick={() => startScreensaver()}>
+        <Sparkles size={16} /> Показать сейчас
+      </button>
+    </section>
+  );
+}
+
 /** Звук напоминаний: 10 своих звуков, свой файл, нарастание громкости. */
 function AlarmSection({ s }: { s: AppSettings }) {
   const a = s.alarm;
@@ -557,6 +610,8 @@ export function Settings() {
           </button>
         </div>
       </section>
+
+      <ScreensaverSection s={s} />
 
       <AlarmSection s={s} />
 

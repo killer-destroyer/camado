@@ -10,6 +10,7 @@ import { initFocus, refreshFocusStats } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
+import { Screensaver, watchIdle } from "./components/Screensaver";
 import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
@@ -68,6 +69,7 @@ export function App() {
       initFocus(),
       api.on("data-changed", () => void refreshFocusStats()),
       initAlarms(),
+      watchIdle(),
       // Напоминания о сроках звенят, утренняя сводка — просто всплывает.
       api.on("reminder", (p) => (p.text.startsWith("⏰") ? ring(p.text) : toast(p.text, "warn"))),
       api.on("go", (screen) => go(screen as ScreenId)),
@@ -114,6 +116,7 @@ export function App() {
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
+      else if (name.startsWith("ss-")) app.set({ screensaver: true, screensaverScene: name.slice(3) });
       else if (name === "burst" || name === "line" || name === "flow") {
         app.set((s) => ({ nowPlaying: true, settings: { ...s.settings, lyricsMode: name } }));
       } else if (name.startsWith("pal-")) {
@@ -148,6 +151,7 @@ export function App() {
       )}
       <CommandPalette />
       <RecapModal />
+      <Screensaver />
       <AlarmModal />
       <Toasts />
       <UpdateBanner />

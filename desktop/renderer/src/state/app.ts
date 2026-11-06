@@ -20,6 +20,9 @@ interface AppState {
   palette: boolean; // командная строка Ctrl+K
   /** Открыты «Итоги недели». */
   recap: boolean;
+  /** Идёт заставка; screensaverScene — показать конкретную сцену (предпросмотр). */
+  screensaver: boolean;
+  screensaverScene?: string;
   settings: AppSettings;
   info: AppInfo;
   toasts: Toast[];
@@ -31,6 +34,7 @@ interface AppState {
 export const app = createStore<AppState>({
   screen: "today",
   recap: false,
+  screensaver: false,
   nowPlaying: false,
   palette: false,
   settings: DEFAULT_SETTINGS,

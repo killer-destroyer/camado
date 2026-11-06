@@ -8,6 +8,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  powerMonitor,
   safeStorage,
   protocol,
   screen,
@@ -352,7 +353,13 @@ const handlers: Record<string, Handler> = {
 
 
 
-  "window.setTitleBarColors": (symbol: string) => {
+  "system.idleSeconds": () => powerMonitor.getSystemIdleTime(),
+  "window.setFullScreen": (on: boolean) => {
+    if (!win) return;
+    if (on && !win.isVisible()) return;
+    win.setFullScreen(!!on);
+  },
+    "window.setTitleBarColors": (symbol: string) => {
     if (win && process.platform !== "darwin") win.setTitleBarOverlay({ color: "#00000000", symbolColor: symbol, height: 44 });
   },
 

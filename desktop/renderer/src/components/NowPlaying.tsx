@@ -16,6 +16,7 @@ import {
   SkipForward,
   SlidersHorizontal,
   SlidersVertical,
+  Sparkles,
   Vibrate,
   Volume1,
   Volume2,
@@ -51,6 +52,7 @@ import { Lyrics } from "./Lyrics";
 import { Segmented, Slider, Toggle } from "./ui";
 import { autoTrim } from "../lib/loudness";
 import { EqPanel } from "./Equalizer";
+import { startScreensaver } from "./Screensaver";
 import { discGeometry, Vinyl } from "./Vinyl";
 import { Visualizer } from "./Visualizer";
 
@@ -445,6 +447,9 @@ export function NowPlaying() {
           {hasLyrics && lyrics?.synced && track && <LyricsShift trackId={track.id} />}
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
           <Segmented size="sm" value={vis} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
+          <button className="icon-btn" title="Заставка-визуализатор на весь экран" onClick={() => startScreensaver()}>
+            <Sparkles size={18} />
+          </button>
           {track && (
             <button className={`icon-btn ${isFav ? "active" : ""}`} title={isFav ? "Убрать из любимого" : "В любимое"} onClick={() => void toggleFavorite(track.id)}>
               <Heart size={18} fill={isFav ? "currentColor" : "none"} />

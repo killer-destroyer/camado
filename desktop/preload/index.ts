@@ -98,7 +98,11 @@ const api: CamadoApi = {
     check: call("updates.check") as CamadoApi["updates"]["check"],
     install: call("updates.install") as CamadoApi["updates"]["install"],
   },
-  window: { setTitleBarColors: call("window.setTitleBarColors") as CamadoApi["window"]["setTitleBarColors"] },
+  system: { idleSeconds: call("system.idleSeconds") as CamadoApi["system"]["idleSeconds"] },
+  window: {
+    setTitleBarColors: call("window.setTitleBarColors") as CamadoApi["window"]["setTitleBarColors"],
+    setFullScreen: call("window.setFullScreen") as CamadoApi["window"]["setFullScreen"],
+  },
   notify: call("notify") as CamadoApi["notify"],
   pathForFile: (file: File) => webUtils.getPathForFile(file),
   on: ((event: string, cb: (payload?: unknown) => void) => {
