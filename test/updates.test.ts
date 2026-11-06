@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { macSwapScript } from "../desktop/main/macSwap.js";
 
-describe("обновление на Mac", () => {
+// Скрипт работает только на Mac (и проверяется на Mac/Linux через bash); на Windows bash нет — там этот тест не нужен.
+describe.skipIf(process.platform === "win32")("обновление на Mac", () => {
   it("меняет программу на новую, подписывает и запускает; старая не остаётся", () => {
     const d = mkdtempSync(join(tmpdir(), "swap-"));
     const app = join(d, "Applications", "Camado.app");
