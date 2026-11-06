@@ -268,6 +268,20 @@ export class AudioEngine {
     await deck.play();
   }
 
+  /**
+   * Заглушить музыку на время скретча (слышен только звук скретча) и вернуть.
+   * Глушим своим регулятором, а не el.muted: снятое на паузе muted Chromium иногда не возвращает — песня играла беззвучно.
+   */
+  setMusicMuted(on: boolean): void {
+    const ctx = this.ensureContext();
+    const g = this.deckGains[this.active]?.gain;
+    if (!g) return;
+    const now = ctx.currentTime;
+    g.cancelScheduledValues(now);
+    g.setTargetAtTime(on ? 0 : 1, now, 0.012);
+    for (const d of this.decks) d.muted = false;
+  }
+
   /** Плавно приглушить и поставить на паузу (для таймера сна). */
   async fadeOutAndPause(seconds = 8): Promise<void> {
     const ctx = this.ensureContext();

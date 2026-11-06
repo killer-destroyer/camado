@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { GeminiProvider, toGeminiSchema } from "../src/llm/gemini.js";
+import { GeminiProvider, geminiKeyProblem, looksLikeGeminiKey, toGeminiSchema } from "../src/llm/gemini.js";
 import { OpenAiCompatProvider } from "../src/llm/openai.js";
 import { buildProvider, parseAiConfig } from "../src/llm/providers.js";
 import { defineTool } from "../src/llm/tool.js";
@@ -126,5 +126,42 @@ describe("выбор нейросети", () => {
     expect(buildProvider({ kind: "gemini" }, undefined, claude)).toBeUndefined();
     expect(buildProvider({ kind: "gemini" }, "AIza", claude)).toBeInstanceOf(GeminiProvider);
     expect(buildProvider({ kind: "openai", baseUrl: "http://localhost:11434/v1" }, undefined, claude)).toBeInstanceOf(OpenAiCompatProvider);
+  });
+});
+
+describe("1.0.2: ключи Gemini нового вида и бесплатные модели", () => {
+  it("ключ AQ. и старый AIza оба похожи на ключ Gemini", () => {
+    expect(looksLikeGeminiKey("AQ.fake-test-key-not-real-0000000000000000000000")).toBe(true);
+    expect(looksLikeGeminiKey("AIzaSyA1234567890abcdefghijklmnopqrstuv")).toBe(true);
+    expect(looksLikeGeminiKey("sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx")).toBe(false);
+    expect(looksLikeGeminiKey("привет")).toBe(false);
+  });
+
+  it("Google не пустил ключ — понятная причина, а не «не принял»", async () => {
+    const impl = (async () =>
+      new Response(JSON.stringify({ error: { status: "UNAUTHENTICATED", message: "x", details: [{ reason: "ACCESS_TOKEN_TYPE_UNSUPPORTED" }] } }), { status: 401 })) as unknown as typeof fetch;
+    expect(await geminiKeyProblem("AQ.test-test-test-test-test", impl)).toMatch(/новый ключ/);
+    const ok = (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    expect(await geminiKeyProblem("AQ.test-test-test-test-test", ok)).toBeUndefined();
+  });
+
+  it("модель, отмеченная бесплатной, стоит $0", async () => {
+    const impl = (async () => json({ choices: [{ message: { role: "assistant", content: "hi" } }], usage: { prompt_tokens: 10, completion_tokens: 1 } })) as unknown as typeof fetch;
+    const usages: Usage[] = [];
+    await new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 0, output: 0 }, free: true }, impl).runAgent({
+      tier: "brain",
+      system: [],
+      history: [],
+      userMessage: "x",
+      tools: [],
+      onUsage: (u) => usages.push(u),
+    });
+    expect(usages[0]!.costUsd).toBe(0);
+  });
+
+  it("сервис ответил не в том виде — показываем причину, а не «ничего не ответила»", async () => {
+    const impl = (async () => json({ error: { message: "model not found" } })) as unknown as typeof fetch;
+    const p = new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 1, output: 1 } }, impl);
+    await expect(p.runAgent({ tier: "brain", system: [], history: [], userMessage: "x", tools: [] })).rejects.toThrow(/model not found/);
   });
 });

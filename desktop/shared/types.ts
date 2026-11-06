@@ -311,6 +311,8 @@ export interface CamadoApi {
   window: {
     setTitleBarColors(symbol: string): Promise<void>;
     setFullScreen(on: boolean): Promise<void>;
+    /** Окно сейчас на весь экран? */
+    isFullScreen(): Promise<boolean>;
   };
   notify(title: string, body: string): Promise<void>;
   /** Путь к файлу, перетащенному в окно. */

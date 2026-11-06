@@ -410,12 +410,20 @@ const PAINT: Record<VinylStyle, (x: Ctx) => void> = {
       g.beginPath();
       g.ellipse(px, py, sz, sz * (0.6 + rnd() * 0.5), rnd() * TAU, 0, TAU);
       g.fill();
-      g.strokeStyle = rgba(shade(inks[2 % inks.length]!, -0.75), 0.9);
-      g.lineWidth = sz * 0.35;
-      g.beginPath();
-      g.arc(px, py, sz * 1.1, rnd() * TAU, rnd() * TAU + 3.5);
-      g.stroke();
+      // Розетка, как у настоящего леопарда: 3–4 тёмных пятна-дуги по всему кругу, а не обводка с одного бока.
+      g.strokeStyle = rgba(shade(inks[2 % inks.length]!, -0.75), 0.85);
+      g.lineWidth = sz * 0.32;
+      g.lineCap = "round";
+      const parts = 3 + Math.floor(rnd() * 2);
+      const a0 = rnd() * TAU;
+      for (let k = 0; k < parts; k++) {
+        const from = a0 + (k / parts) * TAU;
+        g.beginPath();
+        g.arc(px, py, sz * 1.15, from, from + (TAU / parts) * (0.45 + rnd() * 0.25));
+        g.stroke();
+      }
     }
+    g.lineCap = "butt";
   },
 
   // Сетка точек, как на колонке: точки крупнее к краю.
@@ -456,6 +464,7 @@ const PAINT: Record<VinylStyle, (x: Ctx) => void> = {
         if (i === 0) g.moveTo(px, py);
         else g.lineTo(px, py);
       }
+      g.closePath(); // без этого в точке, где кольцо сходится, — зазубрина
       g.stroke();
     }
   },
@@ -549,10 +558,15 @@ const PAINT: Record<VinylStyle, (x: Ctx) => void> = {
   picture(x) {
     const { g, c, R, img } = x;
     if (!img) return PAINT.wheel(x);
-    g.drawImage(img, c - R, c - R, R * 2, R * 2);
+    // Обложка обычно маленькая: растянутая на весь диск, она пикселит. Чуть смягчаем и приглушаем —
+    // получается «фото-пластинка», а не мутная картинка.
+    g.filter = "blur(5px) saturate(1.25) contrast(1.05)";
+    g.drawImage(img, c - R * 1.08, c - R * 1.08, R * 2.16, R * 2.16);
+    g.filter = "none";
+    fillDisc(x, rgba(x.dark, 0.25));
     const sheen = g.createRadialGradient(c, c, R * 0.3, c, c, R);
     sheen.addColorStop(0, "rgba(0,0,0,0)");
-    sheen.addColorStop(1, "rgba(0,0,0,0.45)");
+    sheen.addColorStop(1, "rgba(0,0,0,0.55)");
     fillDisc(x, sheen);
   },
 
@@ -654,7 +668,9 @@ export function drawVinyl(canvas: HTMLCanvasElement, seedKey: string, colors: Vi
 
   PAINT[style](x);
   // Иногда поверх основы — второй, лёгкий узор: так видов в разы больше.
-  if (style !== "picture") OVERLAYS[Math.floor(rnd() * OVERLAYS.length)]!(x);
+  // (не для картинки и сетки из точек — им второй узор только мешает)
+  const overlay = Math.floor(rnd() * OVERLAYS.length);
+  if (style !== "picture" && style !== "mesh") OVERLAYS[overlay]!(x);
 
   // Бороздки поверх цвета: тонкие кольца, цвет под ними остаётся.
   const grooveFrom = labelR + R * 0.05; // гладкая полоска у наклейки, как у настоящих

@@ -13,7 +13,7 @@ export interface Scene {
 export const SHADER_HEAD = `#version 300 es
 precision highp float;
 uniform vec2 uRes;
-uniform float uTime, uBass, uMid, uHigh, uEnergy, uPulse, uSpin, uHasCover, uImgAspect, uFx, uOwn;
+uniform float uTime, uBass, uMid, uHigh, uEnergy, uPulse, uSpin, uHasCover, uImgAspect, uFx, uOwn, uTravel, uWarp;
 uniform vec3 uC1, uC2, uC3, uBg;
 uniform sampler2D uCover;
 uniform float uBands[32];
@@ -263,7 +263,8 @@ vec3 scene(vec2 uv, vec2 p) {
 // Полёт сквозь звёзды: звёзды летят навстречу и вытягиваются в линии, сзади — туманность.
 vec3 scene(vec2 uv, vec2 p) {
   float r = length(p); float ang = atan(p.y, p.x);
-  float speed = 0.35 + uEnergy * 1.2 + uPulse * 0.6;
+  // uTravel — пройденный путь (копится плавно по кадрам), uWarp — текущая скорость: музыка лишь слегка подгоняет
+  float speed = uWarp;
   // туманность в цветах песни, медленно закручивается
   vec2 np = p * 1.6;
   float n1 = fbm(np * 1.2 + vec2(uTime * 0.02, 0.0) + fbm(np * 2.0 - uTime * 0.03));
@@ -279,9 +280,9 @@ vec3 scene(vec2 uv, vec2 p) {
     float h = hash(vec2(id, k * 13.0));
     float h2 = hash(vec2(id, k * 13.0 + 5.0));
     // звезда «летит» от центра: позиция растёт ускоряясь
-    float z = fract(h2 + uTime * speed * (0.08 + h * 0.06) * (1.0 + k * 0.4));
+    float z = fract(h2 + uTravel * (0.08 + h * 0.06) * (1.0 + k * 0.4));
     float pos = pow(z, 2.2) * 1.3;
-    float len = (0.01 + speed * 0.06) * (0.2 + pos * 1.6);
+    float len = (0.008 + speed * 0.05) * (0.2 + pos * 1.4);
     float along = smoothstep(pos - len, pos, r) * smoothstep(pos + 0.004, pos, r);
     float across = smoothstep(0.32, 0.0, abs(fract(a) - 0.5 - (h - 0.5) * 0.3));
     float on = step(0.45, h);

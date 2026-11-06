@@ -1,7 +1,7 @@
 // Огромная пластинка у левого края экрана «Сейчас играет».
 // Узор свой для каждого трека, цвета из обложки, в центре крутится круглая обложка.
 // Крути её мышкой или двумя пальцами на трекпаде — это скретч: песня звучит вперёд и назад, потом перемотка.
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { engine } from "../lib/audio";
 import { damp } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
@@ -20,8 +20,11 @@ export function discGeometry(w: number, h: number): { D: number; cx: number; cy:
   return { D, cx: D * 0.18, cy: h / 2, r: D / 2 };
 }
 
-export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: string; colors: VinylColors }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
+export function Vinyl({ trackKey, cover, colors, ready = true }: { trackKey: string; cover?: string; colors: VinylColors; ready?: boolean }) {
+  // Два холста: новый узор рисуем на заднем и плавно проявляем поверх старого — без рывка при смене трека.
+  const canvasA = useRef<HTMLCanvasElement>(null);
+  const canvasB = useRef<HTMLCanvasElement>(null);
+  const front = useRef<0 | 1>(0);
   const disc = useRef<HTMLDivElement>(null);
   const pulse = useRef<HTMLDivElement>(null);
   const glow = useRef<HTMLDivElement>(null);
@@ -36,22 +39,40 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
   } | null>(null);
   const wheelEnd = useRef<number | undefined>(undefined);
 
-  // Рисуем сразу, а когда загрузится обложка — ещё раз (для пластинки-картинки и дымчатой).
-  const swatchKey = colors.swatches?.join(",") ?? "";
+  // Ждём «свои» цвета обложки (обычно они готовы заранее), но не дольше полсекунды.
+  const [waited, setWaited] = useState(false);
   useEffect(() => {
-    const c = canvas.current;
-    if (!c) return;
-    drawVinyl(c, trackKey, colors);
-    if (!cover) return;
+    setWaited(false);
+    const t = setTimeout(() => setWaited(true), 500);
+    return () => clearTimeout(t);
+  }, [trackKey, cover]);
+  const swatchKey = colors.swatches?.join(",") ?? "";
+  const paint = (img?: CanvasImageSource) => {
+    const cs = [canvasA.current, canvasB.current];
+    const back = (1 - front.current) as 0 | 1;
+    const c = cs[back];
+    const old = cs[front.current];
+    if (!c || !old) return;
+    drawVinyl(c, trackKey, colors, 1024, img);
+    c.style.opacity = "1";
+    old.style.opacity = "0";
+    front.current = back;
+  };
+  useEffect(() => {
+    if (!ready && !waited) return;
+    // Рисуем один раз, уже с обложкой (она обычно в кэше), чтобы не было двух перерисовок подряд.
+    if (!cover) return paint();
     let alive = true;
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.onload = () => alive && drawVinyl(c, trackKey, colors, 1024, img);
+    img.onload = () => alive && paint(img);
+    img.onerror = () => alive && paint();
     img.src = cover;
     return () => {
       alive = false;
     };
-  }, [trackKey, cover, colors.accent, colors.accent2, colors.accent3, colors.bg, swatchKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackKey, cover, ready || waited, colors.accent, colors.accent2, colors.accent3, colors.bg, swatchKey]);
 
   useFrame((dt) => {
     const playing = player.get().playing;
@@ -78,7 +99,7 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
       lastT: performance.now(),
       rate: 0,
     };
-    engine.el.muted = true;
+    engine.setMusicMuted(true);
     prepareScratch(engine.el.src);
     scratchBegin(position());
   };
@@ -99,7 +120,7 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
     const s = scratch.current;
     scratch.current = null;
     scratchEnd();
-    engine.el.muted = false;
+    engine.setMusicMuted(false);
     if (s && Math.abs(s.turned) > 3) seek(s.start + (s.turned / 360) * SEC_PER_TURN);
   };
 
@@ -140,7 +161,8 @@ export function Vinyl({ trackKey, cover, colors }: { trackKey: string; cover?: s
           wheelEnd.current = window.setTimeout(end, 180);
         }}
       >
-        <canvas ref={canvas} className="disc-art" />
+        <canvas ref={canvasA} className="disc-art" />
+        <canvas ref={canvasB} className="disc-art" style={{ opacity: 0 }} />
         <div className="disc-label" style={cover ? { backgroundImage: `url("${cover}")` } : undefined} />
       </div>
       <div className="disc-sheen" />

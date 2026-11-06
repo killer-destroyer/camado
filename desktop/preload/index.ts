@@ -135,6 +135,7 @@ const api: CamadoApi = {
   window: {
     setTitleBarColors: call("window.setTitleBarColors") as CamadoApi["window"]["setTitleBarColors"],
     setFullScreen: call("window.setFullScreen") as CamadoApi["window"]["setFullScreen"],
+    isFullScreen: call("window.isFullScreen") as CamadoApi["window"]["isFullScreen"],
   },
   notify: call("notify") as CamadoApi["notify"],
   pathForFile: (file: File) => webUtils.getPathForFile(file),

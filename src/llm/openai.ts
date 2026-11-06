@@ -22,6 +22,8 @@ export interface OpenAiOptions {
   models: Record<Tier, string>;
   /** $ за 1 млн токенов — для учёта трат. OpenRouter присылает цену сам. */
   price: { input: number; output: number };
+  /** Владелец отметил модель как бесплатную — запросы стоят $0. */
+  free?: boolean;
 }
 
 /** Своя модель на компьютере — бесплатно. */
@@ -81,7 +83,8 @@ export class OpenAiCompatProvider implements LLMProvider {
       req.onUsage?.(this.usage(model, data));
       const choice = data.choices?.[0];
       const msg = choice?.message;
-      if (!msg) return { text: "Модель ничего не ответила. Попробуй ещё раз." };
+      // Нет ответа в привычном виде — показываем, что сказал сервис, а не прячем причину.
+      if (!msg) throw new Error(`Сервис ответил не так, как ждали${data.error?.message ? `: ${data.error.message}` : ""}. Проверь адрес API и название модели в Настройках → ИИ.`);
       if (choice.finish_reason === "content_filter") return { text: "", refused: true };
       messages.push({ role: "assistant", content: msg.content ?? "", ...(msg.tool_calls?.length ? { tool_calls: msg.tool_calls } : {}) });
       if (!msg.tool_calls?.length) return { text: typeof msg.content === "string" ? msg.content.trim() : "" };
@@ -110,7 +113,7 @@ export class OpenAiCompatProvider implements LLMProvider {
     const cost =
       typeof u.cost === "number"
         ? u.cost
-        : isLocalUrl(this.o.baseUrl)
+        : isLocalUrl(this.o.baseUrl) || this.o.free
           ? 0
           : priced
             ? (input * this.o.price.input + output * this.o.price.output) / 1_000_000

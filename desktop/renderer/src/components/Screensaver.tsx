@@ -43,7 +43,7 @@ function compile(gl: WebGL2RenderingContext, fragBody: string): WebGLProgram | n
   return gl.getProgramParameter(p, gl.LINK_STATUS) ? p : null;
 }
 
-const UNIFORMS = ["uRes", "uTime", "uBass", "uMid", "uHigh", "uEnergy", "uPulse", "uSpin", "uHasCover", "uImgAspect", "uFx", "uOwn", "uC1", "uC2", "uC3", "uBg", "uCover", "uBands"];
+const UNIFORMS = ["uRes", "uTime", "uBass", "uMid", "uHigh", "uEnergy", "uPulse", "uSpin", "uHasCover", "uImgAspect", "uFx", "uOwn", "uTravel", "uWarp", "uC1", "uC2", "uC3", "uBg", "uCover", "uBands"];
 
 function rgb(hex: string): [number, number, number] {
   const [r, g, b] = hexToRgb(hex);
@@ -80,6 +80,8 @@ export function Screensaver() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const glRef = useRef<Gl | null>(null);
   const spin = useRef(0);
+  const travel = useRef(0);
+  const warp = useRef(0.25);
   const t0 = useRef(performance.now());
   const preview = useStore(app, (s) => s.screensaverScene);
   const [sceneId, setSceneId] = useState(() => preview ?? pickScene(cfg.scene));
@@ -174,6 +176,10 @@ export function Screensaver() {
     const src = engine.smooth;
     for (let i = 0; i < 32; i++) bands.current[i] = Math.min(1, (src[Math.floor((i / 32) * src.length)] ?? 0) * 1.2);
     spin.current += dt * (player.get().playing ? 0.9 : 0) * (1 + engine.bass * 0.4);
+    // «Полёт сквозь звёзды»: спокойная скорость, музыка подгоняет мягко, путь копится — без рывков
+    const want = 0.22 + Math.min(1, engine.energy) * 0.3 + engine.pulse * 0.08;
+    warp.current += (want - warp.current) * Math.min(1, dt * 1.5);
+    travel.current += dt * warp.current;
     gl.uniform2f(loc.uRes!, w, h);
     gl.uniform1f(loc.uTime!, (performance.now() - t0.current) / 1000);
     gl.uniform1f(loc.uBass!, engine.bass);
@@ -185,6 +191,8 @@ export function Screensaver() {
     gl.uniform1f(loc.uHasCover!, hasCover.current);
     gl.uniform1f(loc.uImgAspect!, aspect.current);
     gl.uniform1f(loc.uOwn!, picture ? 1 : 0);
+    gl.uniform1f(loc.uTravel!, travel.current);
+    gl.uniform1f(loc.uWarp!, warp.current);
     gl.uniform1f(loc.uFx!, cfg.imageFx === "rain" ? 2 : cfg.imageFx === "none" ? 0 : 1);
     gl.uniform3f(loc.uC1!, ...rgb(palette.accent));
     gl.uniform3f(loc.uC2!, ...rgb(palette.accent2));
@@ -228,15 +236,22 @@ export function Screensaver() {
 // ---------- Включение и выход ----------
 
 /** Включить заставку. scene — показать конкретную сцену (кнопка «посмотреть» в Настройках). */
+/** Был ли окно на весь экран ещё до заставки — тогда после неё так и оставляем. */
+let wasFullScreen = false;
 export function startScreensaver(scene?: string): void {
+  if (app.get().screensaver) return;
   app.set({ screensaver: true, screensaverScene: scene });
-  if (app.get().settings.screensaver.fullscreen) void api.window.setFullScreen(true);
+  if (!app.get().settings.screensaver.fullscreen) return;
+  void api.window.isFullScreen().then((on) => {
+    wasFullScreen = on;
+    if (!on && app.get().screensaver) void api.window.setFullScreen(true);
+  });
 }
 
 export function stopScreensaver(): void {
   if (!app.get().screensaver) return;
   app.set({ screensaver: false, screensaverScene: undefined });
-  if (app.get().settings.screensaver.fullscreen) void api.window.setFullScreen(false);
+  if (app.get().settings.screensaver.fullscreen && !wasFullScreen) void api.window.setFullScreen(false);
 }
 
 /**

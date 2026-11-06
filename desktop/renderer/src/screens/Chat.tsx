@@ -1,4 +1,4 @@
-// «Камадо»: разговор с ассистентом — тот же мозг, что и в Telegram.
+// «Камадо»: разговор с ассистентом (тот же, что отвечает в Telegram).
 import { useEffect, useRef, useState } from "react";
 import { KeyRound, SendHorizontal, Sparkles } from "lucide-react";
 import type { ChatEntry } from "../../../shared/types";
@@ -57,7 +57,6 @@ export function Chat() {
     <div className="screen chat">
       <header className="screen-head">
         <h1 className="display">Камадо</h1>
-        <span className="muted">тот же мозг, что и в Telegram</span>
       </header>
       <div className="chat-log">
         {items.length === 0 && (

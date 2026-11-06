@@ -59,7 +59,7 @@ export function buildProvider(cfg: AiConfig, key: string | undefined, claudeMode
   const preset = OPENAI_PRESETS.find((p) => cfg.baseUrl!.startsWith(p.baseUrl));
   const models = { ...(preset?.models ?? { fast: "", brain: "", smart: "" }), ...clean(cfg.models) };
   if (!models.brain) return undefined;
-  return new OpenAiCompatProvider({ baseUrl: cfg.baseUrl, apiKey: key, models: { fast: models.fast || models.brain, brain: models.brain, smart: models.smart || models.brain }, price: cfg.price ?? { input: 0, output: 0 } });
+  return new OpenAiCompatProvider({ baseUrl: cfg.baseUrl, apiKey: key, models: { fast: models.fast || models.brain, brain: models.brain, smart: models.smart || models.brain }, price: cfg.price ?? { input: 0, output: 0 }, free: !!cfg.free });
 }
 
 function clean(m: Partial<Record<Tier, string>> | undefined): Partial<Record<Tier, string>> {

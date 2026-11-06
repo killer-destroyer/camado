@@ -1,7 +1,7 @@
 // Сцены заставки: у каждой своё имя и функция scene(); «Своя картинка» есть; настройки картинки по умолчанию.
 import { describe, expect, it } from "vitest";
-import { SCENES, SHADER_HEAD, sceneById } from "./desktop/renderer/src/lib/scenes.js";
-import { DEFAULT_SETTINGS, mergeSettings } from "./desktop/shared/settings.js";
+import { SCENES, SHADER_HEAD, sceneById } from "../desktop/renderer/src/lib/scenes.js";
+import { DEFAULT_SETTINGS, mergeSettings } from "../desktop/shared/settings.js";
 
 describe("сцены заставки", () => {
   it("у каждой сцены свой id и тело шейдера", () => {

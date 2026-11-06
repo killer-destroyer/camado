@@ -120,7 +120,8 @@ export class GeminiProvider implements LLMProvider {
       const cand = data.candidates?.[0];
       if (!cand?.content) {
         if (cand?.finishReason === "SAFETY" || cand?.finishReason === "PROHIBITED_CONTENT") return { text: "", refused: true };
-        return { text: "Модель ничего не ответила. Попробуй ещё раз." };
+        if (cand?.finishReason === "MAX_TOKENS") return { text: "Модель задумалась слишком надолго и не успела ответить. Спроси короче или ещё раз." };
+        return { text: `Модель ничего не ответила${cand?.finishReason ? ` (${cand.finishReason})` : ""}. Попробуй ещё раз.` };
       }
       contents.push(cand.content);
       const calls = cand.content.parts.filter((p) => p.functionCall);
@@ -173,8 +174,22 @@ function geminiMessage(status: number, data: GenerateResponse): string {
 
 /** Проверить ключ: бесплатный запрос списка моделей. */
 export async function checkGeminiKey(apiKey: string, fetchImpl: typeof fetch = fetch): Promise<boolean> {
+  return (await geminiKeyProblem(apiKey, fetchImpl)) === undefined;
+}
+
+/** Ключ Gemini: старый вид AIza… или новый AQ.… (так AI Studio выдаёт ключи с 2026 года). */
+export const looksLikeGeminiKey = (s: string): boolean => /^(AIza[\w-]{30,}|AQ\.[\w.-]{20,})$/.test(s.trim());
+
+/** Проверить ключ бесплатным запросом. Вернёт понятную причину, если Google его не принял. */
+export async function geminiKeyProblem(apiKey: string, fetchImpl: typeof fetch = fetch): Promise<string | undefined> {
   const res = await fetchImpl(`${API}/models?pageSize=1`, { headers: { "x-goog-api-key": apiKey }, signal: AbortSignal.timeout(15_000) });
-  if (res.ok) return true;
-  if (res.status === 400 || res.status === 401 || res.status === 403) return false;
+  if (res.ok) return undefined;
+  const data = (await res.json().catch(() => ({}))) as { error?: { message?: string; status?: string; details?: { reason?: string }[] } };
+  const reason = [data.error?.status, data.error?.message, ...(data.error?.details ?? []).map((d) => d.reason)].join(" ");
+  if (res.status === 400 || res.status === 401 || res.status === 403) {
+    if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|SERVICE_BLOCKED|SERVICE_DISABLED/i.test(reason))
+      return "Google не пустил этот ключ к Gemini API. Создай новый ключ на aistudio.google.com (Create API key → «Create API key in new project») и вставь его.";
+    return "Google не принял этот ключ. Проверь, что скопировал его целиком.";
+  }
   throw new Error(`Gemini ответил ${res.status}`);
 }

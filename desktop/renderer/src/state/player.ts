@@ -5,6 +5,7 @@ import { addAnchor, approximateTimes, lyricsSlope, mapLyricsTime } from "../../.
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
+import { scratching } from "../lib/scratch";
 import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
@@ -20,6 +21,8 @@ interface PlayerState {
   lyrics?: Lyrics;
   lyricsLoading: boolean;
   coverPalette?: Palette;
+  /** Для какой обложки посчитана coverPalette — пластинка ждёт «свои» цвета, чтобы не мелькнуть в чужих. */
+  coverPaletteFor?: string;
   /** Таймер сна: во сколько выключить (Date.now()) или «после этого трека». */
   sleep?: { at?: number; endOfTrack?: boolean };
   /** «Поймать текст»: следующий клик по строке говорит, что её поют прямо сейчас. */
@@ -183,8 +186,19 @@ export function watchLibrary(): () => void {
 // ---------- Управление ----------
 
 export async function playQueue(tracks: Track[], index: number): Promise<void> {
-  player.set({ queue: tracks, index });
+  player.set({ queue: tracks });
+  setIndex(index);
   await startCurrent(0.35);
+}
+
+/**
+ * Переключить трек: номер, подгонка текста выключается, и если цвета новой обложки уже готовы
+ * (соседей готовим заранее) — ставим их тем же махом, без промежуточного кадра.
+ */
+function setIndex(i: number): void {
+  const t = player.get().queue[i];
+  const cached = t?.cover ? paletteCache.get(paletteKey(t.cover)) : undefined;
+  player.set({ index: i, syncLyrics: false, ...(cached ? { coverPalette: cached, coverPaletteFor: t!.cover } : {}) });
 }
 
 /** Перемешать всё и включить — режим умного рандома. */
@@ -240,7 +254,18 @@ async function startCurrent(fade = 0): Promise<void> {
   }
   void updateMediaSession(t);
   void loadLyrics();
-  void loadCoverPalette(t.cover);
+  void loadCoverPalette(t.cover).then(prefetchNeighbors);
+}
+
+/** Заранее готовим соседние треки: обложку в память и её цвета — переход будет без рывка. */
+function prefetchNeighbors(): void {
+  const s = player.get();
+  if (s.queue.length < 2) return;
+  const ids = new Set([nextIndex(false), (s.index - 1 + s.queue.length) % s.queue.length]);
+  for (const i of ids) {
+    const cover = s.queue[i]?.cover;
+    if (cover && !paletteCache.has(paletteKey(cover))) void paletteFor(cover).catch(() => undefined);
+  }
 }
 
 /** «Сейчас играет» в системе (Пункт управления на Mac, медиа-клавиши, оверлей Windows). */
@@ -274,8 +299,11 @@ export function togglePlay(): void {
     if (first) void playQueue(s.library.tracks, 0);
     return;
   }
-  if (engine.el.paused) void engine.play().catch(() => undefined);
-  else engine.el.pause();
+  if (engine.el.paused) {
+    // На всякий случай: звук не должен остаться заглушённым после скретча на паузе.
+    if (!scratching()) engine.setMusicMuted(false);
+    void engine.play().catch(() => undefined);
+  } else engine.el.pause();
 }
 
 /** Индекс следующего трека или −1, если очередь кончилась. */
@@ -305,7 +333,7 @@ export function next(auto = false, fade = auto ? 0 : 0.4): void {
   }
   const i = nextIndex(auto);
   if (i < 0) return;
-  player.set({ index: i });
+  setIndex(i);
   void startCurrent(fade);
 }
 
@@ -316,7 +344,7 @@ export function prev(): void {
     return;
   }
   if (s.queue.length === 0) return;
-  player.set({ index: (s.index - 1 + s.queue.length) % s.queue.length });
+  setIndex((s.index - 1 + s.queue.length) % s.queue.length);
   void startCurrent(0.4);
 }
 
@@ -368,23 +396,38 @@ export async function loadLyrics(): Promise<void> {
   }
 }
 
+const paletteCache = new Map<string, Palette>();
+/** Держим обложки соседей декодированными, чтобы картинка появлялась мгновенно. */
+const coverImages = new Map<string, HTMLImageElement>();
+const paletteKey = (cover: string) => `${app.get().settings.palette}|${cover}`;
+
+async function paletteFor(cover: string): Promise<Palette> {
+  const key = paletteKey(cover);
+  const hit = paletteCache.get(key);
+  if (hit) return hit;
+  const img = new Image();
+  img.crossOrigin = "anonymous";
+  img.src = cover;
+  await img.decode();
+  coverImages.set(cover, img);
+  if (coverImages.size > 8) coverImages.delete(coverImages.keys().next().value!);
+  const c = document.createElement("canvas");
+  c.width = c.height = 48;
+  const g = c.getContext("2d", { willReadFrequently: true })!;
+  g.drawImage(img, 0, 0, 48, 48);
+  const pal = paletteFromPixels(g.getImageData(0, 0, 48, 48).data, paletteById(app.get().settings.palette));
+  paletteCache.set(key, pal);
+  if (paletteCache.size > 200) paletteCache.delete(paletteCache.keys().next().value!);
+  return pal;
+}
+
 export async function loadCoverPalette(cover?: string): Promise<void> {
-  if (!cover) return player.set({ coverPalette: undefined });
+  if (!cover) return player.set({ coverPalette: undefined, coverPaletteFor: undefined });
   try {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.src = cover;
-    await img.decode();
-    const c = document.createElement("canvas");
-    c.width = c.height = 48;
-    const g = c.getContext("2d", { willReadFrequently: true })!;
-    g.drawImage(img, 0, 0, 48, 48);
-    const px = g.getImageData(0, 0, 48, 48).data;
-    player.set({
-      coverPalette: paletteFromPixels(px, paletteById(app.get().settings.palette)),
-    });
+    const pal = await paletteFor(cover);
+    if (currentTrack()?.cover === cover || nowMeta()?.cover === cover) player.set({ coverPalette: pal, coverPaletteFor: cover });
   } catch {
-    player.set({ coverPalette: undefined });
+    player.set({ coverPalette: undefined, coverPaletteFor: cover });
   }
 }
 

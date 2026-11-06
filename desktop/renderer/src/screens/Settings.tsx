@@ -117,6 +117,7 @@ function AiSection() {
   const [baseUrl, setBaseUrl] = useState("");
   const [model, setModel] = useState("");
   const [price, setPrice] = useState({ input: 0, output: 0 });
+  const [free, setFree] = useState(false);
   const [busy, setBusy] = useState(false);
   const load = () =>
     void api.ai.status().then((x) => {
@@ -125,6 +126,7 @@ function AiSection() {
       setBaseUrl(x.config.baseUrl ?? "");
       setModel(x.config.models?.brain ?? "");
       setPrice(x.config.price ?? { input: 0, output: 0 });
+      setFree(x.kind === "openai" && !!x.config.free);
     });
   useEffect(load, []);
   const current = st?.kind === kind && st.enabled;
@@ -135,7 +137,7 @@ function AiSection() {
         ? { kind, free: true, ...(model ? { models: { brain: model, smart: model } } : {}) }
         : kind === "anthropic"
           ? { kind, ...(model ? { models: { brain: model } } : {}) }
-          : { kind, baseUrl: baseUrl.trim(), price, ...(model ? { models: { fast: model, brain: model, smart: model } } : {}) };
+          : { kind, baseUrl: baseUrl.trim(), price, free, ...(model ? { models: { fast: model, brain: model, smart: model } } : {}) };
     const r = await api.ai.connect(cfg, key || undefined);
     setBusy(false);
     if (r.ok) {
@@ -170,7 +172,7 @@ function AiSection() {
             </button>
           </li>
           <li>
-            Нажми <b>Create API key</b> и скопируй ключ — он начинается с <code>AIza</code>. Карта не нужна.
+            Нажми <b>Create API key</b> и скопируй ключ — он начинается с <code>AQ.</code> (у старых ключей — <code>AIza</code>). Карта не нужна.
           </li>
           <li>Вставь его ниже и нажми «Подключить».</li>
         </ol>
@@ -202,7 +204,15 @@ function AiSection() {
           </div>
           {preset && <div className="set-hint">{preset.hint}</div>}
           <input className="input mono" placeholder="Адрес API, например https://openrouter.ai/api/v1" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} />
+          {/googleapis\.com/.test(baseUrl) && (
+            <div className="set-hint">Это Gemini — при «Подключить» Камадо сам переключится на вкладку Gemini: так работают и новые ключи AQ., и бесплатный тариф.</div>
+          )}
           {!/openrouter\.ai/.test(baseUrl) && !isLocal(baseUrl) && baseUrl && (
+            <Row title="Бесплатная модель" hint="Включи, только если сервис правда ничего не берёт (например модели с пометкой :free). Тогда цену указывать не нужно.">
+              <Toggle value={free} onChange={setFree} />
+            </Row>
+          )}
+          {!free && !/openrouter\.ai/.test(baseUrl) && !isLocal(baseUrl) && baseUrl && (
             <div className="ai-price">
               <span>Цена модели, $ за 1 млн токенов:</span>
               <input className="input sm" type="number" min={0} step={0.01} value={price.input} onChange={(e) => setPrice({ ...price, input: Number(e.target.value) })} />
@@ -225,7 +235,7 @@ function AiSection() {
         <input
           className="input"
           type="password"
-          placeholder={kind === "gemini" ? "AIza…" : kind === "anthropic" ? "sk-ant-…" : "Ключ сервиса (для своей модели на компьютере не нужен)"}
+          placeholder={kind === "gemini" ? "AQ.… или AIza…" : kind === "anthropic" ? "sk-ant-…" : "Ключ сервиса (для своей модели на компьютере не нужен)"}
           value={key}
           onChange={(e) => setKey(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && canSave && void save()}

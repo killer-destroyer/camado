@@ -365,6 +365,26 @@ function SleepButton() {
   );
 }
 
+/** Размытая обложка на фоне: новая плавно проявляется поверх старой. */
+function Backdrop({ cover }: { cover?: string }) {
+  const [layers, setLayers] = useState<{ cover?: string; n: number }[]>(() => [{ cover, n: 0 }]);
+  useEffect(() => {
+    setLayers((ls) => (ls[ls.length - 1]?.cover === cover ? ls : [...ls.slice(-1), { cover, n: (ls[ls.length - 1]?.n ?? 0) + 1 }]));
+  }, [cover]);
+  return (
+    <>
+      {layers.map((l, i) => (
+        <div
+          key={l.n}
+          className={`np-backdrop ${i > 0 ? "fade-in" : ""}`}
+          style={l.cover ? { backgroundImage: `url("${l.cover}")` } : undefined}
+          onAnimationEnd={() => setLayers((ls) => ls.filter((x) => x.n >= l.n))}
+        />
+      ))}
+    </>
+  );
+}
+
 export function NowPlaying() {
   const settings = useStore(app, (s) => s.settings);
   const overlayOn = useStore(app, (s) => s.overlay);
@@ -374,6 +394,7 @@ export function NowPlaying() {
   const shuffle = useStore(player, (s) => s.shuffle);
   const repeat = useStore(player, (s) => s.repeat);
   const coverPalette = useStore(player, (s) => s.coverPalette);
+  const coverPaletteFor = useStore(player, (s) => s.coverPaletteFor);
   useStore(player, (s) => s.index);
   const favorites = useStore(player, (s) => s.favorites);
   const meta = nowMeta();
@@ -412,7 +433,7 @@ export function NowPlaying() {
       className={`nowplaying ${platform === "darwin" ? "mac" : ""}`}
       onKeyDown={(e) => e.key === "Escape" && app.set({ nowPlaying: false })}
     >
-      <div className="np-backdrop" style={meta?.cover ? { backgroundImage: `url("${meta.cover}")` } : undefined} />
+      <Backdrop cover={meta?.cover} />
       <div className="np-tint" />
       {(vis === "wave" || vis === "bars") && <Visualizer kind={vis} className={`np-vis ${vis}`} />}
 
@@ -422,6 +443,7 @@ export function NowPlaying() {
           <Vinyl
             trackKey={`${track?.id ?? meta?.title ?? "camado"}${variant ? `#${variant}` : ""}`}
             cover={meta?.cover}
+            ready={!settings.coverColors || !meta?.cover || coverPaletteFor === meta.cover}
             colors={{
               bg: palette.bg2,
               accent: palette.accent,

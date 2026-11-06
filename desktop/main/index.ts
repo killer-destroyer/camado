@@ -24,7 +24,7 @@ import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
 import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
-import { checkGeminiKey, GEMINI_MODELS } from "../../src/llm/gemini.js";
+import { GEMINI_MODELS, geminiKeyProblem } from "../../src/llm/gemini.js";
 import { UnsupportedAttachmentError } from "../../src/llm/types.js";
 import { cardsFromNote, splitIntoSteps, tutor } from "../../src/camado/study.js";
 import { isLocalUrl } from "../../src/llm/openai.js";
@@ -349,6 +349,8 @@ const handlers: Record<string, Handler> = {
   /** Подключить нейросеть: проверяем ключ, сохраняем (ключ — зашифрованным) и переключаемся. */
   "ai.connect": async (cfg: AiConfig, rawKey?: string) => {
     const key = rawKey?.trim() || undefined;
+    // Gemini, подключённый как «другая модель», переводим на родной режим: там работают ключи AQ. и бесплатный тариф.
+    if (cfg.kind === "openai" && cfg.baseUrl && /generativelanguage\.googleapis\.com/i.test(cfg.baseUrl)) cfg = { kind: "gemini", free: true };
     const have = key ?? aiKey(core, cfg.kind);
     try {
       if (cfg.kind === "anthropic") {
@@ -356,14 +358,15 @@ const handlers: Record<string, Handler> = {
         if (key && !/^sk-ant-[\w-]{20,}$/.test(key)) return { ok: false, error: "Ключ Anthropic начинается с sk-ant-" };
         if (key && !(await checkAnthropicKey(key))) return { ok: false, error: "Anthropic не принял этот ключ" };
       } else if (cfg.kind === "gemini") {
-        if (!have) return { ok: false, error: "Вставь ключ Gemini (начинается с AIza)" };
-        if (key && !(await checkGeminiKey(key))) return { ok: false, error: "Google не принял этот ключ" };
+        if (!have) return { ok: false, error: "Вставь ключ Gemini (начинается с AQ. или AIza)" };
+        const problem = key ? await geminiKeyProblem(key) : undefined;
+        if (problem) return { ok: false, error: problem };
       } else {
         if (!cfg.baseUrl || !/^https?:\/\//.test(cfg.baseUrl)) return { ok: false, error: "Нужен адрес API, например https://openrouter.ai/api/v1" };
         const local = isLocalUrl(cfg.baseUrl);
         const reportsCost = /openrouter\.ai/i.test(cfg.baseUrl);
-        if (!local && !reportsCost && !(cfg.price && (cfg.price.input > 0 || cfg.price.output > 0)))
-          return { ok: false, error: "Укажи цену модели ($ за 1 млн токенов) — иначе не посчитать лимит трат" };
+        if (!local && !reportsCost && !cfg.free && !(cfg.price && (cfg.price.input > 0 || cfg.price.output > 0)))
+          return { ok: false, error: "Укажи цену модели ($ за 1 млн токенов) или отметь «Бесплатная модель» — иначе не посчитать лимит трат" };
         if (!local && !have) return { ok: false, error: "Вставь ключ этого сервиса" };
       }
     } catch {
@@ -499,6 +502,7 @@ const handlers: Record<string, Handler> = {
     studyStatus = String(text ?? "").slice(0, 40);
     updateTray();
   },
+  "window.isFullScreen": () => !!win?.isFullScreen(),
   "window.setFullScreen": (on: boolean) => {
     if (!win) return;
     if (on && !win.isVisible()) return;
