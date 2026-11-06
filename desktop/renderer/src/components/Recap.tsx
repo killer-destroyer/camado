@@ -7,6 +7,7 @@ import { plural } from "../lib/format";
 import { useStore } from "../lib/store";
 import { app } from "../state/app";
 import { player } from "../state/player";
+import { AchievementsGrid } from "./Achievements";
 
 interface RecapData {
   focusMin: number;
@@ -150,6 +151,10 @@ export function RecapModal() {
                 ))}
               </div>
             )}
+            <div className="recap-done" style={{ animationDelay: "0.6s" }}>
+              <div className="rt-head">Ачивки</div>
+              <AchievementsGrid />
+            </div>
             {d.done.length > 0 && (
               <div className="recap-done" style={{ animationDelay: "0.55s" }}>
                 <div className="rt-head">Закрыл на неделе</div>

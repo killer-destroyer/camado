@@ -8,6 +8,7 @@ import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/a
 import { data, refreshData, watchData } from "./state/data";
 import { initFocus, refreshFocusStats, watchMenubar } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
+import { watchAchievements } from "./state/achievements";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
 import { Screensaver, watchIdle } from "./components/Screensaver";
@@ -75,6 +76,7 @@ export function App() {
       initAlarms(),
       watchIdle(),
       watchMenubar(() => data.get().tasks),
+      watchAchievements(),
       // Напоминания о сроках звенят, утренняя сводка — просто всплывает.
       api.on("reminder", (p) => (p.text.startsWith("⏰") ? ring(p.text) : toast(p.text, "warn"))),
       api.on("go", (screen) => go(screen as ScreenId)),

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AlarmClock, ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
 import { MediaButtons } from "../components/MediaButtons";
+import { LevelBadge } from "../components/Achievements";
 import { buildDayPlan } from "../../../shared/plan";
 import type { TaskKind } from "../../../shared/types";
 import { api } from "../lib/api";
@@ -376,6 +377,7 @@ export function Today() {
         <div>
           <div className="eyebrow">{today}</div>
           <h1 className="display">{greeting()}!</h1>
+          <LevelBadge />
           <p className="lead">
             {tasks.length === 0
               ? "Заданий нет — можно выдохнуть."

@@ -94,6 +94,8 @@ export interface AppSettings {
   closeToTray: boolean;
   /** Показывать таймер фокуса и ближайший дедлайн в меню-баре (Mac) / подсказке трея. */
   menubar: boolean;
+  /** Открытые ачивки: id → когда. */
+  achievements: Record<string, string>;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -129,6 +131,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   discord: { enabled: false, clientId: "" },
   closeToTray: true,
   menubar: true,
+  achievements: {},
 };
 
 /** Аккуратно накладывает сохранённое на значения по умолчанию (новые поля не теряются). */
@@ -148,6 +151,7 @@ export function mergeSettings(saved: unknown): AppSettings {
     lyricsOffsets: { ...(s.lyricsOffsets ?? {}) },
     lyricsSync: { ...(s.lyricsSync ?? {}) },
     vinylVariant: { ...(s.vinylVariant ?? {}) },
+    achievements: { ...(s.achievements ?? {}) },
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
   };

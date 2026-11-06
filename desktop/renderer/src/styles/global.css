@@ -5379,3 +5379,64 @@ kbd {
   box-shadow: 0 0 18px rgb(var(--accent-rgb) / 0.9);
   will-change: transform;
 }
+
+/* ---------- Уровень и ачивки ---------- */
+.lvl {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 4px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lvl-n {
+  color: var(--accent);
+  font-family: var(--mono);
+}
+.lvl-bar {
+  width: 110px;
+  height: 5px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--text-rgb) / 0.1);
+}
+.lvl-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left;
+}
+.lvl-streak {
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: rgb(var(--accent-rgb) / 0.15);
+}
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+.ach {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgb(var(--text-rgb) / 0.04);
+  opacity: 0.55;
+  font-size: 12px;
+}
+.ach.got {
+  opacity: 1;
+  background: rgb(var(--accent-rgb) / 0.12);
+  border: 1px solid rgb(var(--accent-rgb) / 0.35);
+}
+.ach-icon {
+  font-size: 24px;
+}
+.ach b {
+  font-size: 13px;
+}
+.ach span:last-child {
+  color: var(--muted);
+}
