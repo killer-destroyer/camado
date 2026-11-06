@@ -56,7 +56,7 @@ const api: CamadoApi = {
     removeFolder: call("library.removeFolder") as CamadoApi["library"]["removeFolder"],
     rescan: call("library.rescan") as CamadoApi["library"]["rescan"],
   },
-  lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"] },
+  lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"], aiSync: call("lyrics.aiSync") as CamadoApi["lyrics"]["aiSync"] },
   quick: { close: call("quick.close") as CamadoApi["quick"]["close"], key: call("quick.key") as CamadoApi["quick"]["key"] },
   alarm: { pickSound: call("alarm.pickSound") as CamadoApi["alarm"]["pickSound"] },
   screensaver: { pickImage: call("screensaver.pickImage") as CamadoApi["screensaver"]["pickImage"] },

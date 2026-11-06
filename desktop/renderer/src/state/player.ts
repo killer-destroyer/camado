@@ -1,7 +1,7 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
-import { addAnchor, approximateTimes, lyricsSlope, mapLyricsTime } from "../../../shared/lrc";
+import { addAnchor, approximateTimes, lyricsSlope, mapLyricsTime, pickSyncLines, syncFromHeard } from "../../../shared/lrc";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
@@ -27,6 +27,8 @@ interface PlayerState {
   sleep?: { at?: number; endOfTrack?: boolean };
   /** «Поймать текст»: следующий клик по строке говорит, что её поют прямо сейчас. */
   syncLyrics?: boolean;
+  /** ИИ сейчас слушает песню, чтобы подогнать текст. */
+  earSyncing?: boolean;
   playlists: Playlist[];
   favorites: string[];
 }
@@ -131,6 +133,86 @@ export function catchLyricsLine(lineTime: number): void {
       : `Подогнал по ${n} точкам — между ними текст растягивается сам.`,
     "ok",
   );
+}
+
+// ---------- Подгонка текста по звуку (ИИ слушает песню) ----------
+
+const SR = 11025; // для голоса хватает: песня 3 мин ≈ 4 МБ
+/** Песню → моно WAV 11 кГц в base64: любой формат файла, маленький размер. */
+async function songAsWav(url: string): Promise<string> {
+  const buf = await (await fetch(url)).arrayBuffer();
+  const decoded = await new OfflineAudioContext(1, SR, SR).decodeAudioData(buf);
+  const dur = Math.min(decoded.duration, 9 * 60);
+  const off = new OfflineAudioContext(1, Math.ceil(dur * SR), SR);
+  const src = off.createBufferSource();
+  src.buffer = decoded;
+  src.connect(off.destination);
+  src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const bytes = new Uint8Array(44 + pcm.length * 2);
+  const v = new DataView(bytes.buffer);
+  const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF");
+  v.setUint32(4, 36 + pcm.length * 2, true);
+  str(8, "WAVEfmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, SR, true);
+  v.setUint32(28, SR * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  str(36, "data");
+  v.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i]!)) * 0x7fff, true);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+let earBusy = "";
+const earTried = new Set<string>();
+/**
+ * Подогнать текст текущей песни по звуку: ИИ слушает песню и называет, когда начинают петь ~10 строк,
+ * по этим точкам ставится та же подгонка, что и ручная ⌖. auto — сама, без всплывашек об ошибках.
+ */
+export async function syncLyricsByEar(auto = false): Promise<boolean> {
+  const t = currentTrack();
+  const lyrics = player.get().lyrics;
+  if (!t || !lyrics?.synced || lyrics.lines.length < 4 || earBusy) return false;
+  if (auto && earTried.has(t.id)) return false;
+  earTried.add(t.id);
+  earBusy = t.id;
+  player.set({ earSyncing: true });
+  if (!auto) toast("Слушаю песню и подгоняю текст — это займёт 10–30 секунд…");
+  try {
+    const idx = pickSyncLines(lyrics.lines, 10);
+    const wav = await songAsWav(`camado-media://track/${t.id}`);
+    const r = await api.lyrics.aiSync(
+      wav,
+      idx.map((i) => ({ n: i, text: lyrics.lines[i]!.text })),
+    );
+    if ("error" in r) {
+      if (!auto) toast(r.error, "warn");
+      return false;
+    }
+    const sync = syncFromHeard(r.points.map((p) => ({ t: p.t, l: lyrics.lines[p.n]!.time })));
+    if (currentTrack()?.id !== t.id) return false;
+    if (!sync) {
+      if (!auto) toast("Не получилось уверенно расслышать строки — подгони вручную кнопкой ⌖.", "warn");
+      return false;
+    }
+    saveSync(t.id, sync);
+    toast(`Подогнал текст по звуку: ${sync.anchors!.length} ${sync.anchors!.length < 5 ? "точки" : "точек"}. Если где-то не так — поправь ⌖.`, "ok");
+    return true;
+  } catch (err) {
+    console.error("Подгонка по звуку:", err);
+    if (!auto) toast("Не получилось подогнать текст по звуку.", "warn");
+    return false;
+  } finally {
+    earBusy = "";
+    player.set({ earSyncing: false });
+  }
 }
 
 // ---------- Громкость каждой песни ----------
@@ -390,7 +472,10 @@ export async function loadLyrics(): Promise<void> {
     const dur = meta.duration || engine.el.duration;
     const ready: Lyrics =
       !lyrics.synced && lyrics.lines.length && dur > 0 ? { ...lyrics, synced: true, approx: true, lines: approximateTimes(lyrics.lines, dur) } : lyrics;
-    if (id === lyricsReq) player.set({ lyrics: ready, lyricsLoading: false });
+    if (id === lyricsReq) {
+      player.set({ lyrics: ready, lyricsLoading: false });
+      void maybeAutoEar(ready, dur);
+    }
   } catch {
     if (id === lyricsReq) player.set({ lyricsLoading: false });
   }
@@ -419,6 +504,19 @@ async function paletteFor(cover: string): Promise<Palette> {
   paletteCache.set(key, pal);
   if (paletteCache.size > 200) paletteCache.delete(paletteCache.keys().next().value!);
   return pal;
+}
+
+/** Текст, скорее всего, разъедется (версия другой длины или расставлен примерно) — подгоняем по звуку сами. */
+async function maybeAutoEar(l: Lyrics, dur: number): Promise<void> {
+  const t = currentTrack();
+  const st = app.get().settings;
+  if (!t || !st.lyricsByEar || st.lyricsSync[t.id] || st.lyricsOffsets[t.id]) return;
+  const off = l.approx || (!l.scaled && !!l.versionDuration && dur > 0 && Math.abs(l.versionDuration - dur) > 1.5);
+  if (!off) return;
+  if (!(await api.ai.status()).enabled) return;
+  // чуть подождём: вдруг человек сразу листает дальше
+  await new Promise((r) => setTimeout(r, 4000));
+  if (currentTrack()?.id === t.id) void syncLyricsByEar(true);
 }
 
 export async function loadCoverPalette(cover?: string): Promise<void> {

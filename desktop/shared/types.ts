@@ -257,6 +257,8 @@ export interface CamadoApi {
   };
   lyrics: {
     get(query: LyricsQuery): Promise<Lyrics>;
+    /** ИИ слушает песню (WAV в base64) и называет, на какой секунде начинают петь строки с этими номерами. */
+    aiSync(wav: string, lines: { n: number; text: string }[]): Promise<{ points: { n: number; t: number }[] } | { error: string }>;
   };
   quick: {
     /** Закрыть окно быстрой записи. */

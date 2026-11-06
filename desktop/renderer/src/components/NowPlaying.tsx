@@ -1,28 +1,7 @@
 // «Сейчас играет»: слева огромная пластинка, справа название и текст песни,
 // внизу светящиеся волны и управление. Всё в цветах обложки, трясётся в такт.
 import { useEffect, useRef, useState } from "react";
-import {
-  ChevronDown,
-  Crosshair,
-  Disc3,
-  Heart,
-  Moon,
-  PictureInPicture2,
-  Pause,
-  Play,
-  Repeat,
-  Repeat1,
-  Shuffle,
-  SkipBack,
-  SkipForward,
-  SlidersHorizontal,
-  SlidersVertical,
-  Sparkles,
-  Vibrate,
-  Volume1,
-  Volume2,
-  VolumeX,
-} from "lucide-react";
+import { AudioWaveform, ChevronDown, Crosshair, Disc3, Heart, Moon, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Vibrate, Volume1, Volume2, VolumeX } from "lucide-react";
 import type { LyricsMode, VisualizerStyle } from "../../../shared/settings";
 import { fmtTime } from "../lib/format";
 import { useFrame } from "../lib/frame";
@@ -30,25 +9,7 @@ import { paletteById } from "../lib/palettes";
 import { useStore } from "../lib/store";
 import { engine } from "../lib/audio";
 import { app, toggleOverlay, updateSettings } from "../state/app";
-import {
-  currentTrack,
-  cycleRepeat,
-  duration,
-  next,
-  nowMeta,
-  player,
-  position,
-  prev,
-  seek,
-  setAutoLevel,
-  lyricsSyncOf,
-  resetLyricsSync,
-  setLyricsOffset,
-  setSleep,
-  setTrackGain,
-  toggleFavorite,
-  togglePlay,
-} from "../state/player";
+import { currentTrack, cycleRepeat, duration, lyricsSyncOf, next, nowMeta, player, position, prev, resetLyricsSync, seek, setAutoLevel, setLyricsOffset, setSleep, setTrackGain, syncLyricsByEar, toggleFavorite, togglePlay } from "../state/player";
 import { Lyrics } from "./Lyrics";
 import { Segmented, Slider, Toggle } from "./ui";
 import { autoTrim } from "../lib/loudness";
@@ -118,6 +79,7 @@ export function Progress({ big = false }: { big?: boolean }) {
 function LyricsShift({ trackId }: { trackId: string }) {
   useStore(app, (s) => s.settings.lyricsSync[trackId] ?? s.settings.lyricsOffsets[trackId]);
   const syncing = useStore(player, (s) => !!s.syncLyrics);
+  const ear = useStore(player, (s) => !!s.earSyncing);
   const lyrics = useStore(player, (s) => s.lyrics);
   const sync = lyricsSyncOf(trackId);
   const v = sync.o;
@@ -130,7 +92,9 @@ function LyricsShift({ trackId }: { trackId: string }) {
   const why = lyrics?.approx
     ? "У этой песни в базе текст без отметок времени — строки расставлены примерно."
     : "Текст в базе сделан под версию песни другой длины — к концу может разъехаться.";
-  const label = syncing
+  const label = ear
+    ? "слушаю песню…"
+    : syncing
     ? "нажми строку, которую поют"
     : !adjusted
       ? "текст"
@@ -150,6 +114,14 @@ function LyricsShift({ trackId }: { trackId: string }) {
         onClick={() => player.set({ syncLyrics: !syncing })}
       >
         <Crosshair size={14} />
+      </button>
+      <button
+        className={`catch ear ${ear ? "busy" : ""}`}
+        disabled={ear}
+        title="Подогнать по звуку: ИИ послушает песню и сам расставит текст (песня уйдёт в Gemini на анализ)"
+        onClick={() => void syncLyricsByEar()}
+      >
+        <AudioWaveform size={14} />
       </button>
     </div>
   );

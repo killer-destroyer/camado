@@ -39,6 +39,8 @@ export interface AppSettings {
    * s ≠ 1 — текст сделан под версию с другим темпом. t1/l1 — первая «пойманная» строка (время песни и текста).
    */
   lyricsSync: Record<string, LyricsSync>;
+  /** Подгонять текст по звуку сам (ИИ слушает песню), когда текст в базе от версии другой длины. */
+  lyricsByEar: boolean;
   shake: {
     enabled: boolean;
     intensity: number; // 0…1
@@ -122,6 +124,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsSize: 1,
   lyricsOffsets: {},
   lyricsSync: {},
+  lyricsByEar: true,
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
   vinylVariant: {},

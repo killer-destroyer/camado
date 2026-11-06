@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
 import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
+import { heardLineTimes } from "../../src/camado/listen.js";
 import { GEMINI_MODELS, geminiKeyProblem } from "../../src/llm/gemini.js";
 import { UnsupportedAttachmentError } from "../../src/llm/types.js";
 import { cardsFromNote, splitIntoSteps, tutor } from "../../src/camado/study.js";
@@ -282,6 +283,14 @@ const handlers: Record<string, Handler> = {
       const task = store.getTask(taskId);
       if (!task) return { error: "Задание не найдено" };
       return { answer: await tutor(core.llm, task, history.slice(-12), message) };
+    }),
+  /** Подгонка текста по звуку: ИИ слушает песню (сжатый WAV) и называет, когда начинают петь строки. */
+  "lyrics.aiSync": (wav: string, lines: { n: number; text: string }[]) =>
+    withAi(async () => {
+      if (typeof wav !== "string" || wav.length > 20 * 1024 * 1024) return { error: "Песня слишком длинная для подгонки по звуку" };
+      const safe = (Array.isArray(lines) ? lines : []).slice(0, 14).map((l) => ({ n: Number(l.n), text: String(l.text).slice(0, 200) }));
+      if (safe.length < 3) return { error: "В тексте слишком мало строк" };
+      return { points: await heardLineTimes(core.llm, wav, safe) };
     }),
   /** Фото доски / скрин / голосовое → Камадо разбирает и записывает задания. */
   "ai.fromMedia": (kind: "photo" | "voice", mime: string, data: string, note?: string) =>

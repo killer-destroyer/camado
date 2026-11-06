@@ -717,6 +717,12 @@ export function Settings() {
             )}
           </Row>
         )}
+        <Row
+          title="Подгонять текст по звуку сам"
+          hint="Если текст в базе сделан под версию другой длины, ИИ послушает песню и сам расставит строки. Песня уходит в Gemini на анализ; нужен ключ ИИ. Вручную — кнопка с волной рядом с ⌖ в плеере."
+        >
+          <Toggle value={s.lyricsByEar} onChange={(v) => updateSettings({ lyricsByEar: v })} />
+        </Row>
         <Row title="Размер текста">
           <Slider value={s.lyricsSize} min={0.7} max={1.4} step={0.05} onChange={(v) => updateSettings({ lyricsSize: v })} />
         </Row>
