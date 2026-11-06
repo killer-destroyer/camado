@@ -23,6 +23,8 @@ import { Focus } from "./screens/Focus";
 import { Music } from "./screens/Music";
 import { Notes } from "./screens/Notes";
 import { Links } from "./screens/Links";
+import { Planner } from "./screens/Planner";
+import { Session } from "./screens/Session";
 import { Settings } from "./screens/Settings";
 import { Tasks } from "./screens/Tasks";
 import { Today } from "./screens/Today";
@@ -30,6 +32,8 @@ import { Today } from "./screens/Today";
 const SCREENS: Record<ScreenId, () => React.JSX.Element> = {
   today: Today,
   tasks: Tasks,
+  plan: Planner,
+  session: Session,
   notes: Notes,
   links: Links,
   music: Music,
@@ -90,8 +94,8 @@ export function App() {
       else if (e.key === "ArrowLeft" && e.shiftKey) prev();
       else if (e.key === "ArrowRight" && app.get().nowPlaying) seek(position() + 5);
       else if (e.key === "ArrowLeft" && app.get().nowPlaying) seek(position() - 5);
-      else if (/^[1-8]$/.test(e.key) && e.altKey) {
-        const ids: ScreenId[] = ["today", "tasks", "notes", "links", "music", "focus", "chat", "settings"];
+      else if (/^[1-9]$/.test(e.key) && e.altKey) {
+        const ids: ScreenId[] = ["today", "tasks", "plan", "session", "notes", "links", "music", "focus", "chat"];
         go(ids[Number(e.key) - 1]!);
       }
     };

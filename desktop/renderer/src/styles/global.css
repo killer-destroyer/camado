@@ -4846,3 +4846,343 @@ kbd {
 .rv-big {
   font-size: 52px;
 }
+
+/* ---------- План недели ---------- */
+.pl-week {
+  font-weight: 650;
+  min-width: 220px;
+  text-align: center;
+}
+.planner-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 18px;
+  height: calc(100vh - 210px);
+  min-height: 460px;
+}
+.pl-tasks {
+  padding: 16px;
+  border-radius: 20px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pl-task {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: grab;
+  background: rgb(var(--text-rgb) / 0.05);
+  border: 1px solid rgb(var(--text-rgb) / 0.08);
+  font-size: 13px;
+}
+.pl-task:hover {
+  border-color: rgb(var(--accent-rgb) / 0.5);
+}
+.pl-task span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pl-task i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--accent);
+}
+.pl-grid {
+  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.pl-head {
+  display: grid;
+  grid-template-columns: 56px repeat(7, 1fr);
+  padding: 10px 6px 8px;
+  border-bottom: 1px solid rgb(var(--text-rgb) / 0.08);
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
+.pl-head b {
+  color: var(--text);
+  font-size: 15px;
+  margin-left: 4px;
+}
+.pl-head .today b {
+  color: var(--accent);
+}
+.pl-body {
+  flex: 1;
+  overflow: auto;
+  display: grid;
+  grid-template-columns: 56px repeat(7, 1fr);
+  padding: 0 6px 10px;
+}
+.pl-hours span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  transform: translateY(-6px);
+}
+.pl-col {
+  position: relative;
+  border-left: 1px solid rgb(var(--text-rgb) / 0.06);
+}
+.pl-col.today {
+  background: rgb(var(--accent-rgb) / 0.05);
+}
+.pl-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: rgb(var(--text-rgb) / 0.05);
+}
+.pl-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--u-overdue);
+  z-index: 3;
+}
+.pl-now::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--u-overdue);
+}
+.pl-deadline {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--u-overdue);
+  border-top: 2px dashed var(--u-overdue);
+  padding-top: 1px;
+  z-index: 2;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+.pl-block {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  border-radius: 10px;
+  padding: 5px 7px;
+  font-size: 11px;
+  overflow: hidden;
+  cursor: grab;
+  z-index: 2;
+  color: var(--on-accent);
+  background: linear-gradient(160deg, var(--accent), color-mix(in srgb, var(--accent) 60%, var(--accent-2)));
+  box-shadow: 0 6px 16px -8px rgb(var(--accent-rgb) / 0.9);
+  display: flex;
+  flex-direction: column;
+}
+.pl-block b {
+  font-size: 12px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-block span {
+  opacity: 0.8;
+}
+.plb-tools {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.pl-block:hover .plb-tools {
+  opacity: 1;
+}
+.plb-tools button {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  background: rgb(0 0 0 / 0.25);
+  color: #fff;
+}
+.plb-resize {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 7px;
+  cursor: ns-resize;
+}
+
+/* ---------- Сессия ---------- */
+.exams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr));
+  gap: 18px;
+}
+.exam {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.exam-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.exam-head > div:first-child {
+  flex: 1;
+}
+.exam-title {
+  font-family: var(--display);
+  font-size: 20px;
+  font-weight: 650;
+}
+.exam-count {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.exam-count b {
+  font-family: var(--display);
+  font-size: 26px;
+  color: var(--accent);
+  line-height: 1;
+}
+.exam-count span {
+  font-size: 11px;
+  color: var(--muted);
+}
+.exam-prog {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.ep-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--text-rgb) / 0.08);
+}
+.ep-bar .k {
+  background: var(--accent);
+}
+.ep-bar .r {
+  background: rgb(var(--accent-rgb) / 0.4);
+}
+.exam-today {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgb(var(--accent-rgb) / 0.1);
+  border: 1px solid rgb(var(--accent-rgb) / 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.et-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-weight: 700;
+  font-size: 13px;
+}
+.ticket {
+  padding: 6px 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: rgb(var(--text-rgb) / 0.07);
+  text-align: left;
+}
+.ticket b {
+  color: var(--accent);
+  margin-right: 4px;
+}
+.tickets {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+.ticket-row {
+  display: grid;
+  grid-template-columns: 30px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+.ticket-row:hover {
+  background: rgb(var(--text-rgb) / 0.04);
+}
+.ticket-row b {
+  font-family: var(--mono);
+  color: var(--muted);
+  font-size: 12px;
+}
+.ticket-row.s-known span {
+  color: var(--muted);
+}
+.seg.mini {
+  display: inline-flex;
+  border-radius: 9px;
+  background: rgb(var(--text-rgb) / 0.06);
+  padding: 2px;
+}
+.seg.mini button {
+  padding: 3px 8px;
+  border-radius: 7px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.seg.mini button.on {
+  background: rgb(var(--accent-rgb) / 0.85);
+  color: var(--on-accent);
+}
+.ticket-row.s-new .seg.mini button.on {
+  background: rgb(var(--text-rgb) / 0.2);
+  color: var(--text);
+}
+.tickets-paste {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.row-end {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.exam-form,
+.from-tasks {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.exam-form .input {
+  width: auto;
+  flex: 1;
+  min-width: 160px;
+}

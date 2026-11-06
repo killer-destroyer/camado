@@ -6,7 +6,7 @@ import { createStore } from "../lib/store";
 import { engine } from "../lib/audio";
 import { ambiencePlaying, setAmbience, setAmbienceVolume } from "../lib/ambience";
 
-export type ScreenId = "today" | "tasks" | "notes" | "links" | "music" | "focus" | "chat" | "settings";
+export type ScreenId = "today" | "tasks" | "plan" | "session" | "notes" | "links" | "music" | "focus" | "chat" | "settings";
 
 export interface Toast {
   id: number;

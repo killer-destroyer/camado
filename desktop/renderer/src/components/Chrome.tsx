@@ -2,6 +2,8 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarCheck,
+  CalendarDays,
+  GraduationCap,
   Disc3,
   Link2,
   Maximize2,
@@ -34,6 +36,8 @@ import { MiniSpectrum } from "./Visualizer";
 export const NAV: { id: ScreenId; label: string; icon: typeof Sun }[] = [
   { id: "today", label: "Сегодня", icon: Sun },
   { id: "tasks", label: "Задания", icon: CalendarCheck },
+  { id: "plan", label: "План", icon: CalendarDays },
+  { id: "session", label: "Сессия", icon: GraduationCap },
   { id: "notes", label: "Заметки", icon: NotebookPen },
   { id: "links", label: "Ссылки", icon: Link2 },
   { id: "music", label: "Музыка", icon: Disc3 },
