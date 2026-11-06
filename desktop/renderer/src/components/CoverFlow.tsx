@@ -41,8 +41,8 @@ export function CoverFlow({
   const lastWritten = useRef(new Map<number, string>());
   const userMoved = useRef(false);
   const settledAt = useRef<number | null>(null);
-  const [center, setCenter] = useState(Math.max(0, playingIndex));
-  const centerRef = useRef(center);
+  const [centerState, setCenter] = useState(Math.max(0, playingIndex));
+  const centerRef = useRef(centerState);
   const playingRef = useRef(playingIndex);
   playingRef.current = playingIndex;
   const onPlayRef = useRef(onPlay);
@@ -169,6 +169,8 @@ export function CoverFlow({
   };
 
   if (n === 0) return null;
+  // Список сменился (другая вкладка, поиск) и стал короче — не выходим за его край, пока карусель не догонит.
+  const center = Math.min(centerState, n - 1);
   const from = Math.max(0, center - WINDOW);
   const to = Math.min(n - 1, center + WINDOW);
   const visible: number[] = [];

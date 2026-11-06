@@ -412,7 +412,7 @@ export function Music() {
         </Empty>
       ) : (
         <>
-          {list.length > 0 && <CoverFlow tracks={list} playingIndex={playingIndex} onPlay={(i) => play(list, i)} onOpen={() => app.set({ nowPlaying: true })} />}
+          {list.length > 0 && <CoverFlow key={tabKey(tab)} tracks={list} playingIndex={playingIndex} onPlay={(i) => play(list, i)} onOpen={() => app.set({ nowPlaying: true })} />}
           <div className="track-list glass">
             {list.slice(0, 400).map((t, i) => (
               <div
