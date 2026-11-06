@@ -1,8 +1,8 @@
 import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
-import { findAudioLinks, importFromUrl } from "../desktop/main/download.js";
+import { beforeAll, describe, expect, it } from "vitest";
+import { findAudioLinks, importFromUrl, setHostLookup } from "../desktop/main/download.js";
 
 type Route = { status?: number; type: string; body: string | Uint8Array; headers?: Record<string, string> };
 
@@ -44,6 +44,9 @@ describe("поиск аудио на странице", () => {
 });
 
 describe("скачивание по ссылке", () => {
+  // Адрес сайта по имени не спрашиваем у настоящего интернета: на сервере проверок это бывало дольше 5 с
+  // и тест падал по времени. Все сайты в тестах — «публичные».
+  beforeAll(() => setHostLookup(async () => ["93.184.216.34"]));
   it("прямая ссылка на mp3 — сохраняет файл, имя из Content-Disposition", async () => {
     const d = dir();
     const { impl } = fakeFetch({
