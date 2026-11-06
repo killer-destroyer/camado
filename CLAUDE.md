@@ -4,7 +4,8 @@
 
 **Жалобы владельца:** когда он пишет об ошибке, только записывай её в `docs/BUGS.md` (что видно и возможная причина) — код не трогай. Исправляй всё разом, когда он скажет «делай».
 
-**Выпуск версии:** всегда собирать и Windows, и Mac (Apple M и Intel). Windows на Linux:
+**Выпуск версии:** собирать Windows и Mac (Apple M и Intel) — для релиза на GitHub. Владельцу в чат кидать только
+сборку для Mac M и одну строку-команду для установки, без длинных инструкций. Windows на Linux:
 `electron-builder --win --x64` (нужен wine с 32-битной частью: `dpkg --add-architecture i386`, `apt-get install wine64 wine32:i386`).
 Mac на Linux: `electron-builder --mac zip --arm64 --x64 -c.mac.identity=null -c.electronFuses.resetAdHocDarwinSignature=false`.
 
