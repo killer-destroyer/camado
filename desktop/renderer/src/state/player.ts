@@ -1,7 +1,7 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
-import { addAnchor, approximateTimes, lyricsSlope, mapLyricsTime, pickSyncLines, syncFromHeard } from "../../../shared/lrc";
+import { addAnchor, approximateTimes, cleanEarWindow, EAR_WINDOW, earWindows, lyricsSlope, mapLyricsTime, syncFromHeard } from "../../../shared/lrc";
 import { api } from "../lib/api";
 import { engine } from "../lib/audio";
 import { autoTrim, measure } from "../lib/loudness";
@@ -137,18 +137,21 @@ export function catchLyricsLine(lineTime: number): void {
 
 // ---------- Подгонка текста по звуку (ИИ слушает песню) ----------
 
-const SR = 11025; // для голоса хватает: песня 3 мин ≈ 4 МБ
-/** Песню → моно WAV 11 кГц в base64: любой формат файла, маленький размер. */
-async function songAsWav(url: string): Promise<string> {
+const SR = 16000; // так Gemini слушает сам; отрывок 40 с ≈ 1,3 МБ
+/** Песню → моно 16 кГц (любой формат файла). */
+async function songPcm(url: string): Promise<Float32Array> {
   const buf = await (await fetch(url)).arrayBuffer();
   const decoded = await new OfflineAudioContext(1, SR, SR).decodeAudioData(buf);
-  const dur = Math.min(decoded.duration, 9 * 60);
-  const off = new OfflineAudioContext(1, Math.ceil(dur * SR), SR);
+  const off = new OfflineAudioContext(1, Math.ceil(Math.min(decoded.duration, 15 * 60) * SR), SR);
   const src = off.createBufferSource();
   src.buffer = decoded;
   src.connect(off.destination);
   src.start();
-  const pcm = (await off.startRendering()).getChannelData(0);
+  return (await off.startRendering()).getChannelData(0);
+}
+
+/** Кусок звука → WAV (16 бит) в base64. */
+function wavBase64(pcm: Float32Array): string {
   const bytes = new Uint8Array(44 + pcm.length * 2);
   const v = new DataView(bytes.buffer);
   const str = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
@@ -186,24 +189,36 @@ export async function syncLyricsByEar(auto = false): Promise<boolean> {
   player.set({ earSyncing: true });
   if (!auto) toast("Слушаю песню и подгоняю текст — это займёт 10–30 секунд…");
   try {
-    const idx = pickSyncLines(lyrics.lines, 10);
-    const wav = await songAsWav(`camado-media://track/${t.id}`);
-    const r = await api.lyrics.aiSync(
-      wav,
-      idx.map((i) => ({ n: i, text: lyrics.lines[i]!.text })),
+    // ИИ слушает 4 коротких отрывка (на всей песне целиком он путается в секундах к концу)
+    const pcm = await songPcm(`camado-media://track/${t.id}`);
+    const windows = earWindows(pcm.length / SR, lyrics.lines);
+    const results = await Promise.all(
+      windows.map(async (w) => {
+        const clip = pcm.subarray(Math.floor(w.start * SR), Math.floor((w.start + EAR_WINDOW) * SR));
+        const r = await api.lyrics.aiSync(
+          wavBase64(clip),
+          w.lines.map((i) => ({ n: i, text: lyrics.lines[i]!.text })),
+        );
+        if ("error" in r) return r.error;
+        // внутри отрывка: не на «нулевой» секунде и не за его концом; потом — проверка темпа отрывка
+        const pts = r.points.filter((p) => p.t >= 1 && p.t <= EAR_WINDOW + 1).map((p) => ({ t: w.start + p.t, l: lyrics.lines[p.n]!.time }));
+        return cleanEarWindow(pts);
+      }),
     );
-    if ("error" in r) {
-      if (!auto) toast(r.error, "warn");
+    const failed = results.find((x): x is string => typeof x === "string");
+    const points = results.flatMap((x) => (typeof x === "string" ? [] : x));
+    if (failed && points.length < 3) {
+      if (!auto) toast(failed, "warn");
       return false;
     }
-    const sync = syncFromHeard(r.points.map((p) => ({ t: p.t, l: lyrics.lines[p.n]!.time })));
+    const sync = syncFromHeard(points);
     if (currentTrack()?.id !== t.id) return false;
     if (!sync) {
       if (!auto) toast("Не получилось уверенно расслышать строки — подгони вручную кнопкой ⌖.", "warn");
       return false;
     }
     saveSync(t.id, sync);
-    toast(`Подогнал текст по звуку: ${sync.anchors!.length} ${sync.anchors!.length < 5 ? "точки" : "точек"}. Если где-то не так — поправь ⌖.`, "ok");
+    toast(`Подогнал текст по звуку — послушал ${points.length} строк. Если где-то не так — поправь ⌖.`, "ok");
     return true;
   } catch (err) {
     console.error("Подгонка по звуку:", err);

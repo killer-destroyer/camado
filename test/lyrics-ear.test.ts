@@ -28,8 +28,16 @@ describe("подгонка текста по звуку", () => {
     const pts = [20, 45, 70, 95, 120, 150].map((t) => ({ t, l: truth(t) }));
     pts.push({ t: 100, l: 30 });
     const sync = syncFromHeard(pts)!;
-    expect(sync.anchors!.length).toBe(6);
-    for (const t of [30, 80, 140]) expect(Math.abs(mapLyricsTime(sync, t) - truth(t))).toBeLessThan(0.05);
+    expect(sync.anchors!.length).toBe(2);
+    for (const t of [5, 30, 80, 140, 200]) expect(Math.abs(mapLyricsTime(sync, t) - truth(t))).toBeLessThan(0.05);
+  });
+
+  it("шум ИИ в доли секунды не раздувает ошибку на краях песни", () => {
+    const truth = (t: number) => t * 0.977 + 0.5;
+    const noise = [0.4, -0.3, 0.2, -0.4, 0.3, -0.2, 0.1, -0.1];
+    const pts = [20, 22, 25, 28, 45, 48, 52, 55].map((t, i) => ({ t, l: truth(t) + noise[i]! }));
+    const sync = syncFromHeard(pts)!;
+    for (const t of [2, 100]) expect(Math.abs(mapLyricsTime(sync, t) - truth(t))).toBeLessThan(0.6);
   });
 
   it("мало согласных точек — не верим и ничего не меняем", () => {

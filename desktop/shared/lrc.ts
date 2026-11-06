@@ -233,8 +233,70 @@ export function syncFromHeard(points: { t: number; l: number }[]): LyricsSync | 
     }
   }
   if (best.length < 3) return null;
-  // одинаковое время в песне — оставляем одну точку; соседние точки ближе 3 с не нужны
-  const anchors: { t: number; l: number }[] = [];
-  for (const p of best) if (!anchors.length || p.t - anchors[anchors.length - 1]!.t >= 3) anchors.push({ t: p.t, l: p.l });
-  return anchors.length >= 2 ? { s: 1, o: 0, anchors } : null;
+  // У каждой точки ИИ погрешность в доли секунды: проводим через согласные точки одну ровную линию
+  // (метод наименьших квадратов), уточняем, какие точки на ней, и проводим ещё раз.
+  const fit = (ps: { t: number; l: number }[]) => {
+    const n = ps.length;
+    const mt = ps.reduce((x, p) => x + p.t, 0) / n;
+    const ml = ps.reduce((x, p) => x + p.l, 0) / n;
+    const vt = ps.reduce((x, p) => x + (p.t - mt) ** 2, 0);
+    const k = vt > 1 ? ps.reduce((x, p) => x + (p.t - mt) * (p.l - ml), 0) / vt : 1;
+    return { k, b: ml - k * mt };
+  };
+  let line = fit(best);
+  const inliers = pts.filter((p) => Math.abs(line.k * p.t + line.b - p.l) <= 1.0);
+  if (inliers.length >= 3) line = fit(inliers);
+  if (line.k < MIN_SLOPE || line.k > MAX_SLOPE) return null;
+  const used = inliers.length >= 3 ? inliers : best;
+  const t0 = used[0]!.t;
+  const t1 = used[used.length - 1]!.t;
+  if (t1 - t0 < 5) return null;
+  // Две точки на концах этой линии: дальше ⌖ может добавить свои, если в песне есть вырезанный кусок.
+  return {
+    s: 1,
+    o: 0,
+    anchors: [
+      { t: t0, l: line.k * t0 + line.b },
+      { t: t1, l: line.k * t1 + line.b },
+    ],
+  };
+}
+
+/** Длина одного отрывка, который ИИ слушает за раз: на коротком куске он точно называет секунды. */
+export const EAR_WINDOW = 40;
+
+/**
+ * Где слушать: 4 отрывка по песне (начало, две середины, конец) и в каждом — строки, которые по тексту
+ * должны звучать внутри него (не повторяющиеся внутри отрывка, до 12 штук). Строки «до начала отрывка» не даём:
+ * ИИ иначе «находит» их в первых секундах.
+ */
+export function earWindows(duration: number, lines: { time: number; text: string }[]): { start: number; lines: number[] }[] {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+  const W = EAR_WINDOW;
+  const starts = duration <= W + 5 ? [0] : [0.08, 0.36, 0.62, 0.88].map((k) => Math.max(0, Math.min(duration - W, duration * k - W / 2)));
+  const out: { start: number; lines: number[] }[] = [];
+  for (const s0 of [...new Set(starts.map((s) => Math.round(s)))]) {
+    const inWin = lines.map((l, i) => ({ i, k: norm(l.text), t: l.time })).filter((x) => x.k.length >= 4 && x.t >= s0 + 2 && x.t <= s0 + W - 4);
+    const cnt = new Map<string, number>();
+    for (const x of inWin) cnt.set(x.k, (cnt.get(x.k) ?? 0) + 1);
+    const pick = inWin.filter((x) => cnt.get(x.k) === 1).slice(0, 12);
+    if (pick.length >= 2) out.push({ start: s0, lines: pick.map((x) => x.i) });
+  }
+  return out;
+}
+
+/**
+ * Проверка одного отрывка: внутри него строки должны идти в обычном темпе (0.85–1.18).
+ * Если ИИ «сжал» или «растянул» время — отрывок целиком не берём; точки далеко от общей линии — тоже.
+ */
+export function cleanEarWindow(points: { t: number; l: number }[]): { t: number; l: number }[] {
+  if (points.length < 3) return points;
+  const n = points.length;
+  const mt = points.reduce((a, p) => a + p.t, 0) / n;
+  const ml = points.reduce((a, p) => a + p.l, 0) / n;
+  const vl = points.reduce((a, p) => a + (p.l - ml) ** 2, 0);
+  if (vl < 1) return points;
+  const k = points.reduce((a, p) => a + (p.l - ml) * (p.t - mt), 0) / vl; // секунд песни на секунду текста
+  if (k < 0.85 || k > 1.18) return [];
+  return points.filter((p) => Math.abs(mt + (p.l - ml) * k - p.t) <= 1.5);
 }

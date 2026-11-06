@@ -287,9 +287,9 @@ const handlers: Record<string, Handler> = {
   /** Подгонка текста по звуку: ИИ слушает песню (сжатый WAV) и называет, когда начинают петь строки. */
   "lyrics.aiSync": (wav: string, lines: { n: number; text: string }[]) =>
     withAi(async () => {
-      if (typeof wav !== "string" || wav.length > 20 * 1024 * 1024) return { error: "Песня слишком длинная для подгонки по звуку" };
+      if (typeof wav !== "string" || wav.length > 8 * 1024 * 1024) return { error: "Отрывок слишком большой" };
       const safe = (Array.isArray(lines) ? lines : []).slice(0, 14).map((l) => ({ n: Number(l.n), text: String(l.text).slice(0, 200) }));
-      if (safe.length < 3) return { error: "В тексте слишком мало строк" };
+      if (safe.length < 2) return { error: "В тексте слишком мало строк" };
       return { points: await heardLineTimes(core.llm, wav, safe) };
     }),
   /** Фото доски / скрин / голосовое → Камадо разбирает и записывает задания. */

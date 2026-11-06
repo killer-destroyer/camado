@@ -99,7 +99,7 @@ function LyricsShift({ trackId }: { trackId: string }) {
     : !adjusted
       ? "текст"
       : pts > 0
-        ? `подогнан: ${pts} ${pts === 1 ? "точка" : pts < 5 ? "точки" : "точек"}${Math.abs(v) >= 0.05 ? ` ${v > 0 ? "+" : ""}${v.toFixed(1)} с` : ""}`
+        ? `подогнан${pts > 2 ? `: ${pts} точек` : ""}${Math.abs(v) >= 0.05 ? ` ${v > 0 ? "+" : ""}${v.toFixed(1)} с` : ""}`
         : `${v > 0 ? "+" : ""}${v.toFixed(1)} с${stretched ? ` ×${sync.s.toFixed(3)}` : ""}`;
   return (
     <div className={`lyr-shift ${syncing ? "syncing" : ""}`} title="Если текст спешит или опаздывает — подвинь его или «поймай» строку">
