@@ -27,6 +27,7 @@
     "@xhayper/discord-rpc": "^1.5.1",
     "electron-updater": "^6.8.11",
     "grammy": "^1.46.0",
+    "katex": "^0.16.22",
     "music-metadata": "^12.3.4",
     "zod": "^4.6.7"
   },

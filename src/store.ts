@@ -140,6 +140,68 @@ export function cleanLinkUrl(raw: string): string {
   return parsed.toString();
 }
 
+export interface TaskStep {
+  id: number;
+  taskId: number;
+  title: string;
+  done: boolean;
+}
+
+export interface Card {
+  id: number;
+  noteId: number | null;
+  subject: string | null;
+  question: string;
+  answer: string;
+  dueAt: string;
+  interval: number;
+  ease: number;
+  reps: number;
+}
+
+export type TicketStatus = "new" | "review" | "known";
+
+export interface Exam {
+  id: number;
+  subject: string | null;
+  title: string;
+  at: string;
+  tickets: { id: number; num: number; title: string; status: TicketStatus; seenAt: string | null }[];
+}
+
+export interface PlanBlock {
+  id: number;
+  taskId: number | null;
+  title: string;
+  startAt: string;
+  minutes: number;
+}
+
+function toCard(r: Record<string, unknown>): Card {
+  return {
+    id: Number(r.id),
+    noteId: r.note_id == null ? null : Number(r.note_id),
+    subject: (r.subject as string | null) ?? null,
+    question: r.question as string,
+    answer: r.answer as string,
+    dueAt: r.due_at as string,
+    interval: Number(r.interval),
+    ease: Number(r.ease),
+    reps: Number(r.reps),
+  };
+}
+
+/**
+ * Следующее повторение карточки (упрощённый SM-2, как в Anki).
+ * Не помню — завтра и «лёгкость» ниже; трудно — интервал растёт чуть-чуть; помню — растёт в «лёгкость» раз.
+ */
+export function nextReview(c: Pick<Card, "interval" | "ease" | "reps">, grade: 0 | 1 | 2): { interval: number; ease: number; reps: number } {
+  if (grade === 0) return { interval: 1, ease: Math.max(1.3, c.ease - 0.2), reps: 0 };
+  const ease = grade === 1 ? Math.max(1.3, c.ease - 0.15) : Math.min(3, c.ease + 0.05);
+  const interval = c.reps === 0 ? (grade === 1 ? 1 : 2) : c.reps === 1 ? (grade === 1 ? 3 : 5) : Math.round(c.interval * (grade === 1 ? 1.2 : ease));
+  return { interval, ease, reps: c.reps + 1 };
+}
+
 /** Как шифровать секреты (ключ ИИ, токен бота). В приложении на ПК — системная связка ключей. */
 export interface SecretCodec {
   encrypt(plain: string): string;
@@ -536,6 +598,162 @@ export class Store {
       plays: Number(r.plays),
       seconds: Number(r.seconds),
     }));
+  }
+
+  // ---------- Шаги заданий («разбей на шаги») ----------
+
+  listSteps(taskId?: number): TaskStep[] {
+    const rows = (
+      taskId === undefined
+        ? this.db.prepare("SELECT * FROM task_steps ORDER BY task_id, pos").all()
+        : this.db.prepare("SELECT * FROM task_steps WHERE task_id = ? ORDER BY pos").all(taskId)
+    ) as Row[];
+    return rows.map((r) => ({ id: Number(r.id), taskId: Number(r.task_id), title: r.title as string, done: Number(r.done) === 1 }));
+  }
+
+  /** Заменить шаги задания целиком. */
+  setSteps(taskId: number, titles: string[]): TaskStep[] {
+    this.db.prepare("DELETE FROM task_steps WHERE task_id = ?").run(taskId);
+    const ins = this.db.prepare("INSERT INTO task_steps (task_id, title, pos) VALUES (?, ?, ?)");
+    titles
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, 12)
+      .forEach((t, i) => ins.run(taskId, t, i));
+    this.changed();
+    return this.listSteps(taskId);
+  }
+
+  toggleStep(id: number): void {
+    this.db.prepare("UPDATE task_steps SET done = 1 - done WHERE id = ?").run(id);
+    this.changed();
+  }
+
+  // ---------- Карточки для повторения ----------
+
+  addCards(cards: { question: string; answer: string; noteId?: number | null; subject?: string | null }[]): number {
+    const ins = this.db.prepare("INSERT INTO cards (note_id, subject, question, answer, due_at, created_at) VALUES (?, ?, ?, ?, ?, ?)");
+    const ts = this.ts();
+    let n = 0;
+    for (const c of cards) {
+      if (!c.question.trim() || !c.answer.trim()) continue;
+      ins.run(c.noteId ?? null, c.subject ?? null, c.question.trim(), c.answer.trim(), ts, ts);
+      n++;
+    }
+    this.changed();
+    return n;
+  }
+
+  listCards(opts: { noteId?: number; dueBefore?: Date } = {}): Card[] {
+    const where: string[] = [];
+    const args: (string | number)[] = [];
+    if (opts.noteId !== undefined) {
+      where.push("note_id = ?");
+      args.push(opts.noteId);
+    }
+    if (opts.dueBefore) {
+      where.push("due_at <= ?");
+      args.push(opts.dueBefore.toISOString());
+    }
+    const sql = `SELECT * FROM cards ${where.length ? `WHERE ${where.join(" AND ")}` : ""} ORDER BY due_at`;
+    return (this.db.prepare(sql).all(...args) as Row[]).map(toCard);
+  }
+
+  /** Ответ на карточку: 0 — не помню, 1 — трудно, 2 — помню. Интервалы — как в Anki, упрощённо. */
+  reviewCard(id: number, grade: 0 | 1 | 2, now = new Date()): Card | undefined {
+    const r = this.db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as Row | undefined;
+    if (!r) return undefined;
+    const c = toCard(r);
+    const next = nextReview(c, grade);
+    const due = new Date(now.getTime() + next.interval * 86400e3);
+    this.db.prepare("UPDATE cards SET interval = ?, ease = ?, reps = ?, due_at = ? WHERE id = ?").run(next.interval, next.ease, next.reps, due.toISOString(), id);
+    this.changed();
+    return toCard(this.db.prepare("SELECT * FROM cards WHERE id = ?").get(id) as Row);
+  }
+
+  deleteCard(id: number): void {
+    this.db.prepare("DELETE FROM cards WHERE id = ?").run(id);
+    this.changed();
+  }
+
+  // ---------- Сессия: экзамены и билеты ----------
+
+  listExams(): Exam[] {
+    const exams = this.db.prepare("SELECT * FROM exams ORDER BY at").all() as Row[];
+    const tickets = this.db.prepare("SELECT * FROM tickets ORDER BY exam_id, num").all() as Row[];
+    return exams.map((e) => ({
+      id: Number(e.id),
+      subject: (e.subject as string | null) ?? null,
+      title: e.title as string,
+      at: e.at as string,
+      tickets: tickets
+        .filter((t) => Number(t.exam_id) === Number(e.id))
+        .map((t) => ({ id: Number(t.id), num: Number(t.num), title: t.title as string, status: t.status as TicketStatus, seenAt: (t.seen_at as string | null) ?? null })),
+    }));
+  }
+
+  saveExam(input: { id?: number; subject?: string | null; title: string; at: string }): number {
+    if (input.id !== undefined) {
+      this.db.prepare("UPDATE exams SET subject = ?, title = ?, at = ? WHERE id = ?").run(input.subject ?? null, input.title, input.at, input.id);
+      this.changed();
+      return input.id;
+    }
+    const res = this.db.prepare("INSERT INTO exams (subject, title, at) VALUES (?, ?, ?)").run(input.subject ?? null, input.title, input.at);
+    this.changed();
+    return Number(res.lastInsertRowid);
+  }
+
+  deleteExam(id: number): void {
+    this.db.prepare("DELETE FROM tickets WHERE exam_id = ?").run(id);
+    this.db.prepare("DELETE FROM exams WHERE id = ?").run(id);
+    this.changed();
+  }
+
+  /** Билеты списком: по строке на билет («1. Пределы» или просто «Пределы»). */
+  setTickets(examId: number, titles: string[]): void {
+    const old = new Map((this.db.prepare("SELECT title, status, seen_at FROM tickets WHERE exam_id = ?").all(examId) as Row[]).map((r) => [r.title as string, r]));
+    this.db.prepare("DELETE FROM tickets WHERE exam_id = ?").run(examId);
+    const ins = this.db.prepare("INSERT INTO tickets (exam_id, num, title, status, seen_at) VALUES (?, ?, ?, ?, ?)");
+    let n = 0;
+    for (const raw of titles) {
+      const m = raw.trim().match(/^(\d+)[.)\s-]+(.*)$/);
+      const title = (m ? m[2]! : raw).trim();
+      if (!title) continue;
+      n = m ? Number(m[1]) : n + 1;
+      const prev = old.get(title);
+      ins.run(examId, n, title, (prev?.status as string) ?? "new", (prev?.seen_at as string | null) ?? null);
+    }
+    this.changed();
+  }
+
+  setTicketStatus(id: number, status: TicketStatus): void {
+    this.db.prepare("UPDATE tickets SET status = ?, seen_at = ? WHERE id = ?").run(status, this.ts(), id);
+    this.changed();
+  }
+
+  // ---------- Планировщик недели ----------
+
+  listPlan(from: Date, to: Date): PlanBlock[] {
+    return (
+      this.db.prepare("SELECT * FROM plan_blocks WHERE start_at >= ? AND start_at < ? ORDER BY start_at").all(from.toISOString(), to.toISOString()) as Row[]
+    ).map((r) => ({ id: Number(r.id), taskId: r.task_id == null ? null : Number(r.task_id), title: r.title as string, startAt: r.start_at as string, minutes: Number(r.minutes) }));
+  }
+
+  savePlanBlock(input: { id?: number; taskId?: number | null; title: string; startAt: string; minutes: number }): number {
+    const minutes = Math.max(15, Math.min(240, Math.round(input.minutes)));
+    if (input.id !== undefined) {
+      this.db.prepare("UPDATE plan_blocks SET task_id = ?, title = ?, start_at = ?, minutes = ? WHERE id = ?").run(input.taskId ?? null, input.title, input.startAt, minutes, input.id);
+      this.changed();
+      return input.id;
+    }
+    const res = this.db.prepare("INSERT INTO plan_blocks (task_id, title, start_at, minutes) VALUES (?, ?, ?, ?)").run(input.taskId ?? null, input.title, input.startAt, minutes);
+    this.changed();
+    return Number(res.lastInsertRowid);
+  }
+
+  deletePlanBlock(id: number): void {
+    this.db.prepare("DELETE FROM plan_blocks WHERE id = ?").run(id);
+    this.changed();
   }
 
   // ---------- Фокус ----------

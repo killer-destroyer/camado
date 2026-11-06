@@ -23,6 +23,7 @@ const api: CamadoApi = {
     list: call("notes.list") as CamadoApi["notes"]["list"],
     save: call("notes.save") as CamadoApi["notes"]["save"],
     remove: call("notes.remove") as CamadoApi["notes"]["remove"],
+    pdf: call("notes.pdf") as CamadoApi["notes"]["pdf"],
   },
   focus: {
     add: call("focus.add") as CamadoApi["focus"]["add"],
@@ -63,6 +64,33 @@ const api: CamadoApi = {
     importHtml: call("music.importHtml") as CamadoApi["music"]["importHtml"],
     searchFree: call("music.searchFree") as CamadoApi["music"]["searchFree"],
     freeTracks: call("music.freeTracks") as CamadoApi["music"]["freeTracks"],
+  },
+  steps: {
+    list: call("steps.list") as CamadoApi["steps"]["list"],
+    set: call("steps.set") as CamadoApi["steps"]["set"],
+    toggle: call("steps.toggle") as CamadoApi["steps"]["toggle"],
+    ai: call("steps.ai") as CamadoApi["steps"]["ai"],
+  },
+  tutor: { ask: call("tutor.ask") as CamadoApi["tutor"]["ask"] },
+  media: { send: call("ai.fromMedia") as CamadoApi["media"]["send"] },
+  cards: {
+    list: call("cards.list") as CamadoApi["cards"]["list"],
+    add: call("cards.add") as CamadoApi["cards"]["add"],
+    review: call("cards.review") as CamadoApi["cards"]["review"],
+    remove: call("cards.remove") as CamadoApi["cards"]["remove"],
+    ai: call("cards.ai") as CamadoApi["cards"]["ai"],
+  },
+  exams: {
+    list: call("exams.list") as CamadoApi["exams"]["list"],
+    save: call("exams.save") as CamadoApi["exams"]["save"],
+    remove: call("exams.remove") as CamadoApi["exams"]["remove"],
+    setTickets: call("tickets.set") as CamadoApi["exams"]["setTickets"],
+    ticketStatus: call("tickets.status") as CamadoApi["exams"]["ticketStatus"],
+  },
+  plan: {
+    list: call("plan.list") as CamadoApi["plan"]["list"],
+    save: call("plan.save") as CamadoApi["plan"]["save"],
+    remove: call("plan.remove") as CamadoApi["plan"]["remove"],
   },
   links: {
     list: call("links.list") as CamadoApi["links"]["list"],

@@ -126,6 +126,57 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX plays_at ON plays (played_at);
   `,
+  // 4: шаги заданий, карточки для повторения, сессия (экзамены и билеты), планировщик недели
+  `
+  CREATE TABLE task_steps (
+    id      INTEGER PRIMARY KEY,
+    task_id INTEGER NOT NULL,
+    title   TEXT NOT NULL,
+    done    INTEGER NOT NULL DEFAULT 0,
+    pos     INTEGER NOT NULL
+  );
+  CREATE INDEX task_steps_task ON task_steps (task_id);
+
+  CREATE TABLE cards (
+    id        INTEGER PRIMARY KEY,
+    note_id   INTEGER,
+    subject   TEXT,
+    question  TEXT NOT NULL,
+    answer    TEXT NOT NULL,
+    due_at    TEXT NOT NULL,
+    interval  REAL NOT NULL DEFAULT 0,
+    ease      REAL NOT NULL DEFAULT 2.5,
+    reps      INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX cards_due ON cards (due_at);
+
+  CREATE TABLE exams (
+    id      INTEGER PRIMARY KEY,
+    subject TEXT,
+    title   TEXT NOT NULL,
+    at      TEXT NOT NULL
+  );
+
+  CREATE TABLE tickets (
+    id      INTEGER PRIMARY KEY,
+    exam_id INTEGER NOT NULL,
+    num     INTEGER NOT NULL,
+    title   TEXT NOT NULL,
+    status  TEXT NOT NULL DEFAULT 'new',
+    seen_at TEXT
+  );
+  CREATE INDEX tickets_exam ON tickets (exam_id);
+
+  CREATE TABLE plan_blocks (
+    id       INTEGER PRIMARY KEY,
+    task_id  INTEGER,
+    title    TEXT NOT NULL,
+    start_at TEXT NOT NULL,
+    minutes  INTEGER NOT NULL
+  );
+  CREATE INDEX plan_blocks_start ON plan_blocks (start_at);
+  `,
 ];
 
 export function openDb(path: string): DB {

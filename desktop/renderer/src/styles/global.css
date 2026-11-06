@@ -4563,3 +4563,286 @@ html.quick-root #root {
 .set-section > .input {
   margin-top: 10px;
 }
+
+/* ---------- Шаги задания и репетитор ---------- */
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 10px;
+}
+.steps-bar {
+  height: 4px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: rgb(var(--text-rgb) / 0.08);
+  margin-bottom: 4px;
+}
+.steps-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+  transform-origin: left;
+  transition: transform 0.4s var(--ease);
+}
+.step {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-align: left;
+  padding: 5px 6px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.step:hover {
+  background: rgb(var(--text-rgb) / 0.05);
+}
+.step.done span:last-child {
+  text-decoration: line-through;
+  color: var(--muted);
+}
+.step-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid rgb(var(--text-rgb) / 0.3);
+}
+.step.done .step-check {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.steps-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 4px;
+}
+.steps-add .input.sm {
+  flex: 1;
+  height: 30px;
+}
+.btn.sm-link.primary {
+  background: rgb(var(--accent-rgb) / 0.18);
+  color: var(--text);
+}
+.steps-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgb(var(--accent-rgb) / 0.16);
+  color: var(--accent);
+}
+.modal.tutor {
+  width: min(760px, calc(100vw - 48px));
+  height: min(720px, calc(100vh - 60px));
+}
+.tutor-hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+.tutor-log {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 2px;
+}
+.tutor-msg {
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.tutor-msg.user {
+  align-self: flex-end;
+  background: rgb(var(--accent-rgb) / 0.22);
+}
+.tutor-msg.assistant {
+  align-self: flex-start;
+  background: rgb(var(--text-rgb) / 0.06);
+}
+.tutor-msg.typing {
+  color: var(--muted);
+  animation: pulse-text 1.2s ease-in-out infinite;
+}
+@keyframes pulse-text {
+  50% {
+    opacity: 0.5;
+  }
+}
+.tutor-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.tutor-input textarea {
+  flex: 1;
+  resize: none;
+}
+.rich p,
+.rich ul,
+.rich ol {
+  margin: 0 0 8px;
+}
+.rich p:last-child {
+  margin-bottom: 0;
+}
+.rich ul,
+.rich ol {
+  padding-left: 20px;
+}
+.rich h4 {
+  margin: 8px 0 6px;
+  font-family: var(--display);
+}
+.rich code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: rgb(var(--text-rgb) / 0.08);
+}
+.rt-math.display {
+  display: block;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+.media-btns {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+.media-btns .icon-btn.rec {
+  color: var(--on-accent);
+  background: var(--u-overdue);
+  animation: pulse-text 1s ease-in-out infinite;
+}
+.rec-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  margin-left: 4px;
+}
+.spin-slow {
+  animation: spin 1.6s linear infinite;
+}
+.quick-foot {
+  flex-wrap: wrap;
+}
+
+/* ---------- Карточки и повторение ---------- */
+.ne-preview {
+  flex: 1;
+  overflow: auto;
+  padding: 6px 4px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.btn.glow {
+  border-color: rgb(var(--accent-rgb) / 0.6);
+  box-shadow: 0 0 24px -8px rgb(var(--accent-rgb) / 0.8);
+}
+.modal.cards-modal {
+  width: min(760px, calc(100vw - 48px));
+  max-height: calc(100vh - 60px);
+}
+.cards-actions {
+  display: flex;
+  gap: 10px;
+}
+.cards-list {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 46vh;
+}
+.card-item {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgb(var(--text-rgb) / 0.05);
+  font-size: 13px;
+}
+.ci-q {
+  font-weight: 650;
+}
+.ci-a {
+  color: rgb(var(--text-rgb) / 0.8);
+}
+.cards-add {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+}
+.modal.review {
+  width: min(640px, calc(100vw - 48px));
+  min-height: 420px;
+}
+.rv-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  padding: 24px 12px;
+}
+.rv-q {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.rv-a {
+  font-size: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgb(var(--text-rgb) / 0.1);
+  animation: rise 0.3s var(--ease) both;
+}
+.rv-show {
+  align-self: center;
+}
+.rv-grades {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.rv-grades .g0 {
+  color: var(--u-overdue);
+}
+kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  margin-left: 4px;
+  background: rgb(var(--text-rgb) / 0.12);
+}
+.rv-done {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  text-align: center;
+}
+.rv-big {
+  font-size: 52px;
+}

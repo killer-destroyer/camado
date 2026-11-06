@@ -18,13 +18,15 @@ import {
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
 import { randomInt } from "node:crypto";
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
 import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
 import { checkGeminiKey, GEMINI_MODELS } from "../../src/llm/gemini.js";
+import { UnsupportedAttachmentError } from "../../src/llm/types.js";
+import { cardsFromNote, splitIntoSteps, tutor } from "../../src/camado/study.js";
 import { isLocalUrl } from "../../src/llm/openai.js";
 import { KEY_KV, OPENAI_PRESETS, type AiConfig } from "../../src/llm/providers.js";
 import { checkAnthropicKey } from "../../src/llm/anthropic.js";
@@ -180,6 +182,19 @@ async function stopBot(): Promise<void> {
 
 type Handler = (...args: never[]) => unknown;
 
+/** Вызов ИИ с понятными ошибками: нет ключа, лимит трат, модель не умеет голос и т. п. */
+async function withAi<T extends object>(fn: () => Promise<T | { error: string }>): Promise<T | { error: string }> {
+  if (!core.ai.enabled) return { error: "ИИ выключен. Подключи его в Настройках → ИИ (бесплатный Gemini — пара минут)." };
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof BudgetExceededError) return { error: err.message };
+    if (err instanceof UnsupportedAttachmentError) return { error: err.message };
+    console.error("Ошибка ИИ:", err);
+    return { error: err instanceof Error && /лимит|ключ|Gemini|модел/i.test(err.message) ? err.message : "Не получилось — проверь интернет и ключ." };
+  }
+}
+
 const handlers: Record<string, Handler> = {
   info: (): AppInfo => ({
     platform: process.platform,
@@ -203,6 +218,21 @@ const handlers: Record<string, Handler> = {
   "notes.list": () => store.listNotes(),
   "notes.save": (input: Parameters<typeof store.saveNote>[0]) => store.saveNote(input),
   "notes.remove": (id: number) => store.deleteNote(id),
+  /** Заметка в PDF: отдельное невидимое окно без скриптов печатает присланный HTML. */
+  "notes.pdf": async (title: string, html: string) => {
+    const safe = String(title).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 80) || "Заметка";
+    const res = await dialog.showSaveDialog(win!, { title: "Сохранить PDF", defaultPath: join(app.getPath("documents"), `${safe}.pdf`), filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (res.canceled || !res.filePath) return false;
+    const pdfWin = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false, contextIsolation: true } });
+    try {
+      await pdfWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(String(html).slice(0, 5_000_000))}`);
+      const pdf = await pdfWin.webContents.printToPDF({ printBackground: true, pageSize: "A4" });
+      await writeFile(res.filePath, pdf);
+      return true;
+    } finally {
+      pdfWin.destroy();
+    }
+  },
 
   "links.list": () => store.listLinks(),
   "links.save": (input: Parameters<typeof store.saveLink>[0]) => store.saveLink(input),
@@ -235,6 +265,58 @@ const handlers: Record<string, Handler> = {
   "focus.list": (sinceIso: string) => store.listFocusSessions(new Date(sinceIso)),
 
   "chat.history": () => store.recentChat(60),
+  // ---------- Учёба: шаги, репетитор, фото/голос, карточки, сессия, планировщик ----------
+
+  "steps.list": (taskId?: number) => store.listSteps(taskId),
+  "steps.set": (taskId: number, titles: string[]) => store.setSteps(taskId, titles),
+  "steps.toggle": (id: number) => store.toggleStep(id),
+  "steps.ai": (taskId: number) =>
+    withAi(async () => {
+      const task = store.getTask(taskId);
+      if (!task) return { error: "Задание не найдено" };
+      const steps = await splitIntoSteps(core.llm, store, task);
+      return steps.length ? { steps } : { error: "Модель не прислала шаги — попробуй ещё раз" };
+    }),
+  "tutor.ask": (taskId: number, history: { role: "user" | "assistant"; content: string }[], message: string) =>
+    withAi(async () => {
+      const task = store.getTask(taskId);
+      if (!task) return { error: "Задание не найдено" };
+      return { answer: await tutor(core.llm, task, history.slice(-12), message) };
+    }),
+  /** Фото доски / скрин / голосовое → Камадо разбирает и записывает задания. */
+  "ai.fromMedia": (kind: "photo" | "voice", mime: string, data: string, note?: string) =>
+    withAi(async () => {
+      if (data.length > 25 * 1024 * 1024) return { error: "Файл слишком большой" };
+      const prompt =
+        kind === "photo"
+          ? "[Фото от хозяина] Найди на фото учебные задания и сроки и запиши их. Если заданий нет — коротко скажи, что видишь."
+          : "[Голосовое от хозяина] Послушай и выполни просьбу: обычно это «запиши задание…» или вопрос.";
+      return { answer: await core.camado.handle({ text: note ? `${prompt}\nПодпись: ${note}` : prompt, attachments: [{ mime, data }] }) };
+    }),
+
+  "cards.list": (opts?: { noteId?: number; due?: boolean }) => store.listCards({ noteId: opts?.noteId, dueBefore: opts?.due ? new Date() : undefined }),
+  "cards.add": (cards: { question: string; answer: string; noteId?: number | null; subject?: string | null }[]) => store.addCards(cards),
+  "cards.review": (id: number, grade: 0 | 1 | 2) => store.reviewCard(id, grade),
+  "cards.remove": (id: number) => store.deleteCard(id),
+  "cards.ai": (noteId: number) =>
+    withAi(async () => {
+      const note = store.getNote(noteId);
+      if (!note) return { error: "Заметка не найдена" };
+      if (note.body.trim().length < 40) return { error: "В заметке слишком мало текста для карточек" };
+      const added = await cardsFromNote(core.llm, store, note);
+      return added ? { added } : { error: "Модель не прислала карточки — попробуй ещё раз" };
+    }),
+
+  "exams.list": () => store.listExams(),
+  "exams.save": (input: Parameters<typeof store.saveExam>[0]) => store.saveExam(input),
+  "exams.remove": (id: number) => store.deleteExam(id),
+  "tickets.set": (examId: number, titles: string[]) => store.setTickets(examId, titles),
+  "tickets.status": (id: number, status: "new" | "review" | "known") => store.setTicketStatus(id, status),
+
+  "plan.list": (fromIso: string, toIso: string) => store.listPlan(new Date(fromIso), new Date(toIso)),
+  "plan.save": (input: Parameters<typeof store.savePlanBlock>[0]) => store.savePlanBlock(input),
+  "plan.remove": (id: number) => store.deletePlanBlock(id),
+
   "chat.send": async (text: string) => {
     if (!core.ai.enabled) return { error: "ИИ выключен. Вставь ключ в Настройках → ИИ." };
     try {

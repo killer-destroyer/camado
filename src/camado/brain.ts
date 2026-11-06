@@ -1,4 +1,4 @@
-import type { LLMProvider, ToolDef } from "../llm/types.js";
+import type { Attachment, LLMProvider, ToolDef } from "../llm/types.js";
 import type { Store } from "../store.js";
 import { nowLine } from "../time.js";
 import { memoryBlock, PERSONA } from "./persona.js";
@@ -14,6 +14,8 @@ const CHANGES_EXISTING = new Set(["update_task", "forget"]);
 
 export interface IncomingMessage {
   text: string;
+  /** Фото или голос (картинка доски, голосовое «запиши…»). */
+  attachments?: Attachment[];
   /** Если сообщение переслано — от кого (человек, чат или канал). */
   forwardedFrom?: string;
 }
@@ -47,13 +49,14 @@ export class Camado {
       history: this.store.recentChat(HISTORY_LIMIT),
       userMessage,
       tools: msg.forwardedFrom ? this.safeTools : this.tools,
+      attachments: msg.attachments,
     });
 
     const answer = result.refused
       ? "Модель отказалась отвечать на это сообщение. Попробуй сформулировать по-другому."
       : result.text || "Готово.";
 
-    this.store.appendChat("user", userMessage);
+    this.store.appendChat("user", msg.attachments?.length ? `[${msg.attachments.some((a) => a.mime.startsWith("audio/")) ? "голосовое" : "фото"}] ${userMessage}` : userMessage);
     this.store.appendChat("assistant", answer);
     return answer;
   }

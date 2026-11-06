@@ -42,6 +42,8 @@ nsis:
 
 mac:
   icon: desktop/assets/icon.png
+  extendInfo:
+    NSMicrophoneUsageDescription: "Камадо слушает микрофон только когда ты нажимаешь кнопку голоса — чтобы записать задание голосом."
   category: public.app-category.productivity
   target:
     - target: dmg

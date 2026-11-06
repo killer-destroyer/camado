@@ -1,6 +1,7 @@
 // «Задания»: запись, группы по срочности, отметка «сдано» с салютом, карточки предметов.
 import { useMemo, useState } from "react";
-import { BookOpen, Check, Plus, Trash2, Undo2 } from "lucide-react";
+import { BookOpen, Check, ListChecks, Plus, Trash2, Undo2 } from "lucide-react";
+import { StepsPanel, TaskHelpButtons, TutorModal } from "../components/TaskHelp";
 import type { Task, TaskKind } from "../../../shared/types";
 import { api } from "../lib/api";
 import { countdown, fmtDue, fromLocalInput, KIND_LABEL, urgency, type Urgency } from "../lib/format";
@@ -36,6 +37,10 @@ function Burst() {
 
 function TaskRow({ t, tz, index }: { t: Task; tz: string; index: number }) {
   const [celebrate, setCelebrate] = useState(false);
+  const allSteps = useStore(data, (s) => s.steps);
+  const steps = allSteps.filter((x) => x.taskId === t.id);
+  const [stepsOpen, setStepsOpen] = useState(false);
+  const [tutorOpen, setTutorOpen] = useState(false);
   const closed = t.status === "done" || t.status === "cancelled";
   const toggle = async () => {
     if (!closed) {
@@ -54,13 +59,20 @@ function TaskRow({ t, tz, index }: { t: Task; tz: string; index: number }) {
         <div className="task-title">{t.title}</div>
         {t.details && <div className="task-details">{t.details}</div>}
         <div className="task-meta">
+          {steps.length > 0 && (
+            <button className="steps-chip" onClick={() => setStepsOpen(!stepsOpen)}>
+              <ListChecks size={12} /> {steps.filter((x) => x.done).length}/{steps.length}
+            </button>
+          )}
           <span className={`kind k-${t.kind}`}>{KIND_LABEL[t.kind]}</span>
           {t.subject && <span className={`subj h${hue(t.subject)}`}>{t.subject}</span>}
           {t.dueAt && <span className="due">{fmtDue(t.dueAt, tz)}</span>}
         </div>
+        {stepsOpen && <StepsPanel task={t} steps={steps} />}
       </div>
       {t.dueAt && !closed && <div className="task-count">{countdown(t.dueAt)}</div>}
       <div className="task-actions">
+        {!closed && <TaskHelpButtons stepsOpen={stepsOpen} onSteps={() => setStepsOpen(!stepsOpen)} onTutor={() => setTutorOpen(true)} />}
         {closed ? (
           <button className="icon-btn" title="Вернуть в работу" onClick={() => void api.tasks.update(t.id, { status: "todo" })}>
             <Undo2 size={16} />
@@ -71,6 +83,7 @@ function TaskRow({ t, tz, index }: { t: Task; tz: string; index: number }) {
           </button>
         )}
       </div>
+      {tutorOpen && <TutorModal task={t} onClose={() => setTutorOpen(false)} />}
     </li>
   );
 }

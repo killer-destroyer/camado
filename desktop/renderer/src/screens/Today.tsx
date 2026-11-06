@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { AlarmClock, ArrowRight, Check, Flame, ListChecks, Music2, NotebookPen, Play, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
+import { MediaButtons } from "../components/MediaButtons";
 import { buildDayPlan } from "../../../shared/plan";
 import type { TaskKind } from "../../../shared/types";
 import { api } from "../lib/api";
@@ -92,6 +93,7 @@ function QuickAdd() {
           />
         )}
         <span className="muted small">{viaAi ? "Enter — отправить Камадо" : "предмет | что | срок · Enter"}</span>
+        <MediaButtons onResult={(t, ok) => toast(t, ok ? "ok" : "warn")} />
       </div>
     </div>
   );

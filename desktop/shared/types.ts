@@ -1,10 +1,11 @@
 // Общие типы для окна (renderer) и фоновой части (main) приложения.
-import type { ChatEntry, FocusSession, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus } from "../../src/store.js";
+import type { Card, ChatEntry, Exam, FocusSession, LessonLink, Note, PlanBlock, PlayStat, Playlist, Subject, Task, TaskKind, TaskStep, TaskStatus } from "../../src/store.js";
 import type { FreeAlbum } from "../main/freeMusic.js";
 import type { AiConfig } from "../../src/llm/providers.js";
 import type { AppSettings } from "./settings.js";
 
 export type { AiConfig };
+export type { Card, Exam, PlanBlock, TaskStep };
 export type { ChatEntry, FocusSession, FreeAlbum, LessonLink, Note, PlayStat, Playlist, Subject, Task, TaskKind, TaskStatus, AppSettings };
 
 type ImportResult =
@@ -159,6 +160,39 @@ export interface CamadoApi {
     list(): Promise<Subject[]>;
     save(input: { name: string; teacher?: string; info?: string }): Promise<Subject>;
   };
+  steps: {
+    list(taskId?: number): Promise<TaskStep[]>;
+    set(taskId: number, titles: string[]): Promise<TaskStep[]>;
+    toggle(id: number): Promise<void>;
+    /** ИИ разбивает задание на шаги и сохраняет их. */
+    ai(taskId: number): Promise<{ steps: string[] } | { error: string }>;
+  };
+  tutor: {
+    ask(taskId: number, history: { role: "user" | "assistant"; content: string }[], message: string): Promise<{ answer: string } | { error: string }>;
+  };
+  media: {
+    /** Фото или голосовое (base64) → Камадо разбирает и записывает задания. */
+    send(kind: "photo" | "voice", mime: string, data: string, note?: string): Promise<{ answer: string } | { error: string }>;
+  };
+  cards: {
+    list(opts?: { noteId?: number; due?: boolean }): Promise<Card[]>;
+    add(cards: { question: string; answer: string; noteId?: number | null; subject?: string | null }[]): Promise<number>;
+    review(id: number, grade: 0 | 1 | 2): Promise<Card | undefined>;
+    remove(id: number): Promise<void>;
+    ai(noteId: number): Promise<{ added: number } | { error: string }>;
+  };
+  exams: {
+    list(): Promise<Exam[]>;
+    save(input: { id?: number; subject?: string | null; title: string; at: string }): Promise<number>;
+    remove(id: number): Promise<void>;
+    setTickets(examId: number, titles: string[]): Promise<void>;
+    ticketStatus(id: number, status: "new" | "review" | "known"): Promise<void>;
+  };
+  plan: {
+    list(fromIso: string, toIso: string): Promise<PlanBlock[]>;
+    save(input: { id?: number; taskId?: number | null; title: string; startAt: string; minutes: number }): Promise<number>;
+    remove(id: number): Promise<void>;
+  };
   links: {
     list(): Promise<LessonLink[]>;
     save(input: { id?: number; title: string; url: string; subject?: string | null; note?: string; pinned?: boolean }): Promise<LessonLink>;
@@ -184,6 +218,8 @@ export interface CamadoApi {
     list(): Promise<Note[]>;
     save(input: { id?: number; title: string; body?: string; subject?: string | null; pinned?: boolean }): Promise<Note>;
     remove(id: number): Promise<boolean>;
+    /** Сохранить заметку в PDF (спросит, куда). */
+    pdf(title: string, html: string): Promise<boolean>;
   };
   focus: {
     add(input: { subject?: string | null; minutes: number; startedAt: string }): Promise<FocusSession>;

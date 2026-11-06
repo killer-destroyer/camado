@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Sparkles, Zap } from "lucide-react";
 import { api } from "../lib/api";
+import { MediaButtons } from "./MediaButtons";
 import { applyPalette, paletteById } from "../lib/palettes";
 
 export function QuickWindow() {
@@ -54,6 +55,7 @@ export function QuickWindow() {
           }}
           onKeyDown={(e) => e.key === "Enter" && void submit()}
         />
+        {aiOn && <MediaButtons compact onResult={(t, ok) => setState({ kind: ok ? "ok" : "err", msg: t })} />}
         {aiOn && <Sparkles size={16} className="qw-ai" />}
       </div>
       <div className={`qw-hint ${state.kind}`}>

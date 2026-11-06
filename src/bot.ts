@@ -10,6 +10,7 @@ import type { Store, TaskKind } from "./store.js";
 
 const TELEGRAM_LIMIT = 4000;
 import { checkGeminiKey, GeminiProvider } from "./llm/gemini.js";
+import { UnsupportedAttachmentError } from "./llm/types.js";
 import { AI_CONFIG_KV, KEY_KV } from "./llm/providers.js";
 
 export const API_KEY_KV = "anthropic_api_key";
@@ -334,9 +335,46 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     }
   });
 
-  bot.on("message", (ctx) =>
-    ctx.reply("Пока я понимаю только текст. Файлы, фото и голосовые научусь читать в следующих версиях."),
-  );
+  // Фото доски/страницы и голосовые «запиши…»: скачиваем файл у Telegram и отдаём модели как вложение.
+  const handleMedia = async (ctx: Context, fileId: string, mime: string, prompt: string) => {
+    if (!ai.enabled) {
+      await ctx.reply("Чтобы я понимал фото и голосовые, подключи ИИ — /key (бесплатный Gemini умеет и то и другое).");
+      return;
+    }
+    await ctx.replyWithChatAction("typing").catch(() => undefined);
+    try {
+      const file = await ctx.api.getFile(fileId);
+      if (!file.file_path || (file.file_size ?? 0) > 18 * 1024 * 1024) {
+        await ctx.reply("Файл слишком большой — пришли поменьше (до 18 МБ).");
+        return;
+      }
+      const res = await fetch(`https://api.telegram.org/file/bot${bot.token}/${file.file_path}`, { signal: AbortSignal.timeout(60_000) });
+      const data = Buffer.from(await res.arrayBuffer()).toString("base64");
+      const caption = ctx.message?.caption?.trim();
+      const answer = await camado.handle({
+        text: caption ? `${prompt}\nПодпись: ${caption}` : prompt,
+        forwardedFrom: describeOrigin(ctx.message?.forward_origin),
+        attachments: [{ mime, data }],
+      });
+      await replyLong(ctx, answer);
+    } catch (err) {
+      if (err instanceof BudgetExceededError) return void (await ctx.reply(err.message));
+      if (err instanceof UnsupportedAttachmentError) return void (await ctx.reply(err.message));
+      console.error("Ошибка с файлом:", err);
+      await ctx.reply("Не получилось разобрать файл 😵 Попробуй ещё раз или напиши текстом.");
+    }
+  };
+
+  bot.on("message:photo", async (ctx) => {
+    const best = ctx.message.photo.at(-1)!;
+    await handleMedia(ctx, best.file_id, "image/jpeg", "[Фото от хозяина] Найди на фото учебные задания и сроки и запиши их. Если заданий нет — коротко скажи, что видишь.");
+  });
+  bot.on(["message:voice", "message:audio"], async (ctx) => {
+    const v = ctx.message.voice ?? ctx.message.audio!;
+    await handleMedia(ctx, v.file_id, v.mime_type ?? "audio/ogg", "[Голосовое от хозяина] Послушай и выполни просьбу: обычно это «запиши задание…» или вопрос.");
+  });
+
+  bot.on("message", (ctx) => ctx.reply("Я понимаю текст, фото и голосовые. Документы научусь читать позже."));
 
   bot.catch((err) => console.error("Ошибка бота:", err.error));
   return bot;
