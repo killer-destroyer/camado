@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
 import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
+import { buildAppTools } from "./appTools.js";
 import { heardLineTimes } from "../../src/camado/listen.js";
 import { GEMINI_MODELS, geminiKeyProblem } from "../../src/llm/gemini.js";
 import { UnsupportedAttachmentError } from "../../src/llm/types.js";
@@ -952,6 +953,34 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
   quitting = true;
   app.quit();
 }
+
+// ---------- Пульт для ИИ ----------
+// Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
+core.camado.setAppTools(
+  buildAppTools({
+    tracks: () => library.view().tracks,
+    playlists: () => store.listPlaylists(),
+    favorites: () => store.listFavorites(),
+    nowPlaying: () => nowPlaying,
+    settings: () => settings,
+    saveSettings: (patch) => send("settings-changed", saveSettings(patch)),
+    act: (a) => send("ai-action", a),
+    showWindow: () => showWindow(),
+    window: (action) => {
+      if (action === "quit" || action === "restart") {
+        quitting = true;
+        if (action === "restart") app.relaunch();
+        app.quit();
+        return;
+      }
+      if (!win) return;
+      if (action === "fullscreen") win.setFullScreen(true);
+      else if (action === "windowed") win.setFullScreen(false);
+      else if (action === "minimize") win.minimize();
+      else win.hide();
+    },
+  }),
+);
 
 // ---------- Запуск ----------
 

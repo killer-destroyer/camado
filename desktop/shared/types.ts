@@ -327,4 +327,8 @@ export interface CamadoApi {
   on(event: "overlay-changed", cb: (payload: boolean) => void): () => void;
   on(event: "np-state", cb: (payload: NowPlayingState | null) => void): () => void;
   on(event: "go", cb: (payload: string) => void): () => void;
+  /** ИИ поменял настройки по просьбе. */
+  on(event: "settings-changed", cb: (payload: AppSettings) => void): () => void;
+  /** ИИ просит сделать что-то в окне: экран, музыка, фокус, заставка. */
+  on(event: "ai-action", cb: (payload: unknown) => void): () => void;
 }

@@ -6,12 +6,12 @@ import { applyPalette, paletteById } from "./lib/palettes";
 import { useStore } from "./lib/store";
 import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/app";
 import { data, refreshData, watchData } from "./state/data";
-import { initFocus, refreshFocusStats, watchMenubar } from "./state/focus";
+import { initFocus, pause as pauseFocus, refreshFocusStats, reset as resetFocus, start as startFocus, watchMenubar } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
 import { watchAchievements } from "./state/achievements";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
-import { Screensaver, watchIdle } from "./components/Screensaver";
+import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
 import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
@@ -48,6 +48,37 @@ const isTyping = (e: KeyboardEvent) => {
   return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable);
 };
 
+/** Что просил сделать ИИ (пульт приложения): экран, музыка, фокус, заставка. */
+type AiAction =
+  | { type: "screen"; screen: ScreenId; nowPlaying?: boolean }
+  | { type: "play"; trackIds: string[]; index: number; shuffle?: boolean }
+  | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
+  | { type: "focus"; action: "start" | "pause" | "reset" }
+  | { type: "screensaver"; on: boolean };
+
+function aiAction(a: AiAction): void {
+  if (a.type === "screen") {
+    go(a.screen);
+    app.set({ nowPlaying: !!a.nowPlaying });
+  } else if (a.type === "play") {
+    const byId = new Map(player.get().library.tracks.map((t) => [t.id, t]));
+    const list = a.trackIds.map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+    if (!list.length) return;
+    if (a.shuffle) player.set({ shuffle: true });
+    void playQueue(list, Math.min(a.index, list.length - 1));
+  } else if (a.type === "music") {
+    if (a.action === "next") next();
+    else if (a.action === "prev") prev();
+    else if ((a.action === "pause") === !engine.el.paused) togglePlay();
+  } else if (a.type === "focus") {
+    go("focus");
+    if (a.action === "start") startFocus();
+    else if (a.action === "pause") pauseFocus();
+    else resetFocus();
+  } else if (a.on) startScreensaver();
+  else stopScreensaver();
+}
+
 export function App() {
   const screen = useStore(app, (s) => s.screen);
   const nowPlaying = useStore(app, (s) => s.nowPlaying);
@@ -80,6 +111,7 @@ export function App() {
       // Напоминания о сроках звенят, утренняя сводка — просто всплывает.
       api.on("reminder", (p) => (p.text.startsWith("⏰") ? ring(p.text) : toast(p.text, "warn"))),
       api.on("go", (screen) => go(screen as ScreenId)),
+      api.on("ai-action", (a) => aiAction(a as AiAction)),
     ];
 
     const onKey = (e: KeyboardEvent) => {

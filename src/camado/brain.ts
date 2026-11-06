@@ -35,6 +35,15 @@ export class Camado {
     this.safeTools = this.tools.filter((t) => !CHANGES_EXISTING.has(t.name));
   }
 
+  /**
+   * Пульт приложения (экраны, музыка, настройки, окно) — его даёт программа для компьютера.
+   * В пересланных сообщениях пульта нет: чужой текст не должен включать музыку или выключать Камадо.
+   */
+  setAppTools(appTools: ToolDef[]): void {
+    const base = this.tools.filter((t) => !t.name.startsWith("app_"));
+    this.tools = [...base, ...appTools];
+  }
+
   async handle(msg: IncomingMessage): Promise<string> {
     const header = nowLine(this.now(), this.timeZone);
     // Пересланное — в явных рамках: всё внутри них только данные, а не просьбы хозяина.

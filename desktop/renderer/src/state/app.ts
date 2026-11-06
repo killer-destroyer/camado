@@ -88,6 +88,11 @@ export async function initApp(): Promise<void> {
   const [settings, info, update] = await Promise.all([api.settings.get(), api.info(), api.updates.status()]);
   app.set({ update, overlay: await api.overlay.isOpen() });
   api.on("overlay-changed", (open) => app.set({ overlay: open }));
+  // Настройки поменял ИИ по просьбе («сделай потише», «включи тему Сакура») — применяем сразу.
+  api.on("settings-changed", (s) => {
+    applySettings(s as AppSettings);
+    app.set({ settings: s as AppSettings });
+  });
   api.on("update-status", (u) => {
     const was = app.get().update.state;
     app.set({ update: u });
