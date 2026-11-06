@@ -36,8 +36,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
-      # Номер версии растёт с каждой сборкой — по нему программа понимает, что вышло обновление.
-      - run: npm version 1.0.${{ github.run_number }} --no-git-tag-version --allow-same-version
+      # Номер версии берём из package.json (его поднимаем при каждом выпуске) — по нему программа понимает,
+      # что вышло обновление. Номер сборки CI не подставляем: он меньше уже вышедших версий и сломал бы обновления.
       - run: npx electron-vite build
       - name: Собрать установщик
         shell: bash

@@ -1,8 +1,9 @@
 // «Камадо»: разговор с ассистентом (тот же, что отвечает в Telegram).
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, SendHorizontal, Sparkles } from "lucide-react";
+import { KeyRound, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
 import type { ChatEntry } from "../../../shared/types";
 import { api } from "../lib/api";
+import { insertAtCursor, pastedWithLinks } from "../lib/paste";
 import { app, go } from "../state/app";
 import { Empty } from "../components/ui";
 
@@ -16,6 +17,16 @@ export function Chat() {
   const [busy, setBusy] = useState(false);
   const [aiOn, setAiOn] = useState<boolean | null>(null);
   const log = useRef<HTMLDivElement>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  /** Первая прокрутка после загрузки истории — сразу вниз, без анимации. */
+  const first = useRef(true);
+  // поле растёт под текст (до 8 строк)
+  useEffect(() => {
+    const el = field.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
+  }, [text]);
 
   useEffect(() => {
     void api.ai.status().then((s) => setAiOn(s.enabled));
@@ -33,7 +44,10 @@ export function Chat() {
   useEffect(() => {
     // У сообщений своя прокрутка — листаем её к последнему сообщению (фигурные скобки важны, см. CLAUDE.md).
     const el = log.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (!el) return;
+    // при открытии чата — сразу внизу; плавно — только для новых сообщений
+    el.scrollTo({ top: el.scrollHeight, behavior: first.current ? "auto" : "smooth" });
+    if (items.length) first.current = false;
   }, [items, busy]);
 
   const send = async (msg = text) => {
@@ -66,6 +80,19 @@ export function Chat() {
     <div className="screen chat">
       <header className="screen-head">
         <h1 className="display">Камадо</h1>
+        {items.length > 0 && (
+          <button
+            className="btn chat-new"
+            title="Стереть переписку и начать заново (задания, ссылки и заметки останутся)"
+            onClick={async () => {
+              if (!confirm("Начать новый разговор? Переписка сотрётся, а задания, ссылки, заметки и то, что Камадо запомнил, останутся.")) return;
+              await api.chat.clear();
+              setItems([]);
+            }}
+          >
+            <MessageSquarePlus size={16} /> Новый разговор
+          </button>
+        )}
       </header>
       <div ref={log} className="chat-log">
         {items.length === 0 && (
@@ -95,11 +122,24 @@ export function Chat() {
         )}
       </div>
       <div className="chat-input glass">
-        <input
+        <textarea
+          ref={field}
+          rows={1}
           value={text}
-          placeholder="Напиши Камадо…"
+          placeholder="Напиши Камадо… (Shift+Enter — новая строка)"
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && void send()}
+          onPaste={(e) => {
+            const t = pastedWithLinks(e.clipboardData);
+            if (t === null) return;
+            e.preventDefault();
+            setText(insertAtCursor(e.currentTarget, t, text));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
           autoFocus
         />
         <button className="play-btn sm" onClick={() => void send()} disabled={busy}>

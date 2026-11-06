@@ -369,6 +369,11 @@ export class Store {
       .run(role, content, this.ts());
   }
 
+  /** Новый разговор: стереть переписку (задания, ссылки, заметки и память не трогаем). */
+  clearChat(): void {
+    this.db.prepare("DELETE FROM chat_log").run();
+  }
+
   /** Последние сообщения, от старых к новым. */
   recentChat(limit: number): ChatEntry[] {
     const rows = this.db

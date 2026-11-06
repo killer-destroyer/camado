@@ -8,7 +8,7 @@ import { parseLrc, plainLines, scaleLyrics, speedHint } from "../shared/lrc.js";
 import type { Lyrics, LyricsQuery } from "../shared/types.js";
 import { lrcPathFor } from "./library.js";
 
-const USER_AGENT = "Camado/0.2 (https://github.com/killer-destroyer/camado)";
+const USER_AGENT = "Camado/0.2 (https://github.com/killer-destroyer/camado-)";
 const NOT_FOUND_TTL = 7 * 24 * 3600 * 1000;
 const NONE: Lyrics = { synced: false, lines: [], source: "none" };
 

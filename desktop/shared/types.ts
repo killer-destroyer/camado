@@ -228,6 +228,8 @@ export interface CamadoApi {
   chat: {
     history(): Promise<ChatEntry[]>;
     send(text: string): Promise<{ answer?: string; error?: string }>;
+    /** Новый разговор: стереть переписку. */
+    clear(): Promise<void>;
   };
   ai: {
     status(): Promise<AiStatus>;

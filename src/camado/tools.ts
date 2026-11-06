@@ -167,6 +167,10 @@ export function buildTools(store: Store, timeZone: string, turnText: () => strin
             bad.push(l.url);
           }
         }
+        if (!saved.length && made.length)
+          throw new Error(
+            `НИЧЕГО НЕ СОХРАНЕНО: адресов ${made.join(", ")} не было в переписке. Не выдумывай ссылки и не говори, что сохранил: скажи хозяину, что в его сообщении нет самих адресов, и попроси скинуть ссылки (или скопировать сообщение вместе со ссылками).`,
+          );
         return (
           `Сохранено в «Ссылки»: ${saved.length}${saved.length ? `\n${saved.join("\n")}` : ""}` +
           (bad.length ? `\nНе похоже на ссылки: ${bad.join(", ")}` : "") +
@@ -304,6 +308,33 @@ export function buildTools(store: Store, timeZone: string, turnText: () => strin
         const bl = store.listPlan(now, new Date(now.getTime() + 7 * 86400e3));
         if (!bl.length) return "В плане на неделю пусто.";
         return bl.map((b) => `#${b.id} ${new Date(b.startAt).toLocaleString("ru-RU", { timeZone, weekday: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} — ${b.title} (${b.minutes} мин)`).join("\n");
+      },
+    }),
+
+    defineTool({
+      name: "delete_plan",
+      description: "Убрать блоки из «Плана недели» по номерам (номера — из list_plan).",
+      schema: z.object({ ids: z.array(z.number().int()).min(1) }),
+      run: (i) => {
+        for (const id of i.ids) store.deletePlanBlock(id);
+        return `Убрано из плана недели: ${i.ids.length}.`;
+      },
+    }),
+
+    defineTool({
+      name: "delete_notes",
+      description: "Удалить заметки по номерам (номера — из list_notes).",
+      schema: z.object({ ids: z.array(z.number().int()).min(1) }),
+      run: (i) => `Удалено заметок: ${i.ids.filter((id) => store.deleteNote(id)).length}.`,
+    }),
+
+    defineTool({
+      name: "delete_exam",
+      description: "Удалить экзамен из «Сессии» вместе с билетами (номер — из list_exams).",
+      schema: z.object({ id: z.number().int() }),
+      run: (i) => {
+        store.deleteExam(i.id);
+        return `Экзамен #${i.id} удалён.`;
       },
     }),
 

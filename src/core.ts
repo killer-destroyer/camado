@@ -9,6 +9,7 @@ import { MeteredProvider } from "./llm/metered.js";
 import { SwitchableProvider } from "./llm/switchable.js";
 import { AI_CONFIG_KV, buildProvider, DEFAULT_AI, KEY_KV, parseAiConfig, type AiConfig, type AiKind } from "./llm/providers.js";
 import { Store } from "./store.js";
+import { buildWebTools } from "./camado/webTools.js";
 
 export interface CamadoCore {
   config: Config;
@@ -72,6 +73,8 @@ export function applyAi(core: CamadoCore): void {
   const cfg = currentAiConfig(core);
   const models = { fast: core.config.CAMADO_MODEL_FAST, brain: core.config.CAMADO_MODEL_BRAIN, smart: core.config.CAMADO_MODEL_SMART };
   core.ai.setProvider(buildProvider(cfg, aiKey(core, cfg.kind), models));
+  // Интернет (поиск Google через Gemini, чтение страниц) — для любой модели, если есть ключ Gemini.
+  core.camado.setTools("web", buildWebTools({ geminiKey: () => aiKey(core, "gemini") }));
 }
 
 /** Сохранить выбор нейросети (и ключ, если дали) и сразу переключиться. Ключ уже должен быть проверен. */

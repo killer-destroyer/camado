@@ -96,6 +96,7 @@ export interface BotDeps {
 export const BOT_COMMANDS = [
   { command: "dz", description: "что задано" },
   { command: "links", description: "ссылки по предметам" },
+  { command: "new", description: "новый разговор (стереть переписку)" },
   { command: "add", description: "записать ДЗ" },
   { command: "kr", description: "записать контрольную" },
   { command: "exam", description: "записать экзамен" },
@@ -143,7 +144,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       }
       await ctx.reply(
         pairing
-          ? "Привет! Чтобы я стал твоим, открой приложение Камадо → Настройки → Telegram и пришли мне код оттуда."
+          ? "Привет! Чтобы я стал твоим, открой приложение Камадо → Настройки → Telegram и пришли мне код оттуда. (Если ты недавно менял токен бота — привязка начинается заново, это нормально.)"
           : `Камадо ещё не привязан к хозяину.\nТвой ID: ${ctx.from?.id}\n` +
               "Впиши его в OWNER_TELEGRAM_ID в файле .env и перезапусти бота.",
       );
@@ -303,6 +304,11 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     await setKey(ctx, arg);
   });
 
+  bot.command("new", async (ctx) => {
+    store.clearChat();
+    await ctx.reply("Начали новый разговор 🧹 Задания, ссылки, заметки и то, что я помню о тебе, на месте.");
+  });
+
   bot.command("links", (ctx) => {
     const links = store.listLinks();
     if (!links.length) return ctx.reply("Ссылок пока нет. Перешли мне сообщение препода со ссылками — разложу по предметам.");
@@ -341,7 +347,10 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
 
     await ctx.replyWithChatAction("typing").catch(() => undefined);
     try {
-      const answer = await camado.handle({ text, forwardedFrom: describeOrigin(ctx.message.forward_origin) });
+      // Ссылки, спрятанные в слова («🔗Общий чат»), Telegram хранит отдельно от текста — разворачиваем их,
+      // иначе ИИ видит только слова и не может сохранить адреса.
+      const full = withLinks(text, ctx.message.entities);
+      const answer = await camado.handle({ text: full, forwardedFrom: describeOrigin(ctx.message.forward_origin) });
       await replyLong(ctx, answer);
     } catch (err) {
       if (err instanceof BudgetExceededError) {
@@ -374,7 +383,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       }
       const res = await fetch(`https://api.telegram.org/file/bot${bot.token}/${file.file_path}`, { signal: AbortSignal.timeout(60_000) });
       const data = Buffer.from(await res.arrayBuffer()).toString("base64");
-      const caption = ctx.message?.caption?.trim();
+      const caption = ctx.message?.caption ? withLinks(ctx.message.caption, ctx.message.caption_entities).trim() : undefined;
       const answer = await camado.handle({
         text: caption ? `${prompt}\nПодпись: ${caption}` : prompt,
         forwardedFrom: describeOrigin(ctx.message?.forward_origin),
@@ -404,6 +413,22 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
   return bot;
 }
 
+/**
+ * Гиперссылки (слово, под которым спрятан адрес) → «слово (адрес)». Сдвиги Telegram считает в UTF-16 —
+ * как и строки JS, поэтому режем прямо по ним, с конца, чтобы не съезжали.
+ */
+export function withLinks(text: string, entities?: { type: string; offset: number; length: number; url?: string }[]): string {
+  const links = (entities ?? []).filter((e) => e.type === "text_link" && e.url).sort((a, b) => b.offset - a.offset);
+  let out = text;
+  for (const e of links) {
+    const end = e.offset + e.length;
+    out = `${out.slice(0, end)} (${e.url})${out.slice(end)}`;
+  }
+  return out;
+}
+
 async function replyLong(ctx: Context, text: string): Promise<void> {
-  for (const chunk of splitMessage(text)) await ctx.reply(chunk);
+  // Telegram показал бы **звёздочки** и ## решётки как есть — убираем разметку, если модель её всё же написала.
+  const plain = text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/\\([$*_])/g, "$1");
+  for (const chunk of splitMessage(plain)) await ctx.reply(chunk, { link_preview_options: { is_disabled: true } });
 }

@@ -1,6 +1,7 @@
 // «Ссылки»: все ссылки преподов в одном месте — Zoom, Meet, Moodle, чаты, диски.
 // Вставляешь хоть целое сообщение из чата — Камадо сам вытащит ссылки и подпишет их.
 import { useMemo, useState } from "react";
+import { insertAtCursor, pastedWithLinks } from "../lib/paste";
 import {
   BookOpen,
   Check,
@@ -97,6 +98,13 @@ function PasteBox({ subjects }: { subjects: string[] }) {
         value={text}
         placeholder="Вставь ссылку или целое сообщение препода — Камадо сам найдёт все ссылки и подпишет их"
         onChange={(e) => onText(e.target.value)}
+        onPaste={(e) => {
+          // из Telegram ссылки приходят спрятанными в слова — достаём адреса
+          const t = pastedWithLinks(e.clipboardData);
+          if (t === null) return;
+          e.preventDefault();
+          onText(insertAtCursor(e.currentTarget, t, text));
+        }}
       />
       {found.length > 0 && (
         <>

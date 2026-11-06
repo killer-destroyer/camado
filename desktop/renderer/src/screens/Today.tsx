@@ -48,6 +48,14 @@ function QuickAdd() {
     if (!t || busy) return;
     setBusy(true);
     try {
+      // Вопрос («сколько стоит…?», «что задали по матану?») — не задание: отправляем в чат Камадо.
+      const question = !t.includes("|") && (/\?\s*$/.test(t) || /^(что|как|сколько|почему|зачем|когда|где|кто|какой|какая|какие|можно|можешь|подскажи|расскажи|объясни|найди)\b/i.test(t));
+      if (question && aiOn) {
+        setText("");
+        app.set({ chatPending: t });
+        go("chat");
+        return;
+      }
       if (viaAi && aiOn) {
         const r = await api.chat.send(t);
         toast(r.answer ?? r.error ?? "Готово", r.error ? "warn" : "ok");

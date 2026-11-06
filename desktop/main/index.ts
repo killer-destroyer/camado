@@ -77,6 +77,9 @@ loadEnv();
 const config = loadConfig();
 const core: CamadoCore = createCore(config);
 const { store } = core;
+// Каждый запуск — новый разговор: старая переписка не показывается и не путает ИИ.
+// Задания, ссылки, заметки и то, что Камадо «запомнил», остаются.
+store.clearChat();
 
 let settings: AppSettings = mergeSettings(JSON.parse(store.getKv(SETTINGS_KV) ?? "null"));
 const saveSettings = (patch: Partial<AppSettings>): AppSettings => {
@@ -268,6 +271,7 @@ const handlers: Record<string, Handler> = {
   "focus.list": (sinceIso: string) => store.listFocusSessions(new Date(sinceIso)),
 
   "chat.history": () => store.recentChat(60),
+  "chat.clear": () => store.clearChat(),
   // ---------- Учёба: шаги, репетитор, фото/голос, карточки, сессия, планировщик ----------
 
   "steps.list": (taskId?: number) => store.listSteps(taskId),
@@ -639,7 +643,9 @@ function toggleOverlay(): boolean {
   });
   overlay.setAlwaysOnTop(true, "screen-saver");
   overlay.setIgnoreMouseEvents(true); // клики проходят сквозь текст
-  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+  // skipTransformProcessType: без него Mac на время делает Камадо «фоновой» программой (без значка в Dock) —
+  // и главное окно выкидывает из полного экрана («как обои»). Панель и так висит поверх полноэкранных программ.
+  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
   overlay.once("ready-to-show", () => overlay?.showInactive());
   overlay.on("closed", () => {
     overlay = undefined;
@@ -678,7 +684,7 @@ function toggleQuick(): void {
     webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
   });
   quick.setAlwaysOnTop(true, "floating");
-  quick.setVisibleOnAllWorkspaces(true);
+  quick.setVisibleOnAllWorkspaces(true, { skipTransformProcessType: true });
   quick.once("ready-to-show", () => {
     quick?.show();
     quick?.focus();
@@ -778,11 +784,17 @@ function updateTray(): void {
 
 // ---------- Окно и трей ----------
 
+/** Окно спрятали из полного экрана — при показе возвращаем полный экран. */
+let wasFullOnHide = false;
 function showWindow(): void {
   if (!win) return createWindow();
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
+  if (wasFullOnHide) {
+    wasFullOnHide = false;
+    win.setFullScreen(true);
+  }
 }
 
 function createWindow(): void {
@@ -809,11 +821,22 @@ function createWindow(): void {
     },
   });
 
-  win.once("ready-to-show", () => win?.show());
+  win.once("ready-to-show", () => {
+    win?.show();
+    // Был на весь экран в прошлый раз — открываемся так же (после обновления окно не «сворачивается»).
+    if (settings.windowFullScreen) win?.setFullScreen(true);
+  });
+  win.on("enter-full-screen", () => !settings.windowFullScreen && saveSettings({ windowFullScreen: true }));
+  win.on("leave-full-screen", () => settings.windowFullScreen && !wasFullOnHide && !quitting && saveSettings({ windowFullScreen: false }));
   win.on("close", (e) => {
     if (!quitting && settings.closeToTray && tray) {
       e.preventDefault();
-      win?.hide();
+      if (win?.isFullScreen()) {
+        // спрятать окно прямо из полного экрана — Mac оставит пустой стол с обоями; сначала выходим из него
+        win.once("leave-full-screen", () => win?.hide());
+        win.setFullScreen(false);
+        wasFullOnHide = true;
+      } else win?.hide();
       // Вместе с окном прячем и «текст поверх окон» — иначе он висит сам по себе и непонятно, как его закрыть.
       if (overlay && !overlay.isDestroyed()) overlay.close();
       if (!settings.bgHintShown) {

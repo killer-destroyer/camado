@@ -10,7 +10,7 @@ const HISTORY_LIMIT = 20;
  * Инструменты, которые меняют или стирают уже сохранённое. В пересланных сообщениях их нет:
  * текст из чужого чата — это данные, и фраза «отметь всё сделанным» в нём не должна ничего сломать.
  */
-const CHANGES_EXISTING = new Set(["update_task", "forget", "remove_tasks", "delete_links", "update_link", "set_task_steps", "save_note"]);
+const CHANGES_EXISTING = new Set(["update_task", "forget", "remove_tasks", "delete_links", "update_link", "set_task_steps", "save_note", "delete_plan", "delete_notes", "delete_exam"]);
 
 export interface IncomingMessage {
   text: string;
@@ -42,8 +42,16 @@ export class Camado {
    * В пересланных сообщениях пульта нет: чужой текст не должен включать музыку или выключать Камадо.
    */
   setAppTools(appTools: ToolDef[]): void {
-    const base = this.tools.filter((t) => !t.name.startsWith("app_"));
-    this.tools = [...base, ...appTools];
+    this.setTools("app", appTools);
+  }
+
+  private groups = new Map<string, ToolDef[]>();
+  private base: ToolDef[] = [];
+  /** Дополнительные наборы инструментов (пульт приложения, интернет). В пересланных сообщениях их нет. */
+  setTools(group: string, tools: ToolDef[]): void {
+    if (!this.base.length) this.base = this.tools;
+    this.groups.set(group, tools);
+    this.tools = [...this.base, ...[...this.groups.values()].flat()];
   }
 
   async handle(msg: IncomingMessage): Promise<string> {

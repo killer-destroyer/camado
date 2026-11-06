@@ -7,7 +7,7 @@ import { isNewer, versionFromYml } from "../shared/version.js";
 
 const { autoUpdater } = electronUpdater;
 
-export const FEED = "https://github.com/killer-destroyer/camado/releases/latest/download";
+export const FEED = "https://github.com/killer-destroyer/camado-/releases/latest/download";
 const MAC_DOWNLOAD = `${FEED}/Camado-mac.dmg`;
 const CHECK_EVERY = 3 * 3600e3;
 

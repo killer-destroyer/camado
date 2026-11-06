@@ -230,3 +230,43 @@ export async function geminiKeyProblem(apiKey: string, fetchImpl: typeof fetch =
   }
   throw new Error(`Gemini ответил ${res.status}`);
 }
+
+/**
+ * Поиск в интернете через Google (встроенный в Gemini «google_search»). Возвращает короткий ответ и источники.
+ * Бесплатный тариф даёт ограниченное число таких запросов в день.
+ */
+export async function geminiSearch(apiKey: string, query: string, fetchImpl: typeof fetch = fetch): Promise<{ text: string; sources: { title: string; url: string }[] }> {
+  let last: Error | undefined;
+  for (const model of GEMINI_FALLBACK) {
+    try {
+      const res = await fetchImpl(`${API}/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: `Найди в интернете и ответь по-русски коротко и точно, с цифрами и датами: ${query}` }] }],
+          tools: [{ google_search: {} }],
+        }),
+        signal: AbortSignal.timeout(40_000),
+      });
+      const data = (await res.json().catch(() => ({}))) as GenerateResponse & {
+        candidates?: { groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] } }[];
+      };
+      if (!res.ok) {
+        last = new GeminiError(geminiMessage(res.status, data), res.status);
+        if (retryable(res.status)) continue;
+        throw last;
+      }
+      const cand = data.candidates?.[0];
+      const text = (cand?.content?.parts ?? []).filter((p) => p.text && !p.thought).map((p) => p.text).join("").trim();
+      const sources = (cand?.groundingMetadata?.groundingChunks ?? [])
+        .map((c) => ({ title: c.web?.title ?? "", url: c.web?.uri ?? "" }))
+        .filter((s) => s.url)
+        .slice(0, 5);
+      return { text: text || "Ничего не нашлось.", sources };
+    } catch (err) {
+      if (err instanceof GeminiError && !retryable(err.status)) throw err;
+      last = err instanceof Error ? err : new Error(String(err));
+    }
+  }
+  throw last ?? new Error("Поиск не ответил");
+}

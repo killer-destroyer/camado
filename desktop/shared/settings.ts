@@ -110,6 +110,8 @@ export interface AppSettings {
   /** Статус «Слушает в Camado» в Discord. */
   discord: { enabled: boolean; clientId: string };
   closeToTray: boolean;
+  /** Окно было на весь экран — так и открываем при следующем запуске. */
+  windowFullScreen?: boolean;
   /** Уже говорили, что при закрытии окна Камадо остаётся работать в фоне. */
   bgHintShown?: boolean;
   /** Показывать таймер фокуса и ближайший дедлайн в меню-баре (Mac) / подсказке трея. */

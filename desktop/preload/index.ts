@@ -32,6 +32,7 @@ const api: CamadoApi = {
   chat: {
     history: call("chat.history") as CamadoApi["chat"]["history"],
     send: call("chat.send") as CamadoApi["chat"]["send"],
+    clear: call("chat.clear") as CamadoApi["chat"]["clear"],
   },
   ai: {
     status: call("ai.status") as CamadoApi["ai"]["status"],
