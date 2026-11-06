@@ -1,0 +1,217 @@
+import { describe, expect, it } from "vitest";
+import { z } from "zod";
+import { GeminiProvider, geminiKeyProblem, looksLikeGeminiKey, toGeminiSchema } from "../src/llm/gemini.js";
+import { OpenAiCompatProvider } from "../src/llm/openai.js";
+import { buildProvider, parseAiConfig } from "../src/llm/providers.js";
+import { defineTool } from "../src/llm/tool.js";
+import { currentAiConfig, migrateGoogleAsOpenAi } from "../src/core.js";
+import { AI_CONFIG_KV, KEY_KV } from "../src/llm/providers.js";
+import { memoryStore as makeStore } from "./helpers.js";
+import type { Usage } from "../src/llm/types.js";
+
+const saved: string[] = [];
+const addTask = defineTool({
+  name: "add_task",
+  description: "Записать задание",
+  schema: z.object({ title: z.string(), due_at: z.string().nullable().optional(), kind: z.enum(["homework", "exam"]).default("homework") }),
+  run: async (i) => {
+    saved.push(i.title);
+    return `Записал: ${i.title}`;
+  },
+});
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+describe("Gemini", () => {
+  it("схема инструментов без того, чего Gemini не понимает", () => {
+    const s = toGeminiSchema(addTask.inputSchema) as Record<string, unknown>;
+    const str = JSON.stringify(s);
+    expect(str).not.toContain("$schema");
+    expect(str).not.toContain("additionalProperties");
+    expect(str).not.toContain("anyOf");
+    expect((s.properties as Record<string, { nullable?: boolean }>).due_at!.nullable).toBe(true);
+  });
+
+  it("вызывает инструмент, отдаёт результат и возвращает ответ; бесплатный тариф стоит $0", async () => {
+    saved.length = 0;
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    const replies = [
+      { candidates: [{ content: { role: "model", parts: [{ functionCall: { name: "add_task", args: { title: "Решить №5–12" } } }] } }], usageMetadata: { promptTokenCount: 100, candidatesTokenCount: 10 } },
+      { candidates: [{ content: { role: "model", parts: [{ text: "Записал матан!" }] } }], usageMetadata: { promptTokenCount: 120, candidatesTokenCount: 5 } },
+    ];
+    const impl = (async (url: string, init: RequestInit) => {
+      calls.push({ url, body: JSON.parse(String(init.body)) });
+      return json(replies[calls.length - 1]);
+    }) as unknown as typeof fetch;
+    const usages: Usage[] = [];
+    const p = new GeminiProvider("AIzaTEST", undefined, true, undefined, impl);
+    const r = await p.runAgent({ tier: "brain", system: ["Ты Камадо"], history: [], userMessage: "по матану №5–12", tools: [addTask], onUsage: (u) => usages.push(u) });
+    expect(r.text).toBe("Записал матан!");
+    expect(saved).toEqual(["Решить №5–12"]);
+    expect(calls[0]!.url).toContain("models/gemini-3.5-flash:generateContent");
+    const second = calls[1]!.body.contents as { role: string; parts: { functionResponse?: { response: { result: string } } }[] }[];
+    expect(second.at(-1)!.parts[0]!.functionResponse!.response.result).toBe("Записал: Решить №5–12");
+    expect(usages.every((u) => u.costUsd === 0)).toBe(true);
+  });
+
+  it("картинки и голос уходят как inlineData", async () => {
+    let body: Record<string, unknown> = {};
+    const impl = (async (_u: string, init: RequestInit) => {
+      body = JSON.parse(String(init.body));
+      return json({ candidates: [{ content: { role: "model", parts: [{ text: "ok" }] } }] });
+    }) as unknown as typeof fetch;
+    await new GeminiProvider("k", undefined, true, undefined, impl).runAgent({
+      tier: "fast",
+      system: [],
+      history: [],
+      userMessage: "что тут?",
+      tools: [],
+      attachments: [{ mime: "audio/wav", data: "AAAA" }],
+    });
+    const parts = (body.contents as { parts: { inlineData?: { mimeType: string } }[] }[])[0]!.parts;
+    expect(parts[0]!.inlineData!.mimeType).toBe("audio/wav");
+  });
+
+  it("закончился бесплатный лимит — понятная ошибка", async () => {
+    const impl = (async () => json({ error: { message: "quota" } }, 429)) as unknown as typeof fetch;
+    await expect(new GeminiProvider("k", undefined, true, undefined, impl).runAgent({ tier: "brain", system: [], history: [], userMessage: "hi", tools: [] })).rejects.toThrow(/лимит/);
+  });
+});
+
+describe("OpenAI-совместимые", () => {
+  it("инструменты через tool_calls; цену OpenRouter берёт из ответа", async () => {
+    saved.length = 0;
+    const replies = [
+      { choices: [{ message: { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "add_task", arguments: '{"title":"Лаба"}' } }] } }], usage: { prompt_tokens: 50, completion_tokens: 5, cost: 0.0001 } },
+      { choices: [{ message: { role: "assistant", content: "Готово" } }], usage: { prompt_tokens: 60, completion_tokens: 2, cost: 0.0002 } },
+    ];
+    let n = 0;
+    const impl = (async () => json(replies[n++])) as unknown as typeof fetch;
+    const usages: Usage[] = [];
+    const p = new OpenAiCompatProvider({ baseUrl: "https://openrouter.ai/api/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 0, output: 0 } }, impl);
+    const r = await p.runAgent({ tier: "brain", system: ["s"], history: [], userMessage: "лаба", tools: [addTask], onUsage: (u) => usages.push(u) });
+    expect(r.text).toBe("Готово");
+    expect(saved).toEqual(["Лаба"]);
+    expect(usages.map((u) => u.costUsd)).toEqual([0.0001, 0.0002]);
+  });
+
+  it("неизвестная цена — не ноль: учёт трат посчитает по самой дорогой (лимит не обойти)", async () => {
+    const impl = (async () => json({ choices: [{ message: { role: "assistant", content: "hi" } }], usage: { prompt_tokens: 10, completion_tokens: 1 } })) as unknown as typeof fetch;
+    const usages: Usage[] = [];
+    await new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 0, output: 0 } }, impl).runAgent({
+      tier: "brain",
+      system: [],
+      history: [],
+      userMessage: "x",
+      tools: [],
+      onUsage: (u) => usages.push(u),
+    });
+    expect(usages[0]!.costUsd).toBeUndefined();
+    // своя модель на компьютере — бесплатно
+    const local: Usage[] = [];
+    await new OpenAiCompatProvider({ baseUrl: "http://localhost:11434/v1", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 0, output: 0 } }, impl).runAgent({
+      tier: "brain",
+      system: [],
+      history: [],
+      userMessage: "x",
+      tools: [],
+      onUsage: (u) => local.push(u),
+    });
+    expect(local[0]!.costUsd).toBe(0);
+  });
+});
+
+describe("выбор нейросети", () => {
+  it("по умолчанию — бесплатный Gemini; без ключа — ручной режим", () => {
+    expect(parseAiConfig(undefined)).toMatchObject({ kind: "gemini", free: true });
+    expect(parseAiConfig("{сломано")).toMatchObject({ kind: "gemini" });
+    const claude = { fast: "a", brain: "b", smart: "c" };
+    expect(buildProvider({ kind: "gemini" }, undefined, claude)).toBeUndefined();
+    expect(buildProvider({ kind: "gemini" }, "AIza", claude)).toBeInstanceOf(GeminiProvider);
+    expect(buildProvider({ kind: "openai", baseUrl: "http://localhost:11434/v1" }, undefined, claude)).toBeInstanceOf(OpenAiCompatProvider);
+  });
+});
+
+describe("1.0.2: ключи Gemini нового вида и бесплатные модели", () => {
+  it("ключ AQ. и старый AIza оба похожи на ключ Gemini", () => {
+    expect(looksLikeGeminiKey("AQ.fake-test-key-not-real-0000000000000000000000")).toBe(true);
+    expect(looksLikeGeminiKey("AIzaSyA1234567890abcdefghijklmnopqrstuv")).toBe(true);
+    expect(looksLikeGeminiKey("sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx")).toBe(false);
+    expect(looksLikeGeminiKey("привет")).toBe(false);
+  });
+
+  it("Google не пустил ключ — понятная причина, а не «не принял»", async () => {
+    const impl = (async () =>
+      new Response(JSON.stringify({ error: { status: "UNAUTHENTICATED", message: "x", details: [{ reason: "ACCESS_TOKEN_TYPE_UNSUPPORTED" }] } }), { status: 401 })) as unknown as typeof fetch;
+    expect(await geminiKeyProblem("AQ.test-test-test-test-test", impl)).toMatch(/новый ключ/);
+    const ok = (async () => new Response("{}", { status: 200 })) as unknown as typeof fetch;
+    expect(await geminiKeyProblem("AQ.test-test-test-test-test", ok)).toBeUndefined();
+  });
+
+  it("модель, отмеченная бесплатной, стоит $0", async () => {
+    const impl = (async () => json({ choices: [{ message: { role: "assistant", content: "hi" } }], usage: { prompt_tokens: 10, completion_tokens: 1 } })) as unknown as typeof fetch;
+    const usages: Usage[] = [];
+    await new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 0, output: 0 }, free: true }, impl).runAgent({
+      tier: "brain",
+      system: [],
+      history: [],
+      userMessage: "x",
+      tools: [],
+      onUsage: (u) => usages.push(u),
+    });
+    expect(usages[0]!.costUsd).toBe(0);
+  });
+
+  it("сервис ответил не в том виде — показываем причину, а не «ничего не ответила»", async () => {
+    const impl = (async () => json({ error: { message: "model not found" } })) as unknown as typeof fetch;
+    const p = new OpenAiCompatProvider({ baseUrl: "https://api.example.com/v1", apiKey: "k", models: { fast: "m", brain: "m", smart: "m" }, price: { input: 1, output: 1 } }, impl);
+    await expect(p.runAgent({ tier: "brain", system: [], history: [], userMessage: "x", tools: [] })).rejects.toThrow(/model not found/);
+  });
+});
+
+describe("1.0.3: Gemini, подключённый как «другая модель»", () => {
+  it("сам переводится на родной режим Gemini, ключ переносится", () => {
+    const store = makeStore();
+    store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "openai", baseUrl: "https://generativelanguage.googleapis.com/v1beta/openai", price: { input: 0.1, output: 0.1 } }));
+    store.setSecret(KEY_KV.openai, "AQ.test-key-test-key-test-key");
+    const core = { store, config: {} as never };
+    migrateGoogleAsOpenAi(core);
+    expect(currentAiConfig(core)).toEqual({ kind: "gemini", free: true });
+    expect(store.getSecret(KEY_KV.gemini)).toBe("AQ.test-key-test-key-test-key");
+  });
+  it("другие сервисы не трогает", () => {
+    const store = makeStore();
+    store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "openai", baseUrl: "https://api.deepseek.com/v1", price: { input: 1, output: 1 } }));
+    migrateGoogleAsOpenAi({ store, config: {} as never });
+    expect(currentAiConfig({ store, config: {} as never }).kind).toBe("openai");
+  });
+});
+
+describe("1.0.4: Gemini сам переходит на запасную модель", () => {
+  const ok = (text: string, model: string) =>
+    new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text }] }, finishReason: "STOP" }], modelVersion: model }), { status: 200 });
+  it("основная перегружена (503) или зависла — отвечает следующая", async () => {
+    const asked: string[] = [];
+    const impl = (async (url: string) => {
+      const m = /models\/([^:]+):/.exec(url)![1]!;
+      asked.push(m);
+      if (m === "busy-model") return new Response(JSON.stringify({ error: { message: "high demand" } }), { status: 503 });
+      if (m === "gemini-3.5-flash") throw Object.assign(new Error("timeout"), { name: "TimeoutError" });
+      return ok("42", m);
+    }) as unknown as typeof fetch;
+    const p = new GeminiProvider("AQ.k", { fast: "busy-model", brain: "busy-model", smart: "busy-model" }, true, undefined, impl);
+    const r = await p.runAgent({ tier: "brain", system: [], history: [], userMessage: "6*7", tools: [] });
+    expect(r.text).toBe("42");
+    expect(asked).toEqual(["busy-model", "gemini-3.5-flash", "gemini-flash-lite-latest"]);
+  });
+  it("неверный ключ (400) — не перебираем модели, сразу понятная ошибка", async () => {
+    let n = 0;
+    const impl = (async () => {
+      n++;
+      return new Response(JSON.stringify({ error: { message: "API key not valid" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+    const p = new GeminiProvider("AQ.k", undefined, true, undefined, impl);
+    await expect(p.runAgent({ tier: "brain", system: [], history: [], userMessage: "x", tools: [] })).rejects.toThrow(/ключ/);
+    expect(n).toBe(1);
+  });
+});
