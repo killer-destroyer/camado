@@ -2,11 +2,28 @@
 // Бесплатный ключ — aistudio.google.com. Умеет инструменты, картинки и голос.
 import type { AgentRequest, AgentResult, LLMProvider, Tier, Usage } from "./types.js";
 
+// Проверено вживую (ноябрь 2026, бесплатный ключ): самые новые flash (3.7, 3.8, «flash-latest») часто зависают
+// или «перегружены», 3.5-flash и лёгкие отвечают за 1–2 с. Поэтому основная — 3.5-flash, а если модель
+// зависла, перегружена или её убрали — сами переходим на запасные (см. GEMINI_FALLBACK).
 export const GEMINI_MODELS: Record<Tier, string> = {
   fast: "gemini-flash-lite-latest",
-  brain: "gemini-flash-latest",
-  smart: "gemini-flash-latest",
+  brain: "gemini-3.5-flash",
+  smart: "gemini-3.5-flash",
 };
+
+/** Запасные модели по порядку: если основная не ответила, пробуем следующую. «latest» Google обновляет сам. */
+export const GEMINI_FALLBACK = ["gemini-3.5-flash", "gemini-flash-lite-latest", "gemini-3.1-flash-lite"];
+
+/** Такую ошибку есть смысл повторить на другой модели: зависла, перегружена, лимит этой модели, модель убрали. */
+const retryable = (status: number) => status === 429 || status === 404 || status >= 500;
+
+/** При смене модели посреди разговора «подписи размышлений» прежней модели новой не подходят — заменяем на служебную. */
+function forOtherModel(contents: Content[]): Content[] {
+  return contents.map((c) => ({
+    ...c,
+    parts: c.parts.map(({ thoughtSignature, ...p }) => (p.functionCall && thoughtSignature ? { ...p, thoughtSignature: "skip_thought_signature_validator" } : p)),
+  }));
+}
 
 const API = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -87,7 +104,9 @@ export class GeminiProvider implements LLMProvider {
   ) {}
 
   async runAgent(req: AgentRequest): Promise<AgentResult> {
-    const model = this.models[req.tier];
+    const chain = [this.models[req.tier], ...GEMINI_FALLBACK].filter((m, i, a) => m && a.indexOf(m) === i);
+    let mi = 0;
+    let model = chain[0]!;
     const toolsByName = new Map(req.tools.map((t) => [t.name, t]));
     const history = [...req.history];
     while (history[0]?.role === "assistant") history.shift();
@@ -105,15 +124,33 @@ export class GeminiProvider implements LLMProvider {
     };
 
     const maxSteps = req.maxSteps ?? 8;
+    // Сколько ждать одну модель: с картинкой или голосом — дольше.
+    const wait = req.attachments?.length ? 60_000 : 30_000;
     for (let step = 0; step < maxSteps; step++) {
-      const res = await this.fetchImpl(`${API}/models/${encodeURIComponent(model)}:generateContent`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
-        body: JSON.stringify({ ...body, contents }),
-        signal: AbortSignal.timeout(90_000),
-      });
-      const data = (await res.json().catch(() => ({}))) as GenerateResponse;
-      if (!res.ok) throw new GeminiError(geminiMessage(res.status, data), res.status);
+      let res: Response | undefined;
+      let data: GenerateResponse = {};
+      for (;;) {
+        let failed: GeminiError | undefined;
+        try {
+          res = await this.fetchImpl(`${API}/models/${encodeURIComponent(model)}:generateContent`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-goog-api-key": this.apiKey },
+            body: JSON.stringify({ ...body, contents }),
+            signal: AbortSignal.timeout(wait),
+          });
+          data = (await res.json().catch(() => ({}))) as GenerateResponse;
+          if (!res.ok) failed = new GeminiError(geminiMessage(res.status, data), res.status);
+        } catch (err) {
+          // зависла (не ответила вовремя) или оборвалась связь
+          const timeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+          failed = new GeminiError(timeout ? "Gemini слишком долго не отвечает. Попробуй ещё раз чуть позже." : "Нет связи с Gemini. Проверь интернет.", timeout ? 504 : 0);
+          if (!timeout) throw failed;
+        }
+        if (!failed) break;
+        if (!retryable(failed.status) || mi + 1 >= chain.length) throw failed;
+        model = chain[++mi]!;
+        contents.splice(0, contents.length, ...forOtherModel(contents));
+      }
       req.onUsage?.(this.usage(model, data));
 
       if (data.promptFeedback?.blockReason) return { text: "", refused: true };

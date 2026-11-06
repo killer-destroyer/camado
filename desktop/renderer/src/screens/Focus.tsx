@@ -1,4 +1,5 @@
-// «Фокус»: большое кольцо-таймер, предмет, статистика недели.
+// «Фокус»: кольцо-таймер с кнопками и неделей слева, справа — компактно предмет, стратегия, фон, настройки.
+// Всё помещается на один экран без прокрутки.
 import { useRef } from "react";
 import { Pause, Play, RotateCcw } from "lucide-react";
 import { engine } from "../lib/audio";
@@ -84,37 +85,40 @@ export function Focus() {
             </div>
           </div>
         </div>
+        <div className="focus-buttons">
+          <button className="play-btn xl" onClick={s.running ? pause : start}>
+            {s.running ? <Pause size={30} fill="currentColor" /> : <Play size={30} fill="currentColor" />}
+          </button>
+          <button className="icon-btn lg" onClick={reset} title="Сбросить">
+            <RotateCcw size={20} />
+          </button>
+        </div>
         {s.mode !== "work" && cfg.coach !== false && <BreakCoach />}
+        {(s.mode === "work" || cfg.coach === false) && (
+          <div className="week-mini" title="Минуты фокуса за неделю">
+            {week.map((d, i) => (
+              <div key={i} className={`wb ${i === week.length - 1 ? "today" : ""}`} title={`${Math.round(d.minutes)} мин`}>
+                <div className="wb-bar" style={{ height: `${(d.minutes / max) * 100}%` }} />
+                <span>{d.day}</span>
+              </div>
+            ))}
+            <div className="week-total">{Math.round(week.reduce((a, d) => a + d.minutes, 0))} мин за неделю</div>
+          </div>
+        )}
         </div>
 
         <div className="focus-side">
-          <div className="focus-buttons">
-            <button className="play-btn xl" onClick={s.running ? pause : start}>
-              {s.running ? <Pause size={34} fill="currentColor" /> : <Play size={34} fill="currentColor" />}
-            </button>
-            <button className="icon-btn lg" onClick={reset} title="Сбросить">
-              <RotateCcw size={22} />
-            </button>
-          </div>
-
-          <div className="card glass">
-            <div className="card-head">
-              <span>Над чем работаем</span>
-            </div>
-            <div className="chips">
+          <div className="card glass focus-setup">
+            <div className="fs-label">Над чем работаем</div>
+            <div className="chips sm">
               {["", ...subjects.map((x) => x.name)].map((n) => (
                 <button key={n || "none"} className={`chip-btn ${s.subject === n ? "on" : ""}`} onClick={() => focus.set({ subject: n })}>
                   {n || "Без предмета"}
                 </button>
               ))}
             </div>
-          </div>
-
-          <div className="card glass">
-            <div className="card-head">
-              <span>Стратегия</span>
-            </div>
-            <div className="chips">
+            <div className="fs-label">Стратегия</div>
+            <div className="chips sm">
               {FOCUS_PRESETS.map((p) => (
                 <button
                   key={p.id}
@@ -145,118 +149,79 @@ export function Focus() {
                 Свой
               </button>
             </div>
-            {preset && <div className="preset-about">{preset.about}</div>}
-          </div>
-
-          {preset && (
-            <div className="card glass focus-guide">
-              <div className="card-head">
-                <span>{s.mode === "work" ? "Как работать" : "Что делать на перерыве"}</span>
-              </div>
-              <ul>
-                {(s.mode === "work" ? preset.during : preset.rest).map((t) => (
-                  <li key={t}>{t}</li>
+            {preset && (
+              <details className="focus-guide">
+                <summary>{preset.about}</summary>
+                <ul>
+                  {(s.mode === "work" ? preset.during : preset.rest).map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+            {cfg.preset === "custom" && (
+              <div className="focus-durations">
+                {(["work", "short", "long"] as const).map((m) => (
+                  <div className="dur-row" key={m}>
+                    <span>{label[m]}</span>
+                    <Slider
+                      value={cfg[m]}
+                      min={m === "work" ? 10 : 1}
+                      max={m === "work" ? 90 : 30}
+                      step={1}
+                      onChange={(v) => {
+                        updateSettings({
+                          focus: { ...cfg, [m]: v, preset: "custom" },
+                        });
+                        if (!s.running && s.mode === m) setTimeout(() => setMode(m), 0);
+                      }}
+                    />
+                    <b>{cfg[m]} мин</b>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          )}
-
-          {cfg.preset === "custom" && (
-            <div className="card glass">
-              <div className="card-head">
-                <span>Длительность</span>
-              </div>
-              {(["work", "short", "long"] as const).map((m) => (
-                <div className="dur-row" key={m}>
-                  <span>{label[m]}</span>
-                  <Slider
-                    value={cfg[m]}
-                    min={m === "work" ? 10 : 1}
-                    max={m === "work" ? 90 : 30}
-                    step={1}
-                    onChange={(v) => {
-                      updateSettings({
-                        focus: { ...cfg, [m]: v, preset: "custom" },
-                      });
-                      if (!s.running && s.mode === m) setTimeout(() => setMode(m), 0);
-                    }}
-                  />
-                  <b>{cfg[m]} мин</b>
+                <div className="dur-row">
+                  <span>Длинный после</span>
+                  <Slider value={cfg.longEvery} min={0} max={6} step={1} onChange={(v) => updateSettings({ focus: { ...cfg, longEvery: v } })} />
+                  <b>{cfg.longEvery ? `${cfg.longEvery} сесс.` : "никогда"}</b>
                 </div>
-              ))}
-              <div className="dur-row">
-                <span>Длинный после</span>
-                <Slider
-                  value={cfg.longEvery}
-                  min={0}
-                  max={6}
-                  step={1}
-                  onChange={(v) => updateSettings({ focus: { ...cfg, longEvery: v } })}
-                />
-                <b>{cfg.longEvery ? `${cfg.longEvery} сесс.` : "никогда"}</b>
               </div>
-            </div>
-          )}
-
-          <div className="card glass">
-            <div className="card-head">
-              <span>Фон для учёбы</span>
-            </div>
-            <AmbienceMixer />
+            )}
           </div>
 
-          {playlists.length > 0 && (
-            <div className="card glass">
-              <div className="card-head">
-                <span>Музыка под режим</span>
-              </div>
-              <div className="dur-row">
-                <span>На работу</span>
-                <select className="input sm" value={cfg.workPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, workPlaylist: Number(e.target.value) } })}>
-                  <option value={0}>как играет</option>
+          <div className="card glass focus-amb">
+            <AmbienceMixer mini />
+          </div>
+
+          <div className="card glass focus-opts">
+            {playlists.length > 0 && (
+              <div className="fo-music">
+                <span>Музыка:</span>
+                <select className="input sm" title="Плейлист на работу" value={cfg.workPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, workPlaylist: Number(e.target.value) } })}>
+                  <option value={0}>работа — как играет</option>
                   {playlists.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name}
+                      работа — {p.name}
+                    </option>
+                  ))}
+                </select>
+                <select className="input sm" title="Плейлист на перерыв" value={cfg.breakPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, breakPlaylist: Number(e.target.value) } })}>
+                  <option value={0}>перерыв — как играет</option>
+                  {playlists.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      перерыв — {p.name}
                     </option>
                   ))}
                 </select>
               </div>
-              <div className="dur-row">
-                <span>На перерыв</span>
-                <select className="input sm" value={cfg.breakPlaylist} onChange={(e) => updateSettings({ focus: { ...cfg, breakPlaylist: Number(e.target.value) } })}>
-                  <option value={0}>как играет</option>
-                  {playlists.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          <label className="inline-toggle focus-music">
-            <Toggle value={cfg.coach} onChange={(v) => updateSettings({ focus: { ...cfg, coach: v } })} />
-            дыхание и разминка на перерыве
-          </label>
-          <label className="inline-toggle focus-music">
-            <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
-            включать музыку на старте
-          </label>
-
-          <div className="card glass">
-            <div className="card-head">
-              <span>Неделя</span>
-              <span className="muted small">{Math.round(week.reduce((a, d) => a + d.minutes, 0))} мин</span>
-            </div>
-            <div className="week-bars">
-              {week.map((d, i) => (
-                <div key={i} className={`wb ${i === week.length - 1 ? "today" : ""}`} title={`${Math.round(d.minutes)} мин`}>
-                  <div className="wb-bar" style={{ height: `${(d.minutes / max) * 100}%` }} />
-                  <span>{d.day}</span>
-                </div>
-              ))}
-            </div>
+            )}
+            <label className="inline-toggle sm">
+              <Toggle value={cfg.coach} onChange={(v) => updateSettings({ focus: { ...cfg, coach: v } })} />
+              дыхание и разминка на перерыве
+            </label>
+            <label className="inline-toggle sm">
+              <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
+              включать музыку на старте
+            </label>
           </div>
         </div>
       </div>

@@ -48,7 +48,7 @@ describe("Gemini", () => {
     const r = await p.runAgent({ tier: "brain", system: ["Ты Камадо"], history: [], userMessage: "по матану №5–12", tools: [addTask], onUsage: (u) => usages.push(u) });
     expect(r.text).toBe("Записал матан!");
     expect(saved).toEqual(["Решить №5–12"]);
-    expect(calls[0]!.url).toContain("models/gemini-flash-latest:generateContent");
+    expect(calls[0]!.url).toContain("models/gemini-3.5-flash:generateContent");
     const second = calls[1]!.body.contents as { role: string; parts: { functionResponse?: { response: { result: string } } }[] }[];
     expect(second.at(-1)!.parts[0]!.functionResponse!.response.result).toBe("Записал: Решить №5–12");
     expect(usages.every((u) => u.costUsd === 0)).toBe(true);
@@ -184,5 +184,34 @@ describe("1.0.3: Gemini, подключённый как «другая моде
     store.setKv(AI_CONFIG_KV, JSON.stringify({ kind: "openai", baseUrl: "https://api.deepseek.com/v1", price: { input: 1, output: 1 } }));
     migrateGoogleAsOpenAi({ store, config: {} as never });
     expect(currentAiConfig({ store, config: {} as never }).kind).toBe("openai");
+  });
+});
+
+describe("1.0.4: Gemini сам переходит на запасную модель", () => {
+  const ok = (text: string, model: string) =>
+    new Response(JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text }] }, finishReason: "STOP" }], modelVersion: model }), { status: 200 });
+  it("основная перегружена (503) или зависла — отвечает следующая", async () => {
+    const asked: string[] = [];
+    const impl = (async (url: string) => {
+      const m = /models\/([^:]+):/.exec(url)![1]!;
+      asked.push(m);
+      if (m === "busy-model") return new Response(JSON.stringify({ error: { message: "high demand" } }), { status: 503 });
+      if (m === "gemini-3.5-flash") throw Object.assign(new Error("timeout"), { name: "TimeoutError" });
+      return ok("42", m);
+    }) as unknown as typeof fetch;
+    const p = new GeminiProvider("AQ.k", { fast: "busy-model", brain: "busy-model", smart: "busy-model" }, true, undefined, impl);
+    const r = await p.runAgent({ tier: "brain", system: [], history: [], userMessage: "6*7", tools: [] });
+    expect(r.text).toBe("42");
+    expect(asked).toEqual(["busy-model", "gemini-3.5-flash", "gemini-flash-lite-latest"]);
+  });
+  it("неверный ключ (400) — не перебираем модели, сразу понятная ошибка", async () => {
+    let n = 0;
+    const impl = (async () => {
+      n++;
+      return new Response(JSON.stringify({ error: { message: "API key not valid" } }), { status: 400 });
+    }) as unknown as typeof fetch;
+    const p = new GeminiProvider("AQ.k", undefined, true, undefined, impl);
+    await expect(p.runAgent({ tier: "brain", system: [], history: [], userMessage: "x", tools: [] })).rejects.toThrow(/ключ/);
+    expect(n).toBe(1);
   });
 });
