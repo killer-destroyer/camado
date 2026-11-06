@@ -8,6 +8,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  safeStorage,
   protocol,
   screen,
   shell,
@@ -15,8 +16,9 @@ import {
 } from "electron";
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
+import { randomInt } from "node:crypto";
 import { copyFile, mkdir } from "node:fs/promises";
-import { basename, extname, join } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV } from "../../src/bot.js";
 import { loadConfig } from "../../src/config.js";
@@ -85,7 +87,7 @@ const botStatus = { running: false } as Pick<BotStatus, "running" | "username" |
 // Бот настраивается прямо в приложении (токен и хозяин хранятся в базе), .env — запасной вариант.
 const TG_TOKEN_KV = "telegram_token";
 const TG_OWNER_KV = "telegram_owner";
-const botToken = () => store.getKv(TG_TOKEN_KV) ?? config.TELEGRAM_BOT_TOKEN;
+const botToken = () => store.getSecret(TG_TOKEN_KV) ?? config.TELEGRAM_BOT_TOKEN;
 const botOwner = (): number | undefined => {
   const v = store.getKv(TG_OWNER_KV);
   return v ? Number(v) : config.OWNER_TELEGRAM_ID;
@@ -241,7 +243,7 @@ const handlers: Record<string, Handler> = {
   },
 
   "ai.status": () => {
-    const key = store.getKv(API_KEY_KV) ?? config.ANTHROPIC_API_KEY;
+    const key = store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY;
     return {
       enabled: core.ai.enabled,
       keyHint: key ? `…${key.slice(-4)}` : undefined,
@@ -274,7 +276,7 @@ const handlers: Record<string, Handler> = {
       return { ok: false, error: "Telegram не принял токен. Проверь, что скопировал его целиком, и что есть интернет." };
     }
     await stopBot();
-    store.setKv(TG_TOKEN_KV, t);
+    store.setSecret(TG_TOKEN_KV, t);
     store.deleteKv(TG_OWNER_KV); // новый бот — привязываем заново
     saveSettings({ runBot: true });
     startBot();
@@ -282,7 +284,7 @@ const handlers: Record<string, Handler> = {
   },
   "bot.pairingCode": () => {
     if (!pairing || Date.now() > pairing.until) {
-      pairing = { code: String(Math.floor(100000 + Math.random() * 900000)), until: Date.now() + 15 * 60e3 };
+      pairing = { code: String(randomInt(100000, 1000000)), until: Date.now() + 15 * 60e3 };
     }
     return pairing.code;
   },
@@ -386,15 +388,48 @@ const handlers: Record<string, Handler> = {
 };
 
 ipcMain.handle("camado", async (event, method: string, ...args: unknown[]) => {
-  if (event.senderFrame?.url && !isAppUrl(event.senderFrame.url)) throw new Error("forbidden");
+  if (!event.senderFrame || !isAppUrl(event.senderFrame.url)) throw new Error("forbidden");
   const h = handlers[method];
   if (!h) throw new Error(`Нет метода ${method}`);
   return (h as (...a: unknown[]) => unknown)(...args);
 });
 
+/** Функции программы доступны только нашей собственной странице — не любому файлу с диска и не чужому сайту. */
 function isAppUrl(url: string): boolean {
-  return url.startsWith("file://") || (process.env.ELECTRON_RENDERER_URL ? url.startsWith(process.env.ELECTRON_RENDERER_URL) : false);
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const dev = process.env.ELECTRON_RENDERER_URL;
+  if (dev) return u.origin === new URL(dev).origin;
+  if (u.protocol !== "file:") return false;
+  try {
+    return resolve(fileURLToPath(u)) === resolve(here, "../renderer/index.html");
+  } catch {
+    return false;
+  }
 }
+
+/**
+ * Окна программы никуда не уходят: ни по ссылке, ни если в окно перетащили HTML-файл.
+ * Ссылки http(s) открываются в браузере, всё остальное — молча запрещено. Новые окна — тоже.
+ */
+app.on("web-contents-created", (_e, wc) => {
+  const guard = (e: { preventDefault(): void }, url: string) => {
+    if (isAppUrl(url)) return;
+    e.preventDefault();
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  };
+  wc.on("will-navigate", guard);
+  wc.on("will-redirect", guard);
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+});
 
 // ---------- Текст песни поверх всех окон ----------
 
@@ -757,7 +792,31 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => showWindow());
 
+/**
+ * Ключ ИИ и токен бота — только в зашифрованном виде (Связка ключей на Mac, DPAPI на Windows).
+ * Шифрование доступно только после запуска программы, поэтому ключ ИИ перечитываем здесь.
+ */
+function enableSecretStorage(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn("Шифрование недоступно — секреты хранятся как есть");
+    return;
+  }
+  store.secretCodec = {
+    encrypt: (plain) => safeStorage.encryptString(plain).toString("base64"),
+    decrypt: (stored) => {
+      try {
+        return safeStorage.decryptString(Buffer.from(stored, "base64"));
+      } catch {
+        console.warn("Не смог расшифровать сохранённый ключ — его нужно ввести заново");
+        return undefined;
+      }
+    },
+  };
+  core.ai.setKey(store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY);
+}
+
 void app.whenReady().then(async () => {
+  enableSecretStorage();
   protocol.handle("camado-media", (req) => {
     const url = new URL(req.url);
     const name = decodeURIComponent(url.pathname.replace(/^\//, ""));

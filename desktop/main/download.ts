@@ -5,13 +5,16 @@ import { basename, extname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
 import { AUDIO_EXT } from "./library.js";
 
 const MAX_BYTES = 600 * 1024 * 1024;
 const MAX_HTML = 5 * 1024 * 1024;
 
 // Эти сервисы не отдают файлы — с них скачать нельзя, говорим об этом сразу и честно.
-const STREAMING = /(^|\.)(youtube\.com|youtu\.be|music\.yandex\.[a-z]+|soundcloud\.com|spotify\.com|music\.apple\.com|vk\.com|vk\.ru|deezer\.com|tidal\.com|zvuk\.com)$/i;
+const STREAMING =
+  /(^|\.)(youtube\.com|youtu\.be|music\.yandex\.[a-z]+|soundcloud\.com|spotify\.com|music\.apple\.com|vk\.com|vk\.ru|deezer\.com|tidal\.com|zvuk\.com)$/i;
 
 const TYPE_EXT: Record<string, string> = {
   "audio/mpeg": ".mp3",
@@ -27,6 +30,69 @@ const TYPE_EXT: Record<string, string> = {
   "audio/x-wav": ".wav",
   "audio/webm": ".webm",
 };
+
+// ---------- Никаких адресов домашней сети ----------
+// Страница со списком треков могла бы подсунуть ссылку на роутер, принтер или сам компьютер
+// (192.168.x.x, localhost). Камадо качает только из интернета.
+
+/** Адрес из домашней/служебной сети (не интернет). */
+export function isPrivateIp(ip: string): boolean {
+  const v4 = ip.startsWith("::ffff:") ? ip.slice(7) : ip;
+  if (isIP(v4) === 4) {
+    const [a, b] = v4.split(".").map(Number) as [number, number];
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) ||
+      (a === 198 && (b === 18 || b === 19)) ||
+      a >= 224
+    );
+  }
+  const v6 = ip.toLowerCase();
+  return v6 === "::" || v6 === "::1" || /^f[cd]/.test(v6) || /^fe[89ab]/.test(v6);
+}
+
+type HostLookup = (host: string) => Promise<string[]>;
+let hostLookup: HostLookup = async (host) => (await lookup(host, { all: true })).map((a) => a.address);
+/** Для тестов: подменить, как узнаётся IP по имени сайта. */
+export function setHostLookup(fn: HostLookup): void {
+  hostLookup = fn;
+}
+
+const LOCAL_ONLY = "Это адрес домашней сети или самого компьютера — оттуда Камадо не скачивает. Нужна ссылка из интернета.";
+
+async function isLocalHost(u: URL): Promise<boolean> {
+  const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (host === "localhost" || /\.(localhost|local|internal|lan|home|arpa)$/.test(host)) return true;
+  if (isIP(host)) return isPrivateIp(host);
+  const ips = await hostLookup(host).catch(() => [] as string[]);
+  return ips.some(isPrivateIp);
+}
+
+/** Запрос с проверкой каждого перенаправления: сайт не может «перекинуть» Камадо в домашнюю сеть. */
+async function publicFetch(
+  start: URL,
+  fetchImpl: typeof fetch,
+  init: RequestInit = {},
+): Promise<{ res: Response; url: URL } | { error: string }> {
+  let cur = start;
+  for (let hop = 0; hop < 8; hop++) {
+    if (!/^https?:$/.test(cur.protocol)) return { error: "Сайт перенаправил на неподдерживаемый адрес." };
+    if (await isLocalHost(cur)) return { error: LOCAL_ONLY };
+    const res = await fetchImpl(cur.href, { ...init, redirect: "manual" });
+    const loc = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && loc) {
+      cur = new URL(loc, cur);
+      continue;
+    }
+    return { res, url: res.url ? new URL(res.url) : cur };
+  }
+  return { error: "Слишком много перенаправлений." };
+}
 
 export interface AudioLink {
   url: string;
@@ -72,7 +138,7 @@ function fileName(res: Response, u: URL): { name: string; ext: string } {
   const cd = res.headers.get("content-disposition") ?? "";
   const star = cd.match(/filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i)?.[1];
   const plain = cd.match(/filename\s*=\s*"?([^";]+)"?/i)?.[1];
-  let raw = star ? decodeURIComponent(star.trim().replace(/^"|"$/g, "")) : plain ?? decodeURIComponent(basename(u.pathname));
+  let raw = star ? decodeURIComponent(star.trim().replace(/^"|"$/g, "")) : (plain ?? decodeURIComponent(basename(u.pathname)));
   raw = raw.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").trim() || "трек";
   let ext = extname(raw).toLowerCase();
   if (!AUDIO_EXT.has(ext)) {
@@ -146,8 +212,14 @@ export async function importFromHtml(
   onProgress: (p: { name: string; received: number; total: number }) => void = () => {},
   fetchImpl: typeof fetch = fetch,
 ): Promise<ImportResult> {
-  const base = baseUrl?.trim() || html.match(/<base\b[^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] || html.match(/<link\b[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] || html.match(/<meta\b[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i)?.[1];
-  const links = findAudioLinks(html.slice(0, MAX_HTML), base ?? "https://camado.invalid/").filter((l) => !l.url.startsWith("https://camado.invalid/"));
+  const base =
+    baseUrl?.trim() ||
+    html.match(/<base\b[^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] ||
+    html.match(/<link\b[^>]*rel\s*=\s*["']canonical["'][^>]*href\s*=\s*["']([^"']+)["']/i)?.[1] ||
+    html.match(/<meta\b[^>]*property\s*=\s*["']og:url["'][^>]*content\s*=\s*["']([^"']+)["']/i)?.[1];
+  const links = findAudioLinks(html.slice(0, MAX_HTML), base ?? "https://camado.invalid/").filter(
+    (l) => !l.url.startsWith("https://camado.invalid/"),
+  );
   if (!links.length) {
     return {
       kind: "error",
@@ -181,20 +253,27 @@ export async function importFromUrl(
     };
   }
 
+  if (await isLocalHost(u)) return { kind: "error", error: LOCAL_ONLY };
   const cloud = await resolveCloud(u, fetchImpl).catch(() => u);
   if ("error" in cloud) return { kind: "error", error: cloud.error };
-  if ("links" in cloud) return cloud.links.length === 1 ? importFromUrl(cloud.links[0]!.url, destDir, onProgress, fetchImpl) : { kind: "choose", links: cloud.links };
+  if ("links" in cloud)
+    return cloud.links.length === 1
+      ? importFromUrl(cloud.links[0]!.url, destDir, onProgress, fetchImpl)
+      : { kind: "choose", links: cloud.links };
   u = cloud;
 
   let res: Response;
+  let finalUrl: URL;
   try {
-    res = await fetchImpl(u.href, { redirect: "follow", signal: AbortSignal.timeout(30_000) });
+    const r = await publicFetch(u, fetchImpl, { signal: AbortSignal.timeout(30_000) });
+    if ("error" in r) return { kind: "error", error: r.error };
+    res = r.res;
+    finalUrl = r.url;
   } catch {
     return { kind: "error", error: "Сайт не ответил. Проверь интернет и ссылку." };
   }
   if (!res.ok) return { kind: "error", error: `Сайт ответил ошибкой ${res.status}. Возможно, ссылка устарела.` };
 
-  const finalUrl = new URL(res.url || u.href);
   const type = (res.headers.get("content-type") ?? "").toLowerCase();
 
   if (type.includes("text/html")) {

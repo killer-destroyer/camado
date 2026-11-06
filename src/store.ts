@@ -140,6 +140,15 @@ export function cleanLinkUrl(raw: string): string {
   return parsed.toString();
 }
 
+/** Как шифровать секреты (ключ ИИ, токен бота). В приложении на ПК — системная связка ключей. */
+export interface SecretCodec {
+  encrypt(plain: string): string;
+  /** undefined — расшифровать не вышло (ключ шифрования сменился). */
+  decrypt(stored: string): string | undefined;
+}
+
+const SECRET_PREFIX = "enc1:";
+
 /** Всё, что Камадо хранит о тебе, — в одном месте. */
 export class Store {
   /** Вызывается после любого изменения данных (приложение на ПК обновляет экран). */
@@ -560,6 +569,22 @@ export class Store {
 
   deleteKv(key: string): void {
     this.db.prepare("DELETE FROM kv WHERE key = ?").run(key);
+  }
+
+  /** Шифрование секретов; без него (бот на сервере) секреты хранятся как есть. */
+  secretCodec?: SecretCodec;
+
+  /** Прочитать секрет. Старый незашифрованный — заодно зашифровать, раз теперь можно. */
+  getSecret(key: string): string | undefined {
+    const v = this.getKv(key);
+    if (v === undefined) return undefined;
+    if (v.startsWith(SECRET_PREFIX)) return this.secretCodec?.decrypt(v.slice(SECRET_PREFIX.length));
+    if (this.secretCodec) this.setSecret(key, v);
+    return v;
+  }
+
+  setSecret(key: string, value: string): void {
+    this.setKv(key, this.secretCodec ? SECRET_PREFIX + this.secretCodec.encrypt(value) : value);
   }
 
   setKv(key: string, value: string): void {

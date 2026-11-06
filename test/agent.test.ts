@@ -70,10 +70,15 @@ describe("Камадо + Claude", () => {
     expect(first.model).toBe("claude-sonnet-5-5");
     expect(first.fallbacks).toBe("default");
     expect(first.betas).toEqual(["server-side-fallback-2026-07-01"]);
-    expect((first.tools ?? []).map((t) => ("name" in t ? t.name : ""))).toContain("add_task");
+    const toolNames = (first.tools ?? []).map((t) => ("name" in t ? t.name : ""));
+    expect(toolNames).toContain("add_task");
+    // Пересланное — данные: менять и стирать сохранённое из него нельзя.
+    expect(toolNames).not.toContain("update_task");
+    expect(toolNames).not.toContain("forget");
     const userText = first.messages[0]!.content as string;
     expect(userText).toMatch(/^\[Сейчас: .*UTC-05:00\]/);
-    expect(userText).toContain("[Пересланное сообщение от: Препод]");
+    expect(userText).toContain("[Пересланное сообщение от: Препод.");
+    expect(userText).toContain("<<<\nпо матану №5-12 к пятнице\n>>>");
 
     // Второй запрос: ответ модели вернулся целиком (с блоком размышлений) + результат инструмента.
     const second = calls[1]!;

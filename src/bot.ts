@@ -10,6 +10,7 @@ import type { Store, TaskKind } from "./store.js";
 
 const TELEGRAM_LIMIT = 4000;
 export const API_KEY_KV = "anthropic_api_key";
+const PAIR_TRIES = 5;
 
 const MANUAL_HELP = `Записать задание:
 /add предмет | что сделать | срок
@@ -94,15 +95,30 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
   bot.command("id", (ctx) => ctx.reply(`Твой Telegram ID: ${ctx.from?.id}`));
 
   // Камадо отвечает только хозяину. Остальных молча игнорирует.
+  // Подбор кода привязки: 5 попыток, потом пауза 15 минут.
+  const tries = new Map<number, { n: number; until: number }>();
   bot.use(async (ctx, next) => {
     const current = getOwner();
     if (!current) {
       const code = pairing?.code();
       const text = ctx.message?.text?.trim() ?? "";
-      if (pairing && code && ctx.from && text.replace(/\D/g, "") === code) {
-        pairing.done(ctx.from.id);
+      const digits = text.replace(/\D/g, "");
+      const who = ctx.from?.id;
+      const t = who !== undefined ? tries.get(who) : undefined;
+      if (t && t.n >= PAIR_TRIES && Date.now() < t.until) return; // слишком много неверных кодов — молчим
+      if (pairing && code && who !== undefined && digits === code) {
+        tries.clear();
+        pairing.done(who);
         await ctx.reply("Готово, я привязан к тебе! 🎉 Теперь я твой Камадо. Напиши /help, чтобы узнать, что я умею.");
         return;
+      }
+      if (pairing && who !== undefined && digits.length >= 4) {
+        const next = t && Date.now() < t.until ? t.n + 1 : 1;
+        tries.set(who, { n: next, until: Date.now() + 15 * 60e3 });
+        if (next >= PAIR_TRIES) {
+          await ctx.reply("Слишком много неверных кодов. Попробуй через 15 минут.");
+          return;
+        }
       }
       await ctx.reply(
         pairing
@@ -183,7 +199,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
   // ---------- Настройки и ключ ----------
 
   bot.command("settings", (ctx) => {
-    const key = store.getKv(API_KEY_KV) ?? config.ANTHROPIC_API_KEY;
+    const key = store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY;
     const mode = ai.enabled
       ? `ИИ включён (ключ …${key?.slice(-4) ?? "?"})`
       : "ручной режим (ИИ выключен — /key, чтобы включить)";
@@ -220,7 +236,7 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       await ctx.reply("Anthropic не принял этот ключ. Проверь, что скопировал его целиком и что он не отозван.");
       return;
     }
-    store.setKv(API_KEY_KV, key);
+    store.setSecret(API_KEY_KV, key);
     ai.setKey(key);
     await ctx.reply(`Ключ принят, сообщение с ним удалил. ИИ включён! 🧠\n\n${AI_HELP}`);
   };

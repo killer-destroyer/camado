@@ -28,7 +28,7 @@ export function createCore(config: Config): CamadoCore {
   // Нет ни того ни другого — ручной режим.
   const ai = new SwitchableProvider(
     (apiKey) => AnthropicProvider.create(apiKey, models),
-    store.getKv(API_KEY_KV) ?? config.ANTHROPIC_API_KEY,
+    store.getSecret(API_KEY_KV) ?? config.ANTHROPIC_API_KEY,
   );
   const llm = new MeteredProvider(ai, store, config.CAMADO_MONTHLY_BUDGET_USD);
   const camado = new Camado(store, llm, config.CAMADO_TIMEZONE);
@@ -41,7 +41,7 @@ export function createCoreBot(core: CamadoCore, extra: Pick<BotDeps, "token" | "
 
 /** Сохраняет ключ API и включает ИИ. Ключ уже должен быть проверен. */
 export function setApiKey(core: CamadoCore, apiKey: string | undefined): void {
-  if (apiKey) core.store.setKv(API_KEY_KV, apiKey);
+  if (apiKey) core.store.setSecret(API_KEY_KV, apiKey);
   else core.store.deleteKv(API_KEY_KV);
   core.ai.setKey(apiKey ?? core.config.ANTHROPIC_API_KEY);
 }

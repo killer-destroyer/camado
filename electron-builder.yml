@@ -13,6 +13,14 @@ extraResources:
     to: assets
     filter: ["*.png"]
 asar: true
+# «Предохранители» Electron: собранную программу нельзя запустить как обычный Node.js,
+# подсунуть ей код через переменные окружения или отладчик, или загрузить код не из её архива.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  resetAdHocDarwinSignature: true
 # Откуда программа берёт обновления: последний релиз на GitHub (latest.yml + установщик).
 publish:
   - provider: generic

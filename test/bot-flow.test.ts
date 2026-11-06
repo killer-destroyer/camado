@@ -180,4 +180,19 @@ describe("привязка бота кодом из приложения", () =>
     expect((await send("/dz", 555)).replies[0]).toContain("Заданий нет");
     expect((await send("/dz", 777)).replies).toHaveLength(0);
   });
+
+  it("подбирать код нельзя: после 5 неверных — молчание, даже с верным кодом", async () => {
+    let owner: number | undefined;
+    const { send } = setup({
+      owner: () => owner,
+      pairing: { code: () => "482913", done: (id) => (owner = id) },
+    });
+    for (const guess of ["111111", "222222", "333333", "444444"]) await send(guess, 666);
+    expect((await send("555555", 666)).replies[0]).toContain("Слишком много");
+    expect((await send("482913", 666)).replies).toHaveLength(0);
+    expect(owner).toBeUndefined();
+    // другой человек (настоящий хозяин) всё ещё может привязаться
+    expect((await send("482913", 555)).replies[0]).toContain("привязан");
+    expect(owner).toBe(555);
+  });
 });

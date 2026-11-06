@@ -145,3 +145,47 @@ describe("бесплатная музыка (Internet Archive)", () => {
     expect(await freeTracks("../evil", impl)).toEqual([]);
   });
 });
+
+describe("безопасность", () => {
+  it("адреса домашней сети и самого компьютера распознаются", async () => {
+    const { isPrivateIp } = await import("../desktop/main/download.js");
+    for (const ip of ["127.0.0.1", "10.1.2.3", "192.168.0.1", "172.20.1.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1", "::ffff:192.168.1.5", "0.0.0.0"]) {
+      expect(isPrivateIp(ip), ip).toBe(true);
+    }
+    for (const ip of ["8.8.8.8", "93.184.216.34", "172.32.0.1", "2a00:1450::1"]) expect(isPrivateIp(ip), ip).toBe(false);
+  });
+
+  it("не скачивает из домашней сети — ни напрямую, ни через перенаправление", async () => {
+    const { importFromUrl, setHostLookup } = await import("../desktop/main/download.js");
+    setHostLookup(async (h) => (h === "router.example" ? ["192.168.1.1"] : ["93.184.216.34"]));
+    const dir = mkdtempSync(join(tmpdir(), "camado-ssrf-"));
+    const calls: string[] = [];
+    const impl = (async (url: string) => {
+      calls.push(url);
+      return new Response("", { status: 302, headers: { location: "http://127.0.0.1:8080/admin.mp3" } });
+    }) as unknown as typeof fetch;
+    expect(await importFromUrl("http://192.168.1.1/song.mp3", dir, () => {}, impl)).toMatchObject({ kind: "error" });
+    expect(await importFromUrl("http://localhost/song.mp3", dir, () => {}, impl)).toMatchObject({ kind: "error" });
+    expect(await importFromUrl("https://router.example/song.mp3", dir, () => {}, impl)).toMatchObject({ kind: "error" });
+    expect(calls).toEqual([]); // в домашнюю сеть даже не постучались
+    const r = await importFromUrl("https://music.example/song.mp3", dir, () => {}, impl);
+    expect(r).toMatchObject({ kind: "error" });
+    expect(calls).toEqual(["https://music.example/song.mp3"]); // перенаправление на 127.0.0.1 не пошло
+  });
+
+  it("секреты шифруются, старые незашифрованные — перешифровываются при чтении", () => {
+    const s = memoryStore();
+    s.setKv("anthropic_api_key", "sk-ant-old");
+    const codec = { encrypt: (p: string) => Buffer.from(p).toString("base64"), decrypt: (c: string) => Buffer.from(c, "base64").toString() };
+    s.secretCodec = codec;
+    expect(s.getSecret("anthropic_api_key")).toBe("sk-ant-old");
+    expect(s.getKv("anthropic_api_key")).toMatch(/^enc1:/);
+    expect(s.getKv("anthropic_api_key")).not.toContain("sk-ant");
+    s.setSecret("telegram_token", "123:ABC");
+    expect(s.getKv("telegram_token")).not.toContain("ABC");
+    expect(s.getSecret("telegram_token")).toBe("123:ABC");
+    // ключ шифрования сменился — секрет просто не читается, программа не падает
+    s.secretCodec = { encrypt: codec.encrypt, decrypt: () => undefined };
+    expect(s.getSecret("telegram_token")).toBeUndefined();
+  });
+});
