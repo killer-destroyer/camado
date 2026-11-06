@@ -61,7 +61,7 @@ export function Focus() {
       </header>
 
       <div className="focus-layout">
-        <div className="focus-left">
+        <div className={`focus-left ${s.mode !== "work" && cfg.coach !== false ? "break" : ""}`}>
         <div className={`focus-timer mode-${s.mode} ${s.running ? "running" : ""}`}>
           <div ref={glow} className="focus-glow" />
           <svg viewBox="0 0 340 340" className="focus-ring">

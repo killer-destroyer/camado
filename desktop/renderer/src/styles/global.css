@@ -5440,3 +5440,12 @@ kbd {
 .ach span:last-child {
   color: var(--muted);
 }
+.focus-left.break {
+  align-self: start;
+}
+.focus-left.break .focus-timer {
+  width: min(280px, 30vh);
+}
+.focus-left.break .focus-time {
+  font-size: clamp(40px, 6vh, 64px);
+}
