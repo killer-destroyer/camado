@@ -8,6 +8,7 @@ import { countdown, fmtDue, fromLocalInput, KIND_LABEL, urgency, type Urgency } 
 import { useStore } from "../lib/store";
 import { app, toast } from "../state/app";
 import { data } from "../state/data";
+import { sameSubject } from "../../../../src/subjects";
 import { Empty, Segmented, Toggle } from "../components/ui";
 
 const GROUPS: { id: Urgency | "closed"; title: string }[] = [
@@ -131,11 +132,25 @@ function AddForm({ subjects }: { subjects: string[] }) {
   );
 }
 
+const longer = (a: string, b: string) => (b.length > a.length ? b : a);
+const shorter = (a: string, b: string) => (b.length > a.length ? a : b);
+
 function Subjects() {
   const subjects = useStore(data, (s) => s.subjects);
   const [name, setName] = useState("");
   const [teacher, setTeacher] = useState("");
   const [info, setInfo] = useState("");
+  const dupes = useMemo(() => {
+    const out: [string, string][] = [];
+    for (let i = 0; i < subjects.length; i++)
+      for (let j = i + 1; j < subjects.length; j++) if (sameSubject(subjects[i]!.name, subjects[j]!.name)) out.push([longer(subjects[i]!.name, subjects[j]!.name), shorter(subjects[i]!.name, subjects[j]!.name)]);
+    return out;
+  }, [subjects]);
+  const merge = async (from: string[], into: string) => {
+    if (!confirm(`Объединить «${from.join("», «")}» в «${into}»? Задания, заметки и ссылки переедут в «${into}».`)) return;
+    const r = await api.subjects.merge(from, into);
+    toast(`Объединено в «${into}» · перенесено записей: ${r.moved}`);
+  };
   const save = async () => {
     if (!name.trim()) return;
     await api.subjects.save({ name: name.trim(), teacher: teacher.trim() || undefined, info: info.trim() || undefined });
@@ -148,11 +163,50 @@ function Subjects() {
       <h3 className="section-title">
         <BookOpen size={17} /> Предметы
       </h3>
+      {dupes.map(([a, b]) => (
+        <div key={`${a}|${b}`} className="subject-dupe glass">
+          <span>
+            Похоже, это один предмет: «{a}» и «{b}»
+          </span>
+          <button className="btn sm" onClick={() => void merge([b], a)}>
+            Объединить
+          </button>
+        </div>
+      ))}
       {subjects.map((s) => (
         <div key={s.id} className={`subject-card glass h${hue(s.name)}`}>
           <div className="sc-name">{s.name}</div>
           {s.teacher && <div className="sc-teacher">{s.teacher}</div>}
           {s.info && <div className="sc-info">{s.info}</div>}
+          <div className="sc-actions">
+            {subjects.length > 1 && (
+              <select
+                className="input sm"
+                value=""
+                title="Это тот же предмет, что…"
+                onChange={(e) => e.target.value && void merge([s.name], e.target.value)}
+              >
+                <option value="">Объединить с…</option>
+                {subjects
+                  .filter((x) => x.id !== s.id)
+                  .map((x) => (
+                    <option key={x.id} value={x.name}>
+                      {x.name}
+                    </option>
+                  ))}
+              </select>
+            )}
+            <button
+              className="icon-btn sm"
+              title="Удалить предмет"
+              onClick={() => {
+                if (!confirm(`Удалить предмет «${s.name}»? Задания и заметки по нему останутся.`)) return;
+                void api.subjects.remove(s.name);
+              }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
         </div>
       ))}
       <div className="subject-card glass add">

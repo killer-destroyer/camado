@@ -18,6 +18,8 @@ const api: CamadoApi = {
   subjects: {
     list: call("subjects.list") as CamadoApi["subjects"]["list"],
     save: call("subjects.save") as CamadoApi["subjects"]["save"],
+    merge: call("subjects.merge") as CamadoApi["subjects"]["merge"],
+    remove: call("subjects.remove") as CamadoApi["subjects"]["remove"],
   },
   notes: {
     list: call("notes.list") as CamadoApi["notes"]["list"],

@@ -5751,3 +5751,60 @@ kbd {
 .chat-new {
   margin-left: auto;
 }
+
+/* ---------- 1.0.9: «Фокус» на перерыве — таймер поменьше и сбоку, блок перерыва под ним, колонка прокручивается ---------- */
+.screen.focus .focus-left.break {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-content: safe start;
+  align-items: center;
+  column-gap: 22px;
+  row-gap: 14px;
+  align-self: stretch;
+  overflow-y: auto;
+  padding: 4px 6px 16px;
+}
+.screen.focus .focus-left.break .focus-timer {
+  width: min(210px, 24vh);
+}
+.screen.focus .focus-left.break .focus-time {
+  font-size: clamp(32px, 4.6vh, 48px);
+}
+.screen.focus .focus-left.break .focus-sub {
+  display: none;
+}
+.screen.focus .focus-left.break .focus-buttons {
+  flex-direction: column;
+}
+.screen.focus .focus-left.break > .coach {
+  grid-column: 1 / -1;
+  justify-self: center;
+}
+
+/* Предметы: объединить / удалить */
+.sc-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  opacity: 0.55;
+  transition: opacity 0.2s;
+}
+.subject-card:hover .sc-actions {
+  opacity: 1;
+}
+.sc-actions select {
+  flex: 1;
+  min-width: 0;
+}
+.subject-dupe {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 13px;
+  border: 1px solid var(--accent);
+}

@@ -1,4 +1,5 @@
 import type { DB } from "./db.js";
+import { findSimilarSubject, normalizeSubject } from "./subjects.js";
 
 export const TASK_KINDS = ["homework", "test", "exam", "lab", "other"] as const;
 export type TaskKind = (typeof TASK_KINDS)[number];
@@ -249,7 +250,7 @@ export class Store {
          VALUES (?, ?, ?, ?, ?, 'todo', ?, ?)`,
       )
       .run(
-        input.subject ?? null,
+        this.canonicalSubject(input.subject),
         input.title,
         input.details ?? null,
         input.kind ?? "homework",
@@ -283,6 +284,7 @@ export class Store {
     if (!current) return undefined;
     // Поля, которые не передали (undefined), остаются как были.
     const changes = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    if (typeof changes.subject === "string") changes.subject = this.canonicalSubject(changes.subject);
     const next: Task = { ...current, ...changes };
     this.db
       .prepare(
@@ -301,8 +303,10 @@ export class Store {
   // ---------- Предметы ----------
 
   /** Создаёт предмет или дополняет существующий. Пустые поля не затирают старые. */
-  saveSubject(input: { name: string; teacher?: string | null; info?: string | null }): Subject {
-    const key = subjectKey(input.name);
+  saveSubject(input: { name: string; teacher?: string | null; info?: string | null }, opts: { exact?: boolean } = {}): Subject {
+    // Похожий предмет уже есть («прога» ≈ «Введение в программирование») — дополняем его, а не заводим второй.
+    const similar = opts.exact ? undefined : findSimilarSubject(input.name, this.listSubjects().map((x) => x.name));
+    const key = subjectKey(similar ?? input.name);
     const existing = this.db
       .prepare("SELECT * FROM subjects WHERE name_key = ?")
       .get(key) as Row | undefined;
@@ -328,6 +332,58 @@ export class Store {
       teacher: (row.teacher as string | null) ?? null,
       info: (row.info as string | null) ?? null,
     };
+  }
+
+  /** Название, под которым предмет уже заведён (если есть похожий), иначе — как прислали. */
+  canonicalSubject(name: string | null | undefined): string | null {
+    if (!name || !name.trim()) return null;
+    return findSimilarSubject(name, this.listSubjects().map((x) => x.name)) ?? name.trim();
+  }
+
+  /** Объединить предметы: задания, заметки, ссылки, карточки, экзамены и фокус переезжают в `into`, лишние карточки удаляются. */
+  mergeSubjects(from: string[], into: string): { moved: number; removed: string[] } {
+    const target = into.trim();
+    const fromKeys = new Set(from.map(normalizeSubject).filter((k) => k && k !== normalizeSubject(target)));
+    let moved = 0;
+    const removed: string[] = [];
+    this.db.exec("BEGIN");
+    try {
+      for (const table of ["tasks", "notes", "links", "cards", "exams", "focus_sessions"]) {
+        const values = this.db.prepare(`SELECT DISTINCT subject FROM ${table} WHERE subject IS NOT NULL`).all() as Row[];
+        for (const v of values) {
+          const subj = v.subject as string;
+          if (fromKeys.has(normalizeSubject(subj))) moved += Number(this.db.prepare(`UPDATE ${table} SET subject = ? WHERE subject = ?`).run(target, subj).changes);
+        }
+      }
+      const rows = this.db.prepare("SELECT * FROM subjects").all() as Row[];
+      const extra = rows.filter((r) => fromKeys.has(normalizeSubject(r.name as string)));
+      const keep = rows.find((r) => normalizeSubject(r.name as string) === normalizeSubject(target));
+      const teacher = (keep?.teacher as string | null) ?? (extra.find((r) => r.teacher)?.teacher as string | undefined) ?? null;
+      const info = [keep?.info, ...extra.map((r) => r.info)].filter((x): x is string => !!x && !!String(x).trim());
+      const infoText = [...new Set(info)].join("\n") || null;
+      if (keep) this.db.prepare("UPDATE subjects SET teacher = ?, info = ?, updated_at = ? WHERE id = ?").run(teacher, infoText, this.ts(), Number(keep.id));
+      else this.db.prepare("INSERT INTO subjects (name, name_key, teacher, info, updated_at) VALUES (?, ?, ?, ?, ?)").run(target, subjectKey(target), teacher, infoText, this.ts());
+      for (const r of extra) {
+        this.db.prepare("DELETE FROM subjects WHERE id = ?").run(Number(r.id));
+        removed.push(r.name as string);
+      }
+      this.db.exec("COMMIT");
+    } catch (err) {
+      this.db.exec("ROLLBACK");
+      throw err;
+    }
+    this.changed();
+    return { moved, removed };
+  }
+
+  /** Удалить карточку предмета (задания и заметки остаются). */
+  deleteSubject(name: string): boolean {
+    const key = normalizeSubject(name);
+    const row = (this.db.prepare("SELECT id, name FROM subjects").all() as Row[]).find((r) => normalizeSubject(r.name as string) === key);
+    if (!row) return false;
+    this.db.prepare("DELETE FROM subjects WHERE id = ?").run(Number(row.id));
+    this.changed();
+    return true;
   }
 
   listSubjects(): Subject[] {

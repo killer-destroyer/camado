@@ -113,8 +113,34 @@ export function buildTools(store: Store, timeZone: string, turnText: () => strin
       }),
       run: (i) => {
         const s = store.saveSubject(i);
-        return `Карточка «${s.name}» сохранена.`;
+        return s.name.trim().toLocaleLowerCase("ru") === i.name.trim().toLocaleLowerCase("ru")
+          ? `Карточка «${s.name}» сохранена.`
+          : `Такой предмет уже был — дополнил карточку «${s.name}» (новую «${i.name}» не заводил).`;
       },
+    }),
+
+    defineTool({
+      name: "merge_subjects",
+      description:
+        "Объединить одинаковые предметы, заведённые под разными названиями («прога» и «Введение в программирование», " +
+        "«Алгоритмы и структура данных» дважды). Задания, заметки, ссылки, карточки и экзамены переезжают в into, лишние предметы удаляются.",
+      schema: z.object({
+        from: z.array(z.string().min(1)).min(1).describe("Названия-дубли, которые убрать"),
+        into: z.string().min(1).describe("Под каким названием оставить"),
+      }),
+      run: (i) => {
+        const r = store.mergeSubjects(i.from, i.into);
+        return r.removed.length || r.moved
+          ? `Объединил в «${i.into}»: убрал ${r.removed.map((x) => `«${x}»`).join(", ") || "—"}, перенёс записей: ${r.moved}.`
+          : "Таких предметов не нашёл — проверь названия через list_subjects.";
+      },
+    }),
+
+    defineTool({
+      name: "delete_subject",
+      description: "Удалить карточку предмета (задания и заметки по нему остаются). Только если пользователь просит.",
+      schema: z.object({ name: z.string().min(1) }),
+      run: (i) => (store.deleteSubject(i.name) ? `Предмет «${i.name}» удалён.` : `Предмета «${i.name}» нет.`),
     }),
 
     defineTool({

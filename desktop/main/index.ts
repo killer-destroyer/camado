@@ -226,6 +226,8 @@ const handlers: Record<string, Handler> = {
 
   "subjects.list": () => store.listSubjects(),
   "subjects.save": (input: { name: string; teacher?: string; info?: string }) => store.saveSubject(input),
+  "subjects.merge": (from: string[], into: string) => store.mergeSubjects(from, into),
+  "subjects.remove": (name: string) => store.deleteSubject(name),
 
   "notes.list": () => store.listNotes(),
   "notes.save": (input: Parameters<typeof store.saveNote>[0]) => store.saveNote(input),

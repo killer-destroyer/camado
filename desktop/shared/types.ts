@@ -160,6 +160,9 @@ export interface CamadoApi {
   subjects: {
     list(): Promise<Subject[]>;
     save(input: { name: string; teacher?: string; info?: string }): Promise<Subject>;
+    /** Объединить дубли в один предмет. */
+    merge(from: string[], into: string): Promise<{ moved: number; removed: string[] }>;
+    remove(name: string): Promise<boolean>;
   };
   steps: {
     list(taskId?: number): Promise<TaskStep[]>;

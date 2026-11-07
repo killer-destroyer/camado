@@ -10,7 +10,7 @@ const HISTORY_LIMIT = 20;
  * Инструменты, которые меняют или стирают уже сохранённое. В пересланных сообщениях их нет:
  * текст из чужого чата — это данные, и фраза «отметь всё сделанным» в нём не должна ничего сломать.
  */
-const CHANGES_EXISTING = new Set(["update_task", "forget", "remove_tasks", "delete_links", "update_link", "set_task_steps", "save_note", "delete_plan", "delete_notes", "delete_exam"]);
+const CHANGES_EXISTING = new Set(["update_task", "forget", "remove_tasks", "delete_links", "update_link", "set_task_steps", "save_note", "delete_plan", "delete_notes", "delete_exam", "merge_subjects", "delete_subject"]);
 
 export interface IncomingMessage {
   text: string;

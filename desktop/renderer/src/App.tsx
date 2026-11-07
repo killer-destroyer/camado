@@ -6,7 +6,7 @@ import { applyPalette, paletteById } from "./lib/palettes";
 import { useStore } from "./lib/store";
 import { app, go, initApp, toast, toggleOverlay, type ScreenId } from "./state/app";
 import { data, refreshData, watchData } from "./state/data";
-import { initFocus, pause as pauseFocus, refreshFocusStats, reset as resetFocus, start as startFocus, watchMenubar } from "./state/focus";
+import { initFocus, setMode as setFocusMode, pause as pauseFocus, refreshFocusStats, reset as resetFocus, start as startFocus, watchMenubar } from "./state/focus";
 import { initAlarms, ring } from "./state/alarms";
 import { watchAchievements } from "./state/achievements";
 import { AlarmModal } from "./components/Alarm";
@@ -155,6 +155,10 @@ export function App() {
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
+      else if (name === "focus-break") {
+        go("focus");
+        setFocusMode("short");
+      }
       else if (name.startsWith("ss-")) app.set({ screensaver: true, screensaverScene: name.slice(3) });
       else if (name === "burst" || name === "line" || name === "flow") {
         app.set((s) => ({ nowPlaying: true, settings: { ...s.settings, lyricsMode: name } }));
