@@ -191,7 +191,7 @@ export function App() {
       <Sidebar />
       <main className="main">
         <div key={screen} className="screen-wrap">
-          <Guard name={screen}>
+          <Guard name={screen} back={screen === "today" ? undefined : { label: "На главную", onClick: () => go("today") }}>
             <Screen />
           </Guard>
         </div>

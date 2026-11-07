@@ -6779,3 +6779,14 @@ a.btn {
     z-index: 40;
   }
 }
+
+/* ---------- Предохранитель экрана ---------- */
+.guard-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.guard-inner {
+  padding: 40px 0;
+}

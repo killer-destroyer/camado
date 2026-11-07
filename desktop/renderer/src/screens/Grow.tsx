@@ -29,6 +29,7 @@ import { RichText } from "../components/RichText";
 import { Review } from "../components/Cards";
 import { Segmented } from "../components/ui";
 import { GrowAssistant } from "../components/GrowAssistant";
+import { Guard } from "../components/Guard";
 import { SyllabusView } from "./GrowSyllabus";
 import { LibraryView } from "./GrowLibrary";
 
@@ -106,6 +107,7 @@ export function Grow() {
 
       <div className="grow-body">
         <div className="grow-main">
+          <Guard inner name={`прокачка · ${s.tab}`} resetKey={s.tab} back={s.tab === "python" ? undefined : { label: "К курсу Python", onClick: () => grow.set({ tab: "python", modal: undefined }) }}>
           {course ? (
             <CourseView key={course.id} course={course} />
           ) : s.tab === "problems" ? (
@@ -117,6 +119,7 @@ export function Grow() {
           ) : (
             <ReviewView />
           )}
+          </Guard>
         </div>
         {assistantOpen && <GrowAssistant />}
       </div>
@@ -699,9 +702,12 @@ function problemTask(p: Problem, lang: RunLang): CodeTask & { solutionLang?: str
   return { level: p.level, text: p.text, starter: problemStarter(lang), tests: p.tests, checks: [], hints: p.hints, solution: p.solution, solutionLang: "python" };
 }
 
+/** Один и тот же пустой объект: новый `{}` на каждый вызов заставлял React перерисовывать экран без конца. */
+const NO_SOLVED: Record<string, string[]> = {};
+
 function ProblemsView() {
   const tools = useStore(grow, (x) => x.tools);
-  const solvedMap = useStore(grow, (x) => x.progress.problems ?? {});
+  const solvedMap = useStore(grow, (x) => x.progress.problems ?? NO_SOLVED);
   const openId = useStore(grow, (x) => x.problem);
   const [lang, setLang] = useState<RunLang>("python");
   const [topic, setTopic] = useState("");
