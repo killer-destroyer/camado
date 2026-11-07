@@ -151,14 +151,21 @@ export function UpdateBanner() {
   const u = useStore(app, (s) => s.update);
   if (u.state !== "available" && u.state !== "downloading" && u.state !== "installing") return null;
   return (
-    <button className="update-banner" disabled={u.state !== "available"} onClick={() => void api.updates.install()}>
-      <Sparkles size={15} />
-      {u.state === "available"
-        ? `Вышла версия ${u.version} — скачать обновление`
-        : u.state === "downloading"
-          ? `Качаю обновление… ${u.percent ?? 0}%`
-          : "Ставлю обновление и перезапускаюсь…"}
-    </button>
+    <div className="update-banner-wrap">
+      <button className="update-banner" disabled={u.state !== "available"} onClick={() => void api.updates.install()}>
+        <Sparkles size={15} />
+        {u.state === "available"
+          ? `Вышла версия ${u.version} — скачать обновление`
+          : u.state === "downloading"
+            ? `Качаю обновление… ${u.percent ?? 0}%`
+            : "Ставлю обновление и перезапускаюсь…"}
+      </button>
+      {u.state === "available" && !!u.notes?.length && (
+        <button className="update-banner what" onClick={() => app.set({ whatsNew: { title: `Что будет в ${u.version}`, entries: u.notes! } })}>
+          Что в ней?
+        </button>
+      )}
+    </div>
   );
 }
 

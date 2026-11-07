@@ -46,6 +46,7 @@ import { Updates } from "./updates.js";
 import { growHandlers } from "./grow.js";
 import { COURSES } from "../shared/courses/index.js";
 import { bookFilePath, booksHandlers } from "./books.js";
+import { ensureModelFile, modelFile, wordsyncHandlers } from "./wordsync.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -213,6 +214,7 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
 const handlers: Record<string, Handler> = {
   ...growHandlers({ store, core, timeZone: config.CAMADO_TIMEZONE, withAi, dialog, win: () => win }),
   ...booksHandlers({ store, dataDir, dialog, win: () => win, notify: () => send("books-changed") }),
+  ...wordsyncHandlers(dataDir, (id) => send("wordsync-changed", id)),
   info: (): AppInfo => ({
     platform: process.platform,
     version: app.getVersion(),
@@ -1076,9 +1078,19 @@ function enableSecretStorage(): void {
 
 void app.whenReady().then(async () => {
   enableSecretStorage();
-  protocol.handle("camado-media", (req) => {
+  protocol.handle("camado-media", async (req) => {
     const url = new URL(req.url);
     const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
+    // модель распознавания слов: качается с Hugging Face один раз, дальше — с диска
+    if (url.hostname === "model") {
+      try {
+        const ok = await ensureModelFile(dataDir, name, (p) => send("model-progress", p));
+        const path = ok ? modelFile(dataDir, name) : undefined;
+        return path ? serveFile(path, req.headers.get("range")) : new Response("not found", { status: 404 });
+      } catch (err) {
+        return new Response(err instanceof Error ? err.message : "error", { status: 502 });
+      }
+    }
     const path =
       url.hostname === "track"
         ? library.trackPath(name)

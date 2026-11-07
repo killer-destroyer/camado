@@ -2974,12 +2974,17 @@ code {
 }
 
 /* Обновления */
-.update-banner {
+.update-banner-wrap {
   position: fixed;
   top: 9px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 85;
+  display: flex;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+.update-banner {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -2993,6 +2998,11 @@ code {
   box-shadow: 0 8px 24px -8px rgb(var(--accent-rgb) / 0.9);
   -webkit-app-region: no-drag;
   animation: toast-in 0.5s var(--spring) both;
+}
+.update-banner.what {
+  color: var(--text);
+  background: rgb(var(--text-rgb) / 0.14);
+  box-shadow: none;
 }
 .nav-dot {
   position: absolute;
@@ -6789,4 +6799,64 @@ a.btn {
 }
 .guard-inner {
   padding: 40px 0;
+}
+
+/* ---------- Что нового ---------- */
+.modal.whatsnew {
+  position: relative;
+  width: min(620px, calc(100vw - 48px));
+  max-height: min(78vh, 760px);
+  overflow-y: auto;
+}
+.wn-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+}
+.wn-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.wn-head h2 {
+  margin: 0;
+  color: var(--text);
+}
+.wn-entry h3 {
+  margin: 16px 0 6px;
+  font-size: 15px;
+}
+.wn-entry ul {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+}
+.wn-entry li .rich p {
+  margin: 0;
+}
+.wn-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+.wn-history {
+  margin-top: 12px;
+}
+.wn-history .wn-list {
+  margin-top: 6px;
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+.wn-coming {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgb(var(--text-rgb) / 0.05);
+}
+.wn-coming .wn-entry h3 {
+  margin-top: 6px;
 }

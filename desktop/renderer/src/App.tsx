@@ -11,8 +11,10 @@ import { initAlarms, ring } from "./state/alarms";
 import { watchAchievements } from "./state/achievements";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
+import { WhatsNewModal } from "./components/WhatsNew";
+import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
-import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, next, prev } from "./state/player";
+import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
 import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
@@ -108,6 +110,7 @@ export function App() {
       onFrame((dt, t) => engine.update(dt, t), -10),
       watchData(),
       watchLibrary(),
+      startWordSync(),
       initPlayer(),
       initFocus(),
       api.on("data-changed", () => void refreshFocusStats()),
@@ -162,6 +165,7 @@ export function App() {
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
+      else if (name === "whatsnew") app.set({ whatsNew: { title: "Что нового", entries: CHANGELOG.slice(0, 1) } });
       else if (name.startsWith("grow-")) {
         go("grow");
         grow.set({ tab: name.slice(5) as GrowTab });
@@ -204,6 +208,7 @@ export function App() {
       )}
       <CommandPalette />
       <RecapModal />
+      <WhatsNewModal />
       <Screensaver />
       <AlarmModal />
       <Toasts />

@@ -3,6 +3,7 @@ import type { Card, ChatEntry, Exam, FocusSession, LessonLink, Note, PlanBlock, 
 import type { FreeAlbum } from "../main/freeMusic.js";
 import type { AiConfig } from "../../src/llm/providers.js";
 import type { AppSettings } from "./settings.js";
+import type { WordSync } from "./wordsync.js";
 
 export type { AiConfig };
 export type { Card, Exam, PlanBlock, TaskStep };
@@ -44,7 +45,9 @@ export interface Lyrics {
   /** true — строки с таймингом, false — просто текст. */
   synced: boolean;
   lines: LyricsLine[];
-  source: "file" | "tags" | "lrclib" | "none";
+  source: "file" | "tags" | "lrclib" | "none" | "heard";
+  /** Время у каждого слова — Камадо расслышал песню сам (на компьютере). */
+  wordTimed?: boolean;
   /** Длина той версии песни, под которую сделан текст (из базы). Сильно отличается от файла — текст может разъезжаться. */
   versionDuration?: number;
   /** Текст растянут под ускоренную/замедленную версию (nightcore, sped up, slowed) — во сколько раз. */
@@ -117,6 +120,8 @@ export interface UpdateStatus {
   percent?: number;
   error?: string;
   checkedAt?: number;
+  /** Что добавит новая версия (из changelog.md в релизе). */
+  notes?: { version: string; date?: string; items: string[] }[];
 }
 
 export interface BotStatus {
@@ -343,6 +348,15 @@ export interface CamadoApi {
     export(): Promise<boolean>;
     setSources(list: Partial<BookSource>[]): Promise<BookSource[]>;
   };
+  wordsync: {
+    get(trackId: string): Promise<WordSync | null>;
+    save(trackId: string, data: WordSync): Promise<boolean>;
+    /** Уже размеченные песни: id → модель. */
+    done(): Promise<Record<string, string>>;
+    drop(trackId: string): Promise<void>;
+    model(): Promise<{ bytes: number }>;
+    dropModel(): Promise<void>;
+  };
   syllabus: {
     list(): Promise<Programme[]>;
     import(input: { text?: string; pickFile?: boolean; subject?: string }): Promise<{ programme: Programme } | { cancelled: true } | { error: string }>;
@@ -457,6 +471,10 @@ export interface CamadoApi {
   on(event: "go", cb: (payload: string) => void): () => void;
   /** Изменился список книг. */
   on(event: "books-changed", cb: (payload?: unknown) => void): () => void;
+  /** Готова (или удалена) пословная разметка песни. */
+  on(event: "wordsync-changed", cb: (trackId: string) => void): () => void;
+  /** Качается модель распознавания слов. */
+  on(event: "model-progress", cb: (p: { file: string; loaded: number; total: number }) => void): () => void;
   /** ИИ поменял настройки по просьбе. */
   on(event: "settings-changed", cb: (payload: AppSettings) => void): () => void;
   /** Видеокарта упала — выйти из заставки. */

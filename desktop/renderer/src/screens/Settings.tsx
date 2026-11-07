@@ -1,4 +1,7 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
+import { kick as kickWords, words } from "../state/wordsync";
+import { WORDSYNC_MODEL } from "../../../shared/wordsync";
+import { EntryList, VersionHistory } from "../components/WhatsNew";
 import { useEffect, useState } from "react";
 import { AlarmClock, Check, Download, FolderPlus, Image as ImageIcon, KeyRound, Music4, Play, RefreshCw, Shuffle, Sparkles, Square, Trash2 } from "lucide-react";
 import { SCENES } from "../lib/scenes";
@@ -58,6 +61,51 @@ function LiveFps() {
   return <b className="live-fps">{v} FPS</b>;
 }
 
+function WordSyncRow() {
+  const s = useStore(app, (x) => x.settings);
+  const w = useStore(words, (x) => x);
+  const total = useStore(player, (x) => x.library.tracks.length);
+  const [bytes, setBytes] = useState<number | null>(null);
+  useEffect(() => {
+    void api.wordsync.model().then((m) => setBytes(m.bytes));
+  }, [w.busy?.id, w.model?.loaded === undefined]);
+  const ready = Object.values(w.done).filter((m) => m === WORDSYNC_MODEL).length;
+  const mb = (n: number) => `${Math.round(n / 1e6)} МБ`;
+  const status = w.model
+    ? `Качаю модель распознавания: ${mb(w.model.loaded)} из ${mb(w.model.total)} (один раз).`
+    : w.busy
+      ? `Слушаю «${w.busy.title}»${w.busy.total ? ` — ${w.busy.done} из ${w.busy.total} отрывков` : "…"}. Готово песен: ${ready} из ${total}.`
+      : `Готово песен: ${ready} из ${total}.${w.error ? ` Последняя ошибка: ${w.error}` : ""}`;
+  return (
+    <Row
+      title="Текст песни по словам — сам, на компьютере"
+      hint={`Камадо заранее слушает каждую песню и ставит время каждому слову: текст ускоряется и замедляется вместе с певцом. Считается один раз и хранится у тебя; без интернета и ключа ИИ (интернет нужен только чтобы один раз скачать модель ≈300 МБ). ${status}${bytes ? ` Модель занимает ${mb(bytes)}.` : ""}`}
+    >
+      <div className="row-actions">
+        {!!bytes && !w.busy && !w.model && (
+          <button
+            className="btn sm"
+            title="Освободить место; понадобится — скачаю снова"
+            onClick={() => {
+              updateSettings({ wordSync: false });
+              void api.wordsync.dropModel().then(() => setBytes(0));
+            }}
+          >
+            Удалить модель
+          </button>
+        )}
+        <Toggle
+          value={s.wordSync}
+          onChange={(v) => {
+            updateSettings({ wordSync: v });
+            if (v) setTimeout(kickWords, 300);
+          }}
+        />
+      </div>
+    </Row>
+  );
+}
+
 function UpdatesSection() {
   const u = useStore(app, (x) => x.update);
   const [busy, setBusy] = useState(false);
@@ -97,7 +145,14 @@ function UpdatesSection() {
           <i style={{ width: `${u.percent ?? 0}%` }} />
         </div>
       )}
+      {u.state === "available" && !!u.notes?.length && (
+        <div className="wn-coming">
+          <div className="small muted">Что будет в новой версии:</div>
+          <EntryList entries={u.notes} />
+        </div>
+      )}
       <div className="set-hint">Камадо сам проверяет, нет ли новой версии (при запуске и каждые 3 часа), но качает её только по кнопке.</div>
+      <VersionHistory />
     </section>
   );
 }
@@ -717,6 +772,7 @@ export function Settings() {
             )}
           </Row>
         )}
+        <WordSyncRow />
         <Row
           title="Подгонять текст по звуку сам"
           hint="Если текст в базе сделан под версию другой длины, ИИ послушает песню и сам расставит строки. Песня уходит в Gemini на анализ; нужен ключ ИИ. Вручную — кнопка с волной рядом с ⌖ в плеере."

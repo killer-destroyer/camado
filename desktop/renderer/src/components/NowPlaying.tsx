@@ -9,6 +9,7 @@ import { paletteById } from "../lib/palettes";
 import { useStore } from "../lib/store";
 import { engine } from "../lib/audio";
 import { app, toggleOverlay, updateSettings } from "../state/app";
+import { redoWords, words } from "../state/wordsync";
 import { currentTrack, cycleRepeat, duration, lyricsSyncOf, next, nowMeta, player, position, prev, resetLyricsSync, seek, setAutoLevel, setLyricsOffset, setSleep, setTrackGain, syncLyricsByEar, toggleFavorite, togglePlay } from "../state/player";
 import { Lyrics } from "./Lyrics";
 import { Segmented, Slider, Toggle } from "./ui";
@@ -92,12 +93,20 @@ function LyricsShift({ trackId }: { trackId: string }) {
   const why = lyrics?.approx
     ? "У этой песни в базе текст без отметок времени — строки расставлены примерно."
     : "Текст в базе сделан под версию песни другой длины — к концу может разъехаться.";
+  const wb = useStore(words, (x) => (x.busy?.id === trackId ? x.busy : undefined));
+  const timed = !!lyrics?.wordTimed;
   const label = ear
     ? "слушаю песню…"
+    : wb
+      ? `слушаю слова…${wb.total ? ` ${wb.done}/${wb.total}` : ""}`
     : syncing
     ? "нажми строку, которую поют"
     : !adjusted
-      ? "текст"
+      ? timed
+        ? lyrics?.source === "heard"
+          ? "по слуху"
+          : "по словам ✓"
+        : "текст"
       : pts > 0
         ? `подогнан${pts > 2 ? `: ${pts} точек` : ""}${Math.abs(v) >= 0.05 ? ` ${v > 0 ? "+" : ""}${v.toFixed(1)} с` : ""}`
         : `${v > 0 ? "+" : ""}${v.toFixed(1)} с${stretched ? ` ×${sync.s.toFixed(3)}` : ""}`;
@@ -116,10 +125,19 @@ function LyricsShift({ trackId }: { trackId: string }) {
         <Crosshair size={14} />
       </button>
       <button
-        className={`catch ear ${ear ? "busy" : ""}`}
-        disabled={ear}
-        title="Подогнать по звуку: ИИ послушает песню и сам расставит текст (песня уйдёт в Gemini на анализ)"
-        onClick={() => void syncLyricsByEar()}
+        className={`catch ear ${ear || wb ? "busy" : ""}`}
+        disabled={ear || !!wb}
+        title={
+          timed
+            ? "Расслышать заново: Камадо ещё раз послушает песню на компьютере и расставит время каждому слову"
+            : "Подогнать по звуку: ИИ послушает песню и сам расставит текст (песня уйдёт в Gemini на анализ)"
+        }
+        onClick={() => {
+          if (timed) {
+            resetLyricsSync(trackId);
+            void redoWords(trackId);
+          } else void syncLyricsByEar();
+        }}
       >
         <AudioWaveform size={14} />
       </button>

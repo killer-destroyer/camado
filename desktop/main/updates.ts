@@ -14,6 +14,7 @@ import { app } from "electron";
 import electronUpdater from "electron-updater";
 import type { UpdateStatus } from "../shared/types.js";
 import { isNewer, versionFromYml } from "../shared/version.js";
+import { changesBetween, parseChangelog } from "../shared/changelog.js";
 import { macSwapScript } from "./macSwap.js";
 
 const { autoUpdater } = electronUpdater;
@@ -58,7 +59,10 @@ export class Updates {
       // Сами ничего не качаем — только по кнопке «Скачать обновление».
       autoUpdater.autoDownload = false;
       autoUpdater.autoInstallOnAppQuit = false;
-      autoUpdater.on("update-available", (i) => this.set({ state: "available", version: i.version }));
+      autoUpdater.on("update-available", (i) => {
+        this.set({ state: "available", version: i.version });
+        void this.loadNotes(i.version);
+      });
       autoUpdater.on("update-not-available", () => this.set({ state: "none", checkedAt: Date.now() }));
       autoUpdater.on("download-progress", (p) => this.set({ state: "downloading", percent: Math.round(p.percent) }));
       autoUpdater.on("update-downloaded", (i) => {
@@ -90,12 +94,28 @@ export class Updates {
       const res = await fetch(`${FEED}/latest.yml`, { signal: AbortSignal.timeout(15000) });
       if (!res.ok) throw new Error(`HttpError: ${res.status}`);
       const v = versionFromYml(await res.text());
-      if (v && isNewer(v, app.getVersion())) this.set({ state: "available", version: v, checkedAt: Date.now() });
+      if (v && isNewer(v, app.getVersion())) {
+        this.set({ state: "available", version: v, checkedAt: Date.now() });
+        void this.loadNotes(v);
+      }
       else this.set({ state: "none", checkedAt: Date.now() });
     } catch (e) {
       this.set({ state: "error", error: explain(e), checkedAt: Date.now() });
     }
     return this.status;
+  }
+
+  /** Что добавит новая версия: changelog.md лежит в релизе рядом с установщиками. Без него — просто без списка. */
+  private async loadNotes(version: string): Promise<void> {
+    try {
+      const res = await fetch(`${FEED}/changelog.md`, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) return;
+      const text = (await res.text()).slice(0, 200_000);
+      const notes = changesBetween(parseChangelog(text), app.getVersion(), version).slice(0, 10);
+      if (notes.length && this.status.version === version) this.set({ notes });
+    } catch {
+      /* нет сети — покажем без списка */
+    }
   }
 
   /** Кнопка «Скачать обновление»: скачать, поставить, перезапуститься — всё само. */

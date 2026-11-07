@@ -41,6 +41,8 @@ export interface AppSettings {
   lyricsSync: Record<string, LyricsSync>;
   /** Подгонять текст по звуку сам (ИИ слушает песню), когда текст в базе от версии другой длины. */
   lyricsByEar: boolean;
+  /** Расставлять время каждому слову текста сам (распознавание на компьютере, заранее, для всех песен). */
+  wordSync: boolean;
   shake: {
     enabled: boolean;
     intensity: number; // 0…1
@@ -133,6 +135,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsOffsets: {},
   lyricsSync: {},
   lyricsByEar: true,
+  wordSync: true,
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
   vinylVariant: {},

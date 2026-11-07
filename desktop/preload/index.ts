@@ -42,6 +42,14 @@ const api: CamadoApi = {
     ask: call("grow.ask") as CamadoApi["grow"]["ask"],
     cards: call("grow.cards") as CamadoApi["grow"]["cards"],
   },
+  wordsync: {
+    get: call("wordsync.get") as CamadoApi["wordsync"]["get"],
+    save: call("wordsync.save") as CamadoApi["wordsync"]["save"],
+    done: call("wordsync.done") as CamadoApi["wordsync"]["done"],
+    drop: call("wordsync.drop") as CamadoApi["wordsync"]["drop"],
+    model: call("wordsync.model") as CamadoApi["wordsync"]["model"],
+    dropModel: call("wordsync.dropModel") as CamadoApi["wordsync"]["dropModel"],
+  },
   books: {
     list: call("books.list") as CamadoApi["books"]["list"],
     save: call("books.save") as CamadoApi["books"]["save"],

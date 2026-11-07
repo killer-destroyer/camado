@@ -1,3 +1,6 @@
+import type { ChangelogEntry } from "../../../shared/changelog";
+import { changesBetween } from "../../../shared/changelog";
+import { CHANGELOG } from "../lib/changelog";
 import { DEFAULT_SETTINGS, type AppSettings } from "../../../shared/settings";
 import type { AppInfo, UpdateStatus } from "../../../shared/types";
 import { api } from "../lib/api";
@@ -27,6 +30,8 @@ interface AppState {
   info: AppInfo;
   toasts: Toast[];
   update: UpdateStatus;
+  /** Окно «Что нового» (после обновления или перед скачиванием). */
+  whatsNew?: { title: string; entries: ChangelogEntry[] };
   /** Открыт ли текст песни поверх окон. */
   overlay: boolean;
   /** Написали в быстрый чат на главной — чат «Камадо» отправит это сразу, как откроется. */
@@ -84,9 +89,27 @@ function applySettings(s: AppSettings): void {
   document.documentElement.style.setProperty("--lyrics-scale", String(s.lyricsSize));
 }
 
+const SEEN = "camado.seenVersion";
+
+/** Камадо обновился — один раз показать, что появилось с прошлой виденной версии. */
+function maybeShowWhatsNew(current: string, packaged: boolean): void {
+  if (!current || !packaged) return;
+  let seen: string | null = null;
+  try {
+    seen = localStorage.getItem(SEEN);
+    localStorage.setItem(SEEN, current);
+  } catch {
+    return;
+  }
+  if (seen === current) return;
+  const list = changesBetween(CHANGELOG, seen ?? undefined, current);
+  if (list.length) app.set({ whatsNew: { title: "Что нового", entries: list } });
+}
+
 export async function initApp(): Promise<void> {
   const [settings, info, update] = await Promise.all([api.settings.get(), api.info(), api.updates.status()]);
   app.set({ update, overlay: await api.overlay.isOpen() });
+  maybeShowWhatsNew(update.current, update.state !== "dev");
   api.on("overlay-changed", (open) => app.set({ overlay: open }));
   // Настройки поменял ИИ по просьбе («сделай потише», «включи тему Сакура») — применяем сразу.
   api.on("settings-changed", (s) => {

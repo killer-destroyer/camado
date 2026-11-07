@@ -67,6 +67,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -79,11 +82,18 @@ jobs:
           ls -la artifacts
           gh release delete camado-latest --yes --cleanup-tag || true
           VERSION=$(grep -m1 '^version:' artifacts/latest.yml | awk '{print $2}')
+          # «Что нового» этой версии — из changelog.md; сам файл кладём в релиз: по нему программа показывает,
+          # что добавит обновление, ещё до скачивания.
+          cp repo/desktop/shared/changelog.md artifacts/changelog.md
+          CHANGES=$(awk -v v="$VERSION" '/^## /{p = ($2 == v); next} p && /^- /' repo/desktop/shared/changelog.md)
           gh release create camado-latest artifacts/* \
             --target "${{ github.sha }}" \
             --title "Камадо $VERSION" \
             --latest \
-            --notes "Собрано автоматически из ${GITHUB_REF_NAME} (${GITHUB_SHA::7}).
+            --notes "## Что нового
+          ${CHANGES}
+
+          Собрано автоматически из ${GITHUB_REF_NAME} (${GITHUB_SHA::7}).
 
           **Windows:** скачай Camado-Setup.exe и запусти. Если появится «Windows защитила ваш компьютер» — нажми «Подробнее» → «Выполнить в любом случае» (программа без платной подписи).
 

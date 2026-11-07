@@ -10,6 +10,7 @@ import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
 import { app, toast, updateSettings } from "./app";
+import { initWordSync, kick as kickWords, withWords } from "./wordsync";
 
 interface PlayerState {
   library: LibraryState;
@@ -137,9 +138,9 @@ export function catchLyricsLine(lineTime: number): void {
 
 // ---------- Подгонка текста по звуку (ИИ слушает песню) ----------
 
-const SR = 16000; // так Gemini слушает сам; отрывок 40 с ≈ 1,3 МБ
+export const SR = 16000; // так Gemini слушает сам; отрывок 40 с ≈ 1,3 МБ
 /** Песню → моно 16 кГц (любой формат файла). */
-async function songPcm(url: string): Promise<Float32Array> {
+export async function songPcm(url: string): Promise<Float32Array> {
   const buf = await (await fetch(url)).arrayBuffer();
   const decoded = await new OfflineAudioContext(1, SR, SR).decodeAudioData(buf);
   const off = new OfflineAudioContext(1, Math.ceil(Math.min(decoded.duration, 15 * 60) * SR), SR);
@@ -274,6 +275,27 @@ export function duration(): number {
 
 export async function loadLibrary(): Promise<void> {
   player.set({ library: await api.library.get() });
+  kickWords();
+}
+
+/** Пословный текст: очередь песен в фоне. Готово для играющей — сразу обновить текст. */
+export function startWordSync(): () => void {
+  initWordSync({
+    tracks: () => player.get().library.tracks,
+    current: currentTrack,
+    ready: (id) => {
+      if (currentTrack()?.id === id) void loadLyrics();
+    },
+    pcm: songPcm,
+    sr: SR,
+    resetSync: (id) => {
+      const st = app.get().settings;
+      if (st.lyricsSync[id] || st.lyricsOffsets[id]) resetLyricsSync(id);
+    },
+  });
+  return api.on("wordsync-changed", (id) => {
+    if (currentTrack()?.id === id) void loadLyrics();
+  });
 }
 
 export function watchLibrary(): () => void {
@@ -351,6 +373,7 @@ async function startCurrent(fade = 0): Promise<void> {
   }
   void updateMediaSession(t);
   void loadLyrics();
+  kickWords();
   void loadCoverPalette(t.cover).then(prefetchNeighbors);
 }
 
@@ -485,8 +508,10 @@ export async function loadLyrics(): Promise<void> {
     });
     // Текст без отметок времени — расставляем строки по песне примерно: так работают «Взрыв», «Строка» и поверх-окно.
     const dur = meta.duration || engine.el.duration;
+    // своя пословная разметка (Камадо расслышал песню сам) — точнее всего остального
+    const timed = t && app.get().settings.wordSync ? withWords(lyrics, await api.wordsync.get(t.id).catch(() => null)) : undefined;
     const ready: Lyrics =
-      !lyrics.synced && lyrics.lines.length && dur > 0 ? { ...lyrics, synced: true, approx: true, lines: approximateTimes(lyrics.lines, dur) } : lyrics;
+      timed ?? (!lyrics.synced && lyrics.lines.length && dur > 0 ? { ...lyrics, synced: true, approx: true, lines: approximateTimes(lyrics.lines, dur) } : lyrics);
     if (id === lyricsReq) {
       player.set({ lyrics: ready, lyricsLoading: false });
       void maybeAutoEar(ready, dur);
@@ -525,7 +550,7 @@ async function paletteFor(cover: string): Promise<Palette> {
 async function maybeAutoEar(l: Lyrics, dur: number): Promise<void> {
   const t = currentTrack();
   const st = app.get().settings;
-  if (!t || !st.lyricsByEar || st.lyricsSync[t.id] || st.lyricsOffsets[t.id]) return;
+  if (!t || !st.lyricsByEar || l.wordTimed || st.lyricsSync[t.id] || st.lyricsOffsets[t.id]) return;
   const off = l.approx || (!l.scaled && !!l.versionDuration && dur > 0 && Math.abs(l.versionDuration - dur) > 1.5);
   if (!off) return;
   if (!(await api.ai.status()).enabled) return;
