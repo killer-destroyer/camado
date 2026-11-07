@@ -55,13 +55,14 @@ export function Grow() {
       <header className="screen-head">
         <h1 className="display">Прокачка</h1>
         <Segmented<GrowTab>
+          size="sm"
           value={s.tab}
           onChange={(tab) => grow.set({ tab })}
           options={[
             ...COURSES.map((c) => ({ value: c.id as GrowTab, label: c.name })),
             { value: "problems", label: "Задачник" },
             { value: "library", label: "Библиотека" },
-            { value: "syllabus", label: "Программа курса" },
+            { value: "syllabus", label: "Программа", title: "Программа курса: темы предмета и подготовка" },
             { value: "review", label: "Проверь код" },
           ]}
         />
@@ -787,9 +788,20 @@ function ProblemsView() {
   );
 }
 
+
+/** Окно закрывается по Esc. */
+function useEscape(onClose: () => void): void {
+  useEffect(() => {
+    const k = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [onClose]);
+}
+
 // ---------- Итоговый тест модуля ----------
 
 function ModuleExam({ courseId, module, onClose }: { courseId: CourseId; module: string; onClose: () => void }) {
+  useEscape(onClose);
   const course = courseById(courseId)!;
   const key = `${courseId}:${module}`;
   const qs = useMemo(() => {
@@ -855,6 +867,7 @@ function ModuleExam({ courseId, module, onClose }: { courseId: CourseId; module:
 // ---------- Разминка дня ----------
 
 function WarmupModal({ onClose }: { onClose: () => void }) {
+  useEscape(onClose);
   const p = useStore(grow, (x) => x.progress);
   const qs = useMemo(() => warmupQuestions(p), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [i, setI] = useState(0);

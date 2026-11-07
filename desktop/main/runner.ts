@@ -45,6 +45,8 @@ function exec(cmd: string, args: string[], opts: { input?: string; cwd?: string;
         });
       },
     );
+    // программа может завершиться, не дочитав ввод (EPIPE) — это не ошибка Камадо
+    child.stdin?.on("error", () => undefined);
     child.stdin?.end(opts.input ?? "");
   });
 }

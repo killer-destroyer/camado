@@ -44,11 +44,14 @@ describe("1.0.9", () => {
   });
 
   it("разбор урока: вопросы, задача, тесты, карточки", () => {
-    const c = parseCourse("python", "Python", "python", `# P\nО курсе.\n\n## t-1 | Урок\nГайд\n\n\`\`\`python\n- не вариант\n\`\`\`\n\n?? Вопрос?\n- нет\n+ да\n= потому что\n\n!! Сложи\n<<<\na = 1\n<<<\nin: 1 2\nout: 3\nhint: подсказка\n===\nprint(3)\n===\ncard: В :: О\\nдва\n`);
+    const c = parseCourse("python", "Python", "python", `# P\nО курсе.\n\n## t-1 | Урок\nГайд\n\n\`\`\`python\n- не вариант\n\`\`\`\n\n?? Вопрос?\n- нет\n+ да\n= потому что\n\n!! Сложи\n<<<\na = 1\n<<<\nin: 1 2\nout: 3\nhint: подсказка\n===\nprint(3)\n===\n!! {3} Посложнее\nin: 5\nout: 5\nhint: h\n===\nprint(5)\n===\ncard: В :: О\\nдва\n\n### Модуль: Второй\n\n## t-2 | Ещё\nГайд 2\n`);
     const l = c.lessons[0]!;
     expect(l.guide).toContain("- не вариант"); // строка внутри кода — не вариант ответа
     expect(l.quiz).toEqual([{ q: "Вопрос?", options: ["нет", "да"], answer: 1, why: "потому что" }]);
-    expect(l.task).toMatchObject({ text: "Сложи", starter: "a = 1", tests: [{ input: "1 2", output: "3" }], hints: ["подсказка"], solution: "print(3)" });
+    expect(l.tasks[0]).toMatchObject({ level: 1, text: "Сложи", starter: "a = 1", tests: [{ input: "1 2", output: "3" }], hints: ["подсказка"], solution: "print(3)" });
+    expect(l.tasks[1]).toMatchObject({ level: 3, text: "Посложнее", tests: [{ input: "5", output: "5" }] });
+    expect(l.module).toBe("Основы");
+    expect(c.lessons[1]!.module).toBe("Второй");
     expect(l.cards).toEqual([{ question: "В", answer: "О\nдва" }]);
   });
 });

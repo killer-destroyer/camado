@@ -1,6 +1,8 @@
 // Пульт для ИИ: поиск музыки, действия, подтверждение выключения, нет пульта в пересланном.
 import { describe, expect, it } from "vitest";
 import { buildAppTools, findMusic, type AppAction } from "../desktop/main/appTools.js";
+import { readFileSync } from "node:fs";
+import { parseCourse, type CourseId, type Lesson } from "../desktop/shared/courses/format.js";
 import { DEFAULT_SETTINGS, type AppSettings } from "../desktop/shared/settings.js";
 import type { Track } from "../desktop/shared/types.js";
 import { Camado } from "../src/camado/brain.js";
@@ -9,6 +11,10 @@ import { memoryStore } from "./helpers.js";
 
 const tr = (id: string, title: string, artist: string) => ({ id, title, artist, duration: 100 }) as unknown as Track;
 const tracks = [tr("1", "Адская колыбельная", "ПОШЛАЯ МОЛЛИ"), tr("2", "Самый лучший эмо панк", "ПОШЛАЯ МОЛЛИ"), tr("3", "nuts", "Lil Peep")];
+
+const COURSES = (["python", "java", "cpp", "html"] as CourseId[]).map((id) =>
+  parseCourse(id, id, id === "html" ? "html" : id, readFileSync(new URL(`../desktop/shared/courses/${id}.md`, import.meta.url), "utf8")),
+);
 
 function rig() {
   const acts: AppAction[] = [];
@@ -24,6 +30,7 @@ function rig() {
     act: (a) => acts.push(a),
     showWindow: () => win.push("show"),
     window: (a) => win.push(a),
+    lessons: () => COURSES.flatMap((c) => c.lessons.map((l: Lesson) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
   });
   const run = (name: string, input: unknown) => tools.find((t) => t.name === name)!.run(input);
   return { acts, win, run, get settings() { return settings; } };
@@ -48,6 +55,17 @@ describe("пульт приложения для ИИ", () => {
     await r.run("app_open", { screen: "plan" });
     expect(r.acts.at(-1)).toEqual({ type: "screen", screen: "plan", nowPlaying: undefined });
     expect(r.win).toContain("show");
+  });
+
+  it("открывает урок «Прокачки» по словам и разминку", async () => {
+    const r = rig();
+    expect(await r.run("app_learn", { tab: "python", lesson: "словари" })).toMatch(/Открыл урок/);
+    const a = r.acts.at(-1) as Extract<AppAction, { type: "grow" }>;
+    expect(a.tab).toBe("python");
+    expect(COURSES.find((c) => c.id === "python")!.lessons.find((l: Lesson) => l.id === a.lesson)!.title).toMatch(/[Сс]ловар/);
+    expect(await r.run("app_learn", { tab: "cpp", lesson: "квантовая гравитация" })).toMatch(/не нашёл/);
+    await r.run("app_learn", { tab: "problems", then: "warmup" });
+    expect(r.acts.at(-1)).toEqual({ type: "grow", tab: "problems", lesson: undefined, modal: "warmup" });
   });
 
   it("выключить — только с подтверждением", async () => {

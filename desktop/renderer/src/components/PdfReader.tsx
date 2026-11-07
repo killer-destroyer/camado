@@ -1,6 +1,7 @@
 // Читалка PDF прямо в Камадо: страницы рисуются по мере прокрутки, можно выделять текст,
 // Камадо помнит, где остановился, и открывает на этом месте.
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, MessageCircleQuestion, Minus, Plus, X } from "lucide-react";
 import * as pdfjs from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -127,7 +128,8 @@ export function PdfReader({ book, onClose, onAsk }: { book: Book; onClose: () =>
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
-  return (
+  // поверх всего окна: внутри экрана fixed-слой «привязался» бы к анимированному контейнеру
+  return createPortal(
     <div className="pdf-back">
       <div className="pdf-bar glass">
         <b className="pdf-title" title={book.title}>
@@ -165,6 +167,7 @@ export function PdfReader({ book, onClose, onAsk }: { book: Book; onClose: () =>
             <div key={`${i + 1}:${zoom}`} className="pdf-page-box" data-page={i + 1} style={{ width: `min(${Math.round(900 * zoom)}px, ${Math.round(94 * zoom)}%)`, aspectRatio: `1 / ${ratio}` }} />
           ))}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

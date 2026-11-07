@@ -57,7 +57,8 @@ type AiAction =
   | { type: "play"; trackIds: string[]; index: number; shuffle?: boolean }
   | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
   | { type: "focus"; action: "start" | "pause" | "reset" }
-  | { type: "screensaver"; on: boolean };
+  | { type: "screensaver"; on: boolean }
+  | { type: "grow"; tab: string; lesson?: string; modal?: string };
 
 function aiAction(a: AiAction): void {
   if (a.type === "screen") {
@@ -78,6 +79,9 @@ function aiAction(a: AiAction): void {
     if (a.action === "start") startFocus();
     else if (a.action === "pause") pauseFocus();
     else resetFocus();
+  } else if (a.type === "grow") {
+    go("grow");
+    grow.set((g) => ({ tab: a.tab as GrowTab, open: a.lesson ? { ...g.open, [a.tab]: a.lesson } : g.open, task: a.lesson ? 0 : g.task, modal: a.modal }));
   } else if (a.on) startScreensaver();
   else stopScreensaver();
 }

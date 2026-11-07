@@ -133,7 +133,12 @@ export function booksHandlers(deps: { store: Store; dataDir: string; dialog: Dia
       const i = list.findIndex((x) => x.id === clean.id);
       // файл можно только сохранить прежний — путь не задаётся из окна
       if (i >= 0) list[i] = { ...clean, file: list[i]!.file };
-      else list.push({ ...clean, file: undefined });
+      else {
+        // та же ссылка уже есть — не заводим вторую книгу
+        const same = clean.url ? list.find((x) => x.url?.toLowerCase() === clean.url!.toLowerCase()) : undefined;
+        if (same) return same;
+        list.push({ ...clean, file: undefined });
+      }
       save(list);
       return clean;
     },

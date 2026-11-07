@@ -44,6 +44,7 @@ import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
 import { growHandlers } from "./grow.js";
+import { COURSES } from "../shared/courses/index.js";
 import { bookFilePath, booksHandlers } from "./books.js";
 import { serveFile } from "./media.js";
 
@@ -1001,6 +1002,7 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
 // Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
 core.camado.setAppTools(
   buildAppTools({
+    lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
     tracks: () => library.view().tracks,
     playlists: () => store.listPlaylists(),
     favorites: () => store.listFavorites(),

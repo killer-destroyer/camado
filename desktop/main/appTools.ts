@@ -24,6 +24,8 @@ export interface AppToolDeps {
   act(action: AppAction): void;
   showWindow(): void;
   window(action: "hide" | "minimize" | "fullscreen" | "windowed" | "quit" | "restart"): void;
+  /** Уроки «Прокачки» — чтобы открыть нужный по словам. */
+  lessons?(): { course: string; id: string; title: string; module: string }[];
 }
 
 export type AppAction =
@@ -31,7 +33,8 @@ export type AppAction =
   | { type: "play"; trackIds: string[]; index: number; shuffle?: boolean }
   | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
   | { type: "focus"; action: "start" | "pause" | "reset" }
-  | { type: "screensaver"; on: boolean };
+  | { type: "screensaver"; on: boolean }
+  | { type: "grow"; tab: string; lesson?: string; modal?: string };
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -64,6 +67,34 @@ export function findMusic(query: string, tracks: Track[], playlists: Playlist[],
 
 export function buildAppTools(d: AppToolDeps): ToolDef[] {
   return [
+    defineTool({
+      name: "app_learn",
+      description:
+        "«Прокачка»: открыть курс (python, java, cpp, html), урок по словам («указатели», «словари»), задачник, библиотеку книг, " +
+        "программу курса, проверку кода, разминку дня или повторение карточек.",
+      schema: z.object({
+        tab: z.enum(["python", "java", "cpp", "html", "problems", "library", "syllabus", "review"]),
+        lesson: z.string().optional().describe("Тема урока своими словами, если нужно открыть конкретный урок"),
+        then: z.enum(["warmup", "review"]).optional().describe("Сразу открыть разминку дня или повторение карточек"),
+      }),
+      run: (i) => {
+        let lesson: { id: string; title: string } | undefined;
+        if (i.lesson && d.lessons) {
+          const words = norm(i.lesson).split(" ").filter((w) => w.length >= 3);
+          const pool = d.lessons().filter((l) => l.course === i.tab);
+          const score = (l: { title: string; module: string }) => {
+            const hay = norm(`${l.title} ${l.module}`);
+            return words.filter((w) => hay.includes(w.slice(0, Math.max(3, w.length - 2)))).length;
+          };
+          const best = pool.map((l) => ({ l, s: score(l) })).sort((a, b) => b.s - a.s)[0];
+          if (best && best.s > 0) lesson = best.l;
+        }
+        d.showWindow();
+        d.act({ type: "grow", tab: i.tab, lesson: lesson?.id, modal: i.then });
+        if (i.lesson && !lesson) return `Открыл «Прокачку» (${i.tab}), но урок про «${i.lesson}» не нашёл — открыл курс.`;
+        return lesson ? `Открыл урок «${lesson.title}».` : `Открыл «Прокачку» → ${i.tab}.`;
+      },
+    }),
     defineTool({
       name: "app_open",
       description: "Открыть окно Камадо на нужном экране (сегодня, задания, план, сессия, заметки, ссылки, прокачка — курсы программирования и программа курса, музыка, фокус, чат, настройки) или плеер «Сейчас играет».",

@@ -93,7 +93,7 @@ function Blocks({ text, prefix }: { text: string; prefix: string }) {
                   </Fragment>
                 ))}
               </p>
-              {ordered ? <ol>{lis}</ol> : <ul>{lis}</ul>}
+              {ordered ? <ol start={Number(/^\s*(\d+)/.exec(items[0]!)?.[1] ?? 1)}>{lis}</ol> : <ul>{lis}</ul>}
             </Fragment>
           );
         }
@@ -101,7 +101,13 @@ function Blocks({ text, prefix }: { text: string; prefix: string }) {
         if (lines.every(isItem)) {
           const ordered = /^\s*\d/.test(lines[0]!);
           const items = lines.map((l, li) => <li key={li}>{inline(l.replace(/^\s*([-*•]|\d+[.)])\s+/, ""), `${bi}-${li}`)}</li>);
-          return ordered ? <ol key={bi}>{items}</ol> : <ul key={bi}>{items}</ul>;
+          return ordered ? (
+            <ol key={bi} start={Number(/^\s*(\d+)/.exec(lines[0]!)?.[1] ?? 1)}>
+              {items}
+            </ol>
+          ) : (
+            <ul key={bi}>{items}</ul>
+          );
         }
         if (/^#{1,3}\s/.test(lines[0]!)) {
           return (

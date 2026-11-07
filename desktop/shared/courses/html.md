@@ -1,6 +1,8 @@
 # HTML и CSS
 
-HTML — из чего состоит страница (заголовки, текст, ссылки, формы), CSS — как она выглядит (цвета, отступы, раскладка). Это основа любого сайта и веб-приложения, и результат видно сразу: справа от кода — живой просмотр. 12 уроков: от первой страницы до flexbox, grid и адаптивной вёрстки.
+HTML — из чего состоит страница (заголовки, текст, ссылки, формы), CSS — как она выглядит (цвета, отступы, раскладка). Это основа любого сайта и веб-приложения, и результат видно сразу: справа от кода — живой просмотр. 18 уроков в 4 модулях: разметка, медиа и доступность; CSS (селекторы, блочная модель, позиционирование, псевдоклассы); раскладка (flex, grid, адаптив, анимации) и два проекта — лендинг и резюме-портфолио.
+
+### Модуль: Основы HTML
 
 ## html-01 | Первая страница: теги и структура
 HTML состоит из **тегов**: открывающий `<p>`, закрывающий `</p>`, между ними содержимое. Вместе это **элемент**.
@@ -82,6 +84,36 @@ hint: В body: `<h1>Имя</h1>` и два `<p>…</p>`.
 </body>
 </html>
 ===
+!! {2} Сделай страницу «Рецепт»: заголовок h1 с названием блюда, h2 «Ингредиенты» и h2 «Приготовление», под каждым — абзац, горизонтальная линия `hr` между разделами и комментарий в коде.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Рецепт</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: h1 | Нужен заголовок h1 с названием блюда
+check: h2 >= 2 | Нужно два подзаголовка h2
+check: hr | Раздели разделы линией hr
+check: p >= 2 | Под каждым разделом — абзац p
+hint: `<hr>` — пустой тег, его не закрывают. Комментарий: `<!-- текст -->`.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Рецепт</title></head>
+<body>
+  <!-- рецепт сырников -->
+  <h1>Сырники</h1>
+  <h2>Ингредиенты</h2>
+  <p>Творог, яйцо, мука, сахар.</p>
+  <hr>
+  <h2>Приготовление</h2>
+  <p>Смешать, сформировать, обжарить с двух сторон.</p>
+</body>
+</html>
+===
 card: Чем `<title>` отличается от `<h1>`? :: title — название вкладки (в head), h1 — главный заголовок на самой странице (в body).
 card: Какие теги не нужно закрывать? :: Пустые: `<br>`, `<img>`, `<meta>`, `<hr>`, `<input>`.
 
@@ -158,6 +190,37 @@ hint: Внутри пункта: `<li>Сдать <strong>лабу по C++</stro
 </body>
 </html>
 ===
+!! {2} Список покупок с вложенным списком: маркированный список отделов (3+), в двух из них — вложенные списки товаров. Самый нужный товар выдели `mark`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Покупки</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: ul > li >= 3 | Нужно 3 отдела в списке
+check: li ul >= 2 | В двух отделах — вложенные списки
+check: mark | Выдели товар тегом mark
+hint: Вложенный список кладут внутрь пункта: `<li>Молочка<ul><li>Кефир</li></ul></li>`.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Покупки</title></head>
+<body>
+  <ul>
+    <li>Молочка
+      <ul><li>Кефир</li><li><mark>Творог</mark></li></ul>
+    </li>
+    <li>Овощи
+      <ul><li>Огурцы</li><li>Помидоры</li></ul>
+    </li>
+    <li>Хлеб</li>
+  </ul>
+</body>
+</html>
+===
 card: Чем ul отличается от ol? :: ul — маркированный список (точки), ol — нумерованный. Пункты в обоих — li.
 card: Что будет с несколькими пробелами и переносами строк в HTML-тексте? :: Схлопнутся в один пробел.
 
@@ -226,6 +289,36 @@ hint: `<h2 id="top">…</h2>` и ниже `<a href="#top">наверх</a>`.
   <p>Wikipedia — свободная энциклопедия, где есть почти всё.</p>
   <a href="https://ru.wikipedia.org" target="_blank" rel="noopener">Открыть Википедию</a>
   <a href="#top">Наверх</a>
+</body>
+</html>
+===
+!! {2} Навигационное меню: список из 4 ссылок, одна ведёт на почту (`mailto:`), одна — на телефон (`tel:`), и картинка-ссылка (img внутри a) с alt.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Контакты</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: li a >= 4 | Нужно 4 ссылки в пунктах списка
+check: a[href^="mailto:"] | Ссылка на почту: href="mailto:…"
+check: a[href^="tel:"] | Ссылка на телефон: href="tel:…"
+check: a img[alt] | Картинка-ссылка: img с alt внутри a
+hint: Телефон: `<a href="tel:+79990000000">Позвонить</a>`.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Контакты</title></head>
+<body>
+  <ul>
+    <li><a href="#about">Обо мне</a></li>
+    <li><a href="mailto:me@example.com">Написать</a></li>
+    <li><a href="tel:+79990000000">Позвонить</a></li>
+    <li><a href="https://github.com" target="_blank" rel="noopener">GitHub</a></li>
+  </ul>
+  <a href="https://github.com"><img src="https://picsum.photos/80" alt="Аватар"></a>
 </body>
 </html>
 ===
@@ -301,6 +394,43 @@ hint: Последняя строка: `<tr><td colspan="3">Выходные</td
       <tr><td>Ср</td><td>13:30</td><td>Программирование</td></tr>
       <tr><td colspan="3">Выходные</td></tr>
     </tbody>
+  </table>
+</body>
+</html>
+===
+!! {3} Таблица успеваемости с объединением: заголовок «Предмет» на 2 строки (rowspan), «Оценки» на 2 столбца (colspan) с подзаголовками «Модуль 1» и «Модуль 2», и 3 строки предметов. Внизу — tfoot со строкой «Итого».
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Оценки</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: th[rowspan="2"] | «Предмет» — на две строки: rowspan="2"
+check: th[colspan="2"] | «Оценки» — на два столбца: colspan="2"
+check: tbody tr >= 3 | Нужно 3 строки предметов
+check: tfoot | Добавь итоговую строку в tfoot
+hint: В thead две строки: первая — Предмет (rowspan) и Оценки (colspan), вторая — Модуль 1 и Модуль 2.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Оценки</title></head>
+<body>
+  <table border="1">
+    <thead>
+      <tr><th rowspan="2">Предмет</th><th colspan="2">Оценки</th></tr>
+      <tr><th>Модуль 1</th><th>Модуль 2</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Матанализ</td><td>4</td><td>5</td></tr>
+      <tr><td>Алгоритмы</td><td>5</td><td>5</td></tr>
+      <tr><td>Физика</td><td>3</td><td>4</td></tr>
+    </tbody>
+    <tfoot>
+      <tr><td>Итого</td><td>4</td><td>4.7</td></tr>
+    </tfoot>
   </table>
 </body>
 </html>
@@ -392,6 +522,39 @@ hint: Радиокнопки: `<label><input type="radio" name="form" value="ful
     <label><input type="radio" name="mode" value="full" checked> Очно</label>
     <label><input type="radio" name="mode" value="part"> Заочно</label>
     <button type="submit">Зарегистрироваться</button>
+  </form>
+</body>
+</html>
+===
+!! {2} Форма поиска: поле `type="search"` с placeholder, выбор даты (`type="date"`), чекбокс «только бесплатные», ползунок `type="range"` от 0 до 100 и кнопка. Поле поиска — обязательное.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Поиск</title></head>
+<body>
+  <form>
+
+  </form>
+</body>
+</html>
+<<<
+check: input[type="search"][required][placeholder] | Поиск: type="search", required и placeholder
+check: input[type="date"] | Нужен выбор даты
+check: input[type="checkbox"] | Нужен чекбокс
+check: input[type="range"][min="0"][max="100"] | Ползунок: type="range" min="0" max="100"
+check: button | Нужна кнопка
+hint: `<input type="range" min="0" max="100" value="50">`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Поиск</title></head>
+<body>
+  <form>
+    <input type="search" name="q" placeholder="Что ищем?" required>
+    <input type="date" name="from">
+    <label><input type="checkbox" name="free"> только бесплатные</label>
+    <input type="range" name="price" min="0" max="100" value="50">
+    <button>Найти</button>
   </form>
 </body>
 </html>
@@ -488,8 +651,333 @@ hint: Структура: header (h1 + nav) → main (article, article, aside) �
 </body>
 </html>
 ===
+!! {2} Страница статьи: article с header (h1 и `time` с атрибутом datetime), двумя section с h2, цитатой blockquote и footer статьи с автором.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Статья</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: article header h1 | В шапке статьи — h1
+check: time[datetime] | Дата публикации: time с datetime
+check: article section h2 >= 2 | Две секции с заголовками h2
+check: blockquote | Добавь цитату blockquote
+check: article footer | У статьи — свой footer
+hint: `<time datetime="2026-11-07">7 ноября</time>`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Статья</title></head>
+<body>
+  <article>
+    <header>
+      <h1>Как я выучил Python</h1>
+      <time datetime="2026-11-07">7 ноября 2026</time>
+    </header>
+    <section>
+      <h2>С чего начал</h2>
+      <p>Каждый день по уроку.</p>
+      <blockquote>Повторение — мать учения.</blockquote>
+    </section>
+    <section>
+      <h2>Что помогло</h2>
+      <p>Задачи и карточки.</p>
+    </section>
+    <footer>Автор: Миша</footer>
+  </article>
+</body>
+</html>
+===
 card: Зачем семантические теги вместо div? :: Поисковики и экранные дикторы понимают структуру, код читается легче.
 card: Чем article отличается от section? :: article — самостоятельный материал (пост, карточка), section — смысловой раздел внутри чего-то.
+
+## html-15 | Картинки и медиа: figure, picture, video, object-fit
+Картинка с подписью — `figure` и `figcaption`:
+
+```html
+<figure>
+  <img src="graph.png" alt="График функции sin x">
+  <figcaption>Рис. 1. График синуса</figcaption>
+</figure>
+```
+
+Разные картинки для разных экранов — `picture`:
+
+```html
+<picture>
+  <source media="(max-width: 600px)" srcset="small.jpg">
+  <img src="big.jpg" alt="Пейзаж">
+</picture>
+```
+
+`loading="lazy"` — картинка загрузится, только когда до неё доскроллят.
+
+Видео и звук: `<video src="lesson.mp4" controls poster="preview.jpg"></video>`, `<audio controls src="song.mp3"></audio>`.
+
+Обрезка под рамку без искажений — `object-fit: cover` (заполнить, лишнее обрезать) или `contain` (вписать целиком). `aspect-ratio: 16 / 9` — держать пропорции.
+
+?? Что делает `object-fit: cover`?
++ заполняет рамку картинкой без искажения, обрезая лишнее
+- растягивает с искажением
+- вписывает целиком с полями
+- делает картинку фоном
+= contain — вписать целиком, оставив поля.
+
+?? Зачем `loading="lazy"`?
++ откладывает загрузку картинки, пока она не понадобится — страница грузится быстрее
+- делает картинку медленнее
+- для анимации
+- для SEO
+= Особенно полезно для длинных галерей.
+
+!! {1} Картинка с подписью: `figure` с `img` (alt и loading="lazy") и `figcaption`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Рисунок</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: figure img[alt] | Внутри figure — img с alt
+check: img[loading="lazy"] | Отложенная загрузка: loading="lazy"
+check: figure figcaption | Подпись figcaption
+hint: `<figure><img src="https://picsum.photos/400/250" alt="…" loading="lazy"><figcaption>…</figcaption></figure>`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Рисунок</title></head>
+<body>
+  <figure>
+    <img src="https://picsum.photos/400/250" alt="Случайная фотография природы" loading="lazy">
+    <figcaption>Рис. 1. Природа</figcaption>
+  </figure>
+</body>
+</html>
+===
+!! {2} Галерея квадратных превью: 4 картинки в контейнере `.grid` (grid, 2+ столбца), у картинок `aspect-ratio: 1` и `object-fit: cover`, ширина 100%.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Галерея</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <img src="https://picsum.photos/400/200" alt="Фото 1">
+    <img src="https://picsum.photos/200/400" alt="Фото 2">
+    <img src="https://picsum.photos/300/300" alt="Фото 3">
+    <img src="https://picsum.photos/500/250" alt="Фото 4">
+  </div>
+</body>
+</html>
+<<<
+check: css:aspect-ratio | Квадрат: aspect-ratio: 1
+check: css:object-fit\s*:\s*cover | Без искажений: object-fit: cover
+check: css:display\s*:\s*grid | Контейнер — grid
+check: img[alt] >= 4 | У всех картинок alt
+hint: `.grid img { width: 100%; aspect-ratio: 1; object-fit: cover; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Галерея</title>
+  <style>
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; max-width: 420px; }
+    .grid img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
+  </style>
+</head>
+<body>
+  <div class="grid">
+    <img src="https://picsum.photos/400/200" alt="Фото 1">
+    <img src="https://picsum.photos/200/400" alt="Фото 2">
+    <img src="https://picsum.photos/300/300" alt="Фото 3">
+    <img src="https://picsum.photos/500/250" alt="Фото 4">
+  </div>
+</body>
+</html>
+===
+!! {3} Блок урока с видео: `video` с controls и poster, под ним `picture` с `source` для узких экранов (media max-width) и запасным `img`, всё в `figure` с подписью.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Видеоурок</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: video[controls][poster] | Видео с controls и poster
+check: picture source[media] | В picture — source с media
+check: picture img[alt] | Запасная картинка img с alt
+check: figure figcaption | Подпись в figure
+hint: `<picture><source media="(max-width: 600px)" srcset="…"><img src="…" alt="…"></picture>`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Видеоурок</title></head>
+<body>
+  <figure>
+    <video controls poster="https://picsum.photos/640/360" width="640"></video>
+    <picture>
+      <source media="(max-width: 600px)" srcset="https://picsum.photos/300/200">
+      <img src="https://picsum.photos/640/200" alt="Схема из урока">
+    </picture>
+    <figcaption>Урок 1. Введение</figcaption>
+  </figure>
+</body>
+</html>
+===
+card: Для чего figure и figcaption? :: Картинка (или код, график) с подписью как единое целое.
+card: Чем object-fit: cover отличается от contain? :: cover заполняет рамку, обрезая лишнее; contain вписывает целиком, оставляя поля.
+
+## html-16 | Доступность (a11y)
+Сайтом пользуются люди с экранными дикторами, только клавиатурой, с плохим зрением. Базовые правила:
+
+- у картинок — осмысленный `alt` (декоративные — `alt=""`)
+- у полей — `label`; у кнопок-иконок — `aria-label="Закрыть"`
+- кнопки — это `<button>`, ссылки — `<a href>`; не делай кликабельные `div`
+- заголовки по порядку h1 → h2 → h3, без пропусков
+- `lang="ru"` у html — диктор выберет правильный язык
+- видимый фокус: не убирай `outline` без замены (`:focus-visible`)
+- контраст текста и фона — минимум 4.5:1
+- ссылка «пропустить меню» в начале — `<a href="#main" class="skip">К содержимому</a>`
+
+`aria-*` — подсказки для дикторов: `aria-label`, `aria-hidden="true"` (скрыть декор), `aria-live="polite"` (объявлять изменения), `role="alert"`.
+
+?? Что не так с `<div onclick="...">Купить</div>`?
++ с клавиатуры до него не добраться, и диктор не скажет, что это кнопка
+- ничего
+- div не умеет onclick
+- он медленный
+= Используй `<button>` — фокус и Enter работают сами.
+
+?? Какой alt у чисто декоративной картинки?
++ пустой: alt=""
+- alt="картинка"
+- без alt
+- alt="decor"
+= Пустой alt говорит диктору «пропусти».
+
+!! {1} Исправь доступность: у html есть lang, у картинки — alt, у поля — label, кнопка-иконка с `aria-label`.
+<<<
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>Поиск</title></head>
+<body>
+  <img src="https://picsum.photos/120/40">
+  <input id="q" type="search">
+  <button>🔍</button>
+</body>
+</html>
+<<<
+check: html[lang] | Укажи язык страницы: lang у html
+check: img[alt] | Добавь alt картинке
+check: label[for="q"] | Подпиши поле: label for="q"
+check: button[aria-label] | Кнопке-иконке — aria-label
+hint: `<button aria-label="Найти">🔍</button>`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Поиск</title></head>
+<body>
+  <img src="https://picsum.photos/120/40" alt="Логотип сайта">
+  <label for="q">Поиск по курсам</label>
+  <input id="q" type="search">
+  <button aria-label="Найти">🔍</button>
+</body>
+</html>
+===
+!! {2} Ссылка «к содержимому» и видимый фокус: первая ссылка страницы `.skip` ведёт на `#main`, видна только при фокусе (сдвинута за экран, а в `:focus` возвращается); у ссылок и кнопок — заметный `:focus-visible` (outline).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Навигация</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <nav><a href="#">Курсы</a> <a href="#">План</a></nav>
+  <main id="main"><h1>Главное</h1></main>
+</body>
+</html>
+<<<
+check: a.skip[href="#main"] | Ссылка .skip на #main
+check: body > a.skip:first-child | Сделай её первым элементом body
+check: css:\.skip:focus | Показывай .skip при фокусе: .skip:focus
+check: css::focus-visible[^{]*\{[^}]*outline | Видимый фокус: :focus-visible с outline
+hint: `.skip { position: absolute; left: -999px; } .skip:focus { left: 10px; top: 10px; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Навигация</title>
+  <style>
+    .skip { position: absolute; left: -999px; top: 10px; background: white; padding: 6px 10px; }
+    .skip:focus { left: 10px; }
+    a:focus-visible, button:focus-visible { outline: 3px solid #6c5ce7; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">К содержимому</a>
+  <nav><a href="#">Курсы</a> <a href="#">План</a></nav>
+  <main id="main"><h1>Главное</h1></main>
+</body>
+</html>
+===
+!! {3} Уведомление для дикторов: блок `.status` с `aria-live="polite"`, декоративная иконка с `aria-hidden="true"`, ошибка формы — с `role="alert"`, а поле связано с текстом ошибки через `aria-describedby`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Отправка</title></head>
+<body>
+  <form>
+    <label for="mail">Почта</label>
+    <input id="mail" type="email">
+    <p id="err">Почта без @</p>
+    <button>Отправить</button>
+  </form>
+  <div class="status"><span>✓</span> Сохранено</div>
+</body>
+</html>
+<<<
+check: .status[aria-live="polite"] | Статус объявляй: aria-live="polite"
+check: span[aria-hidden="true"] | Скрой декоративную иконку: aria-hidden="true"
+check: [role="alert"] | Ошибке — role="alert"
+check: input[aria-describedby="err"] | Свяжи поле с ошибкой: aria-describedby="err"
+hint: Атрибуты добавляются к уже существующим элементам — разметку менять почти не нужно.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Отправка</title></head>
+<body>
+  <form>
+    <label for="mail">Почта</label>
+    <input id="mail" type="email" aria-describedby="err">
+    <p id="err" role="alert">Почта без @</p>
+    <button>Отправить</button>
+  </form>
+  <div class="status" aria-live="polite"><span aria-hidden="true">✓</span> Сохранено</div>
+</body>
+</html>
+===
+card: Почему кнопка должна быть <button>, а не <div>? :: button сам получает фокус с клавиатуры, нажимается Enter/пробелом и объявляется диктором как кнопка.
+card: Что делает aria-live="polite"? :: Экранный диктор вслух объявит изменение содержимого блока, когда освободится.
+
+### Модуль: CSS
 
 ## html-07 | CSS: селекторы, цвета, шрифты
 CSS задаёт внешний вид. Подключают в `<head>` через `<style>` или файлом `<link rel="stylesheet" href="style.css">`.
@@ -584,8 +1072,221 @@ hint: `.card a { text-decoration: none; } .card a:hover { color: tomato; }`
 </body>
 </html>
 ===
+!! {2} Зебра-таблица и подсветка: в списке из 5 пунктов каждый чётный пункт с другим фоном (`:nth-child(even)`), первый пункт жирный (`:first-child`), при наведении пункт меняет цвет.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Зебра</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <ul class="list">
+    <li>Пн</li><li>Вт</li><li>Ср</li><li>Чт</li><li>Пт</li>
+  </ul>
+</body>
+</html>
+<<<
+check: css::nth-child\(even\) | Покрась чётные пункты: :nth-child(even)
+check: css::first-child | Выдели первый пункт: :first-child
+check: css:li:hover | Подсветка при наведении: li:hover
+hint: `.list li:nth-child(even) { background: #eee; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Зебра</title>
+  <style>
+    .list li:nth-child(even) { background: #eef; }
+    .list li:first-child { font-weight: 700; }
+    .list li:hover { color: tomato; }
+  </style>
+</head>
+<body>
+  <ul class="list">
+    <li>Пн</li><li>Вт</li><li>Ср</li><li>Чт</li><li>Пт</li>
+  </ul>
+</body>
+</html>
+===
 card: Как в CSS выбрать элемент по классу и по id? :: Класс — `.имя`, id — `#имя`.
 card: Какое CSS-правило побеждает при конфликте? :: Более конкретное (id > класс > тег), при равной конкретности — последнее.
+
+## html-14 | Псевдоклассы и псевдоэлементы
+**Псевдоклассы** — состояние или положение элемента:
+- `:hover`, `:active`, `:focus`, `:focus-visible` — наведение, нажатие, фокус клавиатурой
+- `:first-child`, `:last-child`, `:nth-child(3n)`, `:not(.done)`
+- `:checked`, `:disabled`, `:invalid` — для полей форм
+
+**Псевдоэлементы** — «виртуальные» части элемента, которые можно оформить:
+- `::before`, `::after` — добавляют содержимое (`content` обязателен!)
+- `::placeholder`, `::selection`, `::first-letter`
+
+```css
+.req::after { content: " *"; color: red; }
+li:not(:last-child) { border-bottom: 1px solid #eee; }
+input:invalid { border-color: red; }
+input:checked + label { text-decoration: line-through; }
+```
+
+`+` — соседний следующий элемент, `~` — все следующие соседи.
+
+?? Что обязательно для `::before`, чтобы он появился?
++ свойство content (хотя бы пустое: content: "")
+- display: block
+- position: absolute
+- ничего
+= Без content псевдоэлемент не создаётся.
+
+?? Что выберет `li:not(:last-child)`?
++ все пункты, кроме последнего
+- только последний
+- все li
+- ничего
+= :not исключает подходящие под условие элементы.
+
+!! {1} В форме у обязательных полей (класс `req` у label) добавь звёздочку через `::after`, а неправильно заполненные поля подсвети через `:invalid`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Форма</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <form>
+    <label class="req" for="e">Почта</label>
+    <input id="e" type="email" required>
+    <label for="n">Ник</label>
+    <input id="n">
+  </form>
+</body>
+</html>
+<<<
+check: css:\.req::after | Звёздочка через .req::after
+check: css:content\s*:\s*["'][^"']*\* | В content должна быть *
+check: css::invalid | Подсветка через :invalid
+hint: `.req::after { content: " *"; color: tomato; } input:invalid { border-color: tomato; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Форма</title>
+  <style>
+    .req::after { content: " *"; color: tomato; }
+    input:invalid { border: 2px solid tomato; }
+  </style>
+</head>
+<body>
+  <form>
+    <label class="req" for="e">Почта</label>
+    <input id="e" type="email" required>
+    <label for="n">Ник</label>
+    <input id="n">
+  </form>
+</body>
+</html>
+===
+!! {2} Список дел без JavaScript: чекбокс и подпись рядом; отмеченное дело зачёркнуто и бледное (`input:checked + label`), между пунктами — линии, кроме последнего (`:not(:last-child)`).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Дела</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <ul class="todo">
+    <li><input type="checkbox" id="t1"><label for="t1">Решить задачу</label></li>
+    <li><input type="checkbox" id="t2" checked><label for="t2">Повторить карточки</label></li>
+    <li><input type="checkbox" id="t3"><label for="t3">Прочитать главу</label></li>
+  </ul>
+</body>
+</html>
+<<<
+check: css::checked\s*\+\s*label | Стиль для отмеченного: input:checked + label
+check: css:line-through | Зачеркни: text-decoration: line-through
+check: css::not\(:last-child\) | Линии между пунктами: li:not(:last-child)
+check: input[type="checkbox"] >= 3 | Оставь три дела
+hint: `.todo input:checked + label { text-decoration: line-through; opacity: .5; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Дела</title>
+  <style>
+    .todo { list-style: none; padding: 0; }
+    .todo li { padding: 8px 0; }
+    .todo li:not(:last-child) { border-bottom: 1px solid #eee; }
+    .todo input:checked + label { text-decoration: line-through; opacity: 0.5; }
+  </style>
+</head>
+<body>
+  <ul class="todo">
+    <li><input type="checkbox" id="t1"><label for="t1">Решить задачу</label></li>
+    <li><input type="checkbox" id="t2" checked><label for="t2">Повторить карточки</label></li>
+    <li><input type="checkbox" id="t3"><label for="t3">Прочитать главу</label></li>
+  </ul>
+</body>
+</html>
+===
+!! {3} Красивая цитата: у `blockquote` огромная открывающая кавычка через `::before` (позиционирована absolute), первая буква абзаца крупная (`::first-letter`), выделение текста — своего цвета (`::selection`).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Цитата</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <blockquote>
+    <p>Программирование — это искусство говорить другому человеку, чего ты хочешь от компьютера.</p>
+  </blockquote>
+</body>
+</html>
+<<<
+check: css:blockquote::before | Кавычка через blockquote::before
+check: css:position\s*:\s*absolute | Кавычку позиционируй absolute
+check: css:::first-letter | Крупная первая буква: ::first-letter
+check: css:::selection | Свой цвет выделения: ::selection
+hint: `blockquote { position: relative; } blockquote::before { content: "“"; position: absolute; left: -10px; top: -20px; font-size: 80px; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Цитата</title>
+  <style>
+    blockquote { position: relative; margin: 40px; font-style: italic; }
+    blockquote::before { content: "“"; position: absolute; left: -30px; top: -30px; font-size: 80px; color: #6c5ce7; }
+    blockquote p::first-letter { font-size: 2em; font-weight: 700; }
+    ::selection { background: #ffd166; }
+  </style>
+</head>
+<body>
+  <blockquote>
+    <p>Программирование — это искусство говорить другому человеку, чего ты хочешь от компьютера.</p>
+  </blockquote>
+</body>
+</html>
+===
+card: Чем псевдокласс отличается от псевдоэлемента? :: Псевдокласс (:hover) — состояние элемента; псевдоэлемент (::before) — отдельная виртуальная часть, которую можно оформить.
+card: Что выбирает `a + b`? :: Элемент b, который идёт сразу после a (соседний).
 
 ## html-08 | Блочная модель: отступы, рамки, размеры
 Каждый элемент — прямоугольник из слоёв: **content → padding → border → margin**.
@@ -675,8 +1376,220 @@ hint: `.wrap { max-width: 600px; margin: 0 auto; } .box { padding: 16px; border:
 </body>
 </html>
 ===
+!! {2} Кнопки трёх размеров: класс `btn` (общие отступы, рамка, скругление, `display: inline-block`) и модификаторы `btn-small`, `btn-big` с разными padding и font-size. Сделай три кнопки-ссылки.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Кнопки</title>
+  <style>
+
+  </style>
+</head>
+<body>
+
+</body>
+</html>
+<<<
+check: a.btn >= 3 | Нужно три ссылки с классом btn
+check: .btn-small | Одна кнопка с классом btn-small
+check: .btn-big | Одна кнопка с классом btn-big
+check: css:display\s*:\s*inline-block | У .btn — display: inline-block
+check: css:\.btn-big\s*\{[^}]*font-size | У .btn-big свой font-size
+hint: Несколько классов через пробел: `<a class="btn btn-big">`.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Кнопки</title>
+  <style>
+    .btn { display: inline-block; padding: 8px 14px; border: 2px solid #6c5ce7; border-radius: 10px; color: #6c5ce7; text-decoration: none; }
+    .btn-small { padding: 4px 8px; font-size: 12px; }
+    .btn-big { padding: 14px 24px; font-size: 20px; }
+  </style>
+</head>
+<body>
+  <a class="btn btn-small" href="#">Мелкая</a>
+  <a class="btn" href="#">Обычная</a>
+  <a class="btn btn-big" href="#">Большая</a>
+</body>
+</html>
+===
 card: Порядок слоёв блочной модели изнутри наружу? :: content → padding → border → margin.
 card: Что делает `box-sizing: border-box`? :: width и height включают padding и border — размеры считать проще.
+
+## html-13 | Позиционирование: relative, absolute, fixed, sticky
+`position` меняет, как элемент встаёт на странице:
+- `static` — обычный поток (по умолчанию)
+- `relative` — сдвиг относительно своего места (`top`, `left`); место в потоке остаётся
+- `absolute` — вынут из потока, координаты — от ближайшего предка с `position` не static
+- `fixed` — приклеен к окну (не уезжает при прокрутке)
+- `sticky` — едет вместе со страницей, пока не упрётся в `top`, потом прилипает
+
+```css
+.card { position: relative; }
+.badge { position: absolute; top: 8px; right: 8px; }  /* в углу карточки */
+.header { position: sticky; top: 0; z-index: 10; }
+.chat-btn { position: fixed; right: 20px; bottom: 20px; }
+```
+
+`z-index` — кто сверху (работает у позиционированных элементов). `inset: 0` — то же, что top/right/bottom/left: 0.
+
+?? Относительно чего встаёт `position: absolute`?
++ относительно ближайшего предка с position, отличным от static
+- относительно окна всегда
+- относительно своего обычного места
+- относительно body всегда
+= Поэтому родителю обычно ставят `position: relative`.
+
+?? Чем sticky отличается от fixed?
++ sticky прилипает, только когда доезжает до порога, и остаётся в пределах родителя
+- ничем
+- sticky не работает в браузерах
+- fixed едет вместе со страницей
+= Классика — липкая шапка таблицы или меню.
+
+!! {1} Карточка с значком «NEW» в правом верхнем углу: у `.card` — position: relative, у `.badge` — absolute с top и right.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Значок</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">NEW</span>
+    <h3>Курс по C++</h3>
+    <p>28 уроков</p>
+  </div>
+</body>
+</html>
+<<<
+check: css:\.card\s*\{[^}]*position\s*:\s*relative | У .card — position: relative
+check: css:\.badge\s*\{[^}]*position\s*:\s*absolute | У .badge — position: absolute
+check: css:\.badge\s*\{[^}]*top | Задай .badge top
+check: css:\.badge\s*\{[^}]*right | Задай .badge right
+hint: `.badge { position: absolute; top: 8px; right: 8px; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Значок</title>
+  <style>
+    .card { position: relative; width: 220px; padding: 16px; border: 1px solid #ddd; border-radius: 12px; }
+    .badge { position: absolute; top: 8px; right: 8px; background: tomato; color: white; font-size: 11px; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <span class="badge">NEW</span>
+    <h3>Курс по C++</h3>
+    <p>28 уроков</p>
+  </div>
+</body>
+</html>
+===
+!! {2} Липкая шапка и плавающая кнопка: header прилипает к верху при прокрутке (`sticky` + `top: 0` + `z-index`), кнопка `.fab` всегда в правом нижнем углу окна (`fixed`).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Липкая шапка</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <header>Камадо</header>
+  <main style="height: 2000px">Длинная страница…</main>
+  <button class="fab">+</button>
+</body>
+</html>
+<<<
+check: css:position\s*:\s*sticky | Шапке — position: sticky
+check: css:top\s*:\s*0 | Прилипание к верху: top: 0
+check: css:z-index | Чтобы шапка была поверх — z-index
+check: css:\.fab\s*\{[^}]*position\s*:\s*fixed | Кнопке — position: fixed
+hint: `header { position: sticky; top: 0; z-index: 10; } .fab { position: fixed; right: 20px; bottom: 20px; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Липкая шапка</title>
+  <style>
+    header { position: sticky; top: 0; z-index: 10; background: #1e1b2e; color: white; padding: 12px; }
+    .fab { position: fixed; right: 20px; bottom: 20px; width: 48px; height: 48px; border-radius: 50%; border: 0; background: #6c5ce7; color: white; font-size: 24px; }
+  </style>
+</head>
+<body>
+  <header>Камадо</header>
+  <main style="height: 2000px">Длинная страница…</main>
+  <button class="fab">+</button>
+</body>
+</html>
+===
+!! {3} Модальное окно поверх страницы: полупрозрачный фон `.overlay` на весь экран (fixed + inset: 0), а окно `.dialog` по центру (flex-центровка или transform: translate(-50%, -50%)).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Модалка</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <p>Страница под модальным окном.</p>
+  <div class="overlay">
+    <div class="dialog">
+      <h3>Удалить урок?</h3>
+      <button>Да</button> <button>Нет</button>
+    </div>
+  </div>
+</body>
+</html>
+<<<
+check: css:\.overlay\s*\{[^}]*position\s*:\s*fixed | Фон — position: fixed
+check: css:inset\s*:\s*0|top\s*:\s*0[^}]*left\s*:\s*0 | Растяни фон: inset: 0
+check: css:rgba\(|rgb\([^)]*/ | Полупрозрачный цвет фона: rgba(…) или rgb(… / …)
+check: css:justify-content\s*:\s*center|translate\(-50%,\s*-50%\) | Отцентрируй окно
+hint: `.overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); display: flex; justify-content: center; align-items: center; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Модалка</title>
+  <style>
+    .overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; }
+    .dialog { background: white; padding: 24px; border-radius: 16px; }
+  </style>
+</head>
+<body>
+  <p>Страница под модальным окном.</p>
+  <div class="overlay">
+    <div class="dialog">
+      <h3>Удалить урок?</h3>
+      <button>Да</button> <button>Нет</button>
+    </div>
+  </div>
+</body>
+</html>
+===
+card: Что нужно, чтобы absolute-элемент встал в углу карточки? :: Карточке — `position: relative`, элементу — `position: absolute; top: …; right: …`.
+card: Как сделать липкую шапку? :: `position: sticky; top: 0; z-index: 10;`
+
+### Модуль: Раскладка и анимации
 
 ## html-09 | Flexbox
 Flex раскладывает элементы **в строку или столбец** и легко выравнивает:
@@ -769,6 +1682,54 @@ hint: `nav { display: flex; gap: 20px; }`
       <a href="#">Профиль</a>
     </nav>
   </header>
+</body>
+</html>
+===
+!! {2} Карточки товаров flex-ом: контейнер `.cards` — flex с переносом и gap; 4 карточки `.card` шириной ~200px (flex: 0 0 200px или width), внутри — колонка (flex-direction: column), кнопка прижата к низу (`margin-top: auto`).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Товары</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <div class="cards">
+    <div class="card"><h3>Чай</h3><p>Зелёный</p><button>Купить</button></div>
+    <div class="card"><h3>Кофе</h3><p>Зерновой, свежая обжарка</p><button>Купить</button></div>
+    <div class="card"><h3>Какао</h3><p>Горячий</p><button>Купить</button></div>
+    <div class="card"><h3>Сок</h3><p>Апельсиновый</p><button>Купить</button></div>
+  </div>
+</body>
+</html>
+<<<
+check: css:flex-wrap\s*:\s*wrap | Разреши перенос: flex-wrap: wrap
+check: css:flex-direction\s*:\s*column | Карточка — колонка: flex-direction: column
+check: css:margin-top\s*:\s*auto | Прижми кнопку вниз: margin-top: auto
+check: css:gap | Расстояние между карточками — gap
+hint: `.card { display: flex; flex-direction: column; } .card button { margin-top: auto; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Товары</title>
+  <style>
+    .cards { display: flex; flex-wrap: wrap; gap: 14px; }
+    .card { flex: 0 0 200px; display: flex; flex-direction: column; padding: 12px; border: 1px solid #ddd; border-radius: 12px; }
+    .card button { margin-top: auto; }
+  </style>
+</head>
+<body>
+  <div class="cards">
+    <div class="card"><h3>Чай</h3><p>Зелёный</p><button>Купить</button></div>
+    <div class="card"><h3>Кофе</h3><p>Зерновой, свежая обжарка</p><button>Купить</button></div>
+    <div class="card"><h3>Какао</h3><p>Горячий</p><button>Купить</button></div>
+    <div class="card"><h3>Сок</h3><p>Апельсиновый</p><button>Купить</button></div>
+  </div>
 </body>
 </html>
 ===
@@ -881,6 +1842,56 @@ hint: `.tile:first-child { grid-column: span 2; }`
 </body>
 </html>
 ===
+!! {3} Раскладка страницы на grid-областях: `.page` с `grid-template-areas` из header, sidebar, main, footer (шапка и подвал на всю ширину), сайдбар 220px.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Раскладка</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>Шапка</header>
+    <aside>Меню</aside>
+    <main>Содержимое</main>
+    <footer>Подвал</footer>
+  </div>
+</body>
+</html>
+<<<
+check: css:grid-template-areas | Задай области: grid-template-areas
+check: css:grid-area | Назначь области элементам: grid-area
+check: css:220px | Сайдбар шириной 220px
+check: css:display\s*:\s*grid | Включи grid
+hint: `grid-template-areas: "head head" "side main" "foot foot"; grid-template-columns: 220px 1fr;`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Раскладка</title>
+  <style>
+    .page { display: grid; grid-template-columns: 220px 1fr; grid-template-areas: "head head" "side main" "foot foot"; gap: 10px; min-height: 300px; }
+    header { grid-area: head; background: #e4e0ff; }
+    aside { grid-area: side; background: #f2f0ff; }
+    main { grid-area: main; }
+    footer { grid-area: foot; background: #e4e0ff; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header>Шапка</header>
+    <aside>Меню</aside>
+    <main>Содержимое</main>
+    <footer>Подвал</footer>
+  </div>
+</body>
+</html>
+===
 card: Что такое fr в grid? :: Доля свободного места: `1fr 2fr` — второй столбец вдвое шире.
 card: Когда flex, а когда grid? :: Flex — раскладка в один ряд/столбец. Grid — двумерная сетка (строки и столбцы).
 
@@ -973,6 +1984,49 @@ hint: `.cols { display: grid; grid-template-columns: repeat(3, 1fr); } @media (m
     <div class="col">Java</div>
     <div class="col">C++</div>
   </div>
+</body>
+</html>
+===
+!! {2} Тёмная тема по настройке системы: светлые цвета по умолчанию, а в `@media (prefers-color-scheme: dark)` — тёмный фон и светлый текст. Цвета — через CSS-переменные.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тема</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <h1>Привет</h1>
+  <p>Эта страница подстраивается под тему системы.</p>
+</body>
+</html>
+<<<
+check: css:prefers-color-scheme\s*:\s*dark | Добавь @media (prefers-color-scheme: dark)
+check: css:--[\w-]+\s*: | Объяви CSS-переменные
+check: css:var\(-- | Используй переменные через var()
+hint: `:root { --bg: #fff; --text: #222; } @media (prefers-color-scheme: dark) { :root { --bg: #111; --text: #eee; } } body { background: var(--bg); color: var(--text); }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тема</title>
+  <style>
+    :root { --bg: #ffffff; --text: #222222; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #111318; --text: #eeeeee; }
+    }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, sans-serif; }
+  </style>
+</head>
+<body>
+  <h1>Привет</h1>
+  <p>Эта страница подстраивается под тему системы.</p>
 </body>
 </html>
 ===
@@ -1077,5 +2131,375 @@ hint: `@keyframes pulse { to { transform: scale(1.4); } } .dot { animation: puls
 </body>
 </html>
 ===
+!! {2} Загрузчик-спиннер: круглый элемент `.spinner` с рамкой (одна сторона другого цвета через border-top-color), бесконечно вращается через `@keyframes` с `transform: rotate(360deg)`. Для тех, кто не любит анимации, — отключи её в `prefers-reduced-motion`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Загрузка</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+</body>
+</html>
+<<<
+check: css:border-radius\s*:\s*50% | Сделай круг: border-radius: 50%
+check: css:border-top-color | Выдели одну сторону: border-top-color
+check: css:rotate\(\s*360deg\s*\) | Поворот до 360deg в @keyframes
+check: css:infinite | Бесконечная анимация: infinite
+check: css:prefers-reduced-motion | Уважай настройку prefers-reduced-motion
+hint: `@keyframes spin { to { transform: rotate(360deg); } } .spinner { animation: spin 1s linear infinite; }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Загрузка</title>
+  <style>
+    .spinner { width: 40px; height: 40px; border: 4px solid #ddd; border-top-color: #6c5ce7; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+  </style>
+</head>
+<body>
+  <div class="spinner"></div>
+</body>
+</html>
+===
 card: Как объявить и использовать CSS-переменную? :: `:root { --accent: #6c5ce7; }` и `color: var(--accent);`
 card: Чем transition отличается от animation? :: transition — плавный переход при смене состояния (например, :hover). animation — анимация по @keyframes, может идти сама и бесконечно.
+
+### Модуль: Проекты
+
+## html-17 | Проект: лендинг курса
+Лендинг — одностраничный сайт, который продаёт идею. Структура почти всегда такая:
+
+1. **header** — логотип и меню (flex, sticky)
+2. **hero** — большой заголовок, подзаголовок и кнопка-призыв
+3. **features** — 3–6 карточек преимуществ (grid, auto-fit)
+4. **отзывы** или **цены**
+5. **footer** — контакты, копирайт
+
+Порядок работы: сначала семантическая разметка без стилей → общие стили (шрифт, переменные цветов, box-sizing) → раскладка блоков → мелочи (hover, переходы) → адаптив (`@media`).
+
+```css
+:root { --accent: #6c5ce7; }
+.hero { min-height: 60vh; display: grid; place-items: center; text-align: center; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+```
+
+`place-items: center` — центр по обеим осям в grid одной строкой.
+
+?? С чего правильно начинать вёрстку?
++ с семантической разметки без стилей, потом стили
+- с анимаций
+- с цветов
+- с JavaScript
+= Сначала структура и смысл, потом внешний вид.
+
+?? Что делает `place-items: center` в grid?
++ центрирует содержимое ячеек по горизонтали и вертикали
+- выравнивает текст по центру
+- центрирует страницу в окне
+- ничего
+= Это сокращение align-items + justify-items.
+
+!! {2} Шаг 1. Разметка лендинга: header с логотипом и nav (3+ ссылки), section `.hero` с h1, абзацем и ссылкой-кнопкой `.cta`, section `.features` с 3 карточками-article (h3 + p), footer.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Курс Камадо</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: header nav a >= 3 | В шапке — nav с 3+ ссылками
+check: .hero h1 | В hero — h1
+check: .hero a.cta | Кнопка-призыв: a с классом cta
+check: .features article >= 3 | Три карточки преимуществ
+check: footer | Подвал footer
+hint: Пока без стилей — только смысл и структура.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Курс Камадо</title></head>
+<body>
+  <header>
+    <b>Камадо</b>
+    <nav><a href="#features">Почему</a> <a href="#price">Цена</a> <a href="#contacts">Контакты</a></nav>
+  </header>
+  <section class="hero">
+    <h1>Выучи Python за 30 дней</h1>
+    <p>Уроки, задачи с проверкой и повторение каждый день.</p>
+    <a class="cta" href="#price">Начать бесплатно</a>
+  </section>
+  <section class="features" id="features">
+    <article><h3>Задачи с тестами</h3><p>Код проверяется сразу.</p></article>
+    <article><h3>ИИ-помощник</h3><p>Объясняет ошибки.</p></article>
+    <article><h3>Повторение</h3><p>Карточки по интервалам.</p></article>
+  </section>
+  <footer id="contacts">© 2026 Камадо</footer>
+</body>
+</html>
+===
+!! {3} Шаг 2. Стили лендинга: переменная цвета в `:root`, шапка flex (`space-between`) и sticky, hero на 60vh с `place-items: center`, карточки — grid `repeat(auto-fit, minmax(...))`, кнопка `.cta` с hover-переходом, и `@media` для узких экранов.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Курс Камадо</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <header>
+    <b>Камадо</b>
+    <nav><a href="#features">Почему</a> <a href="#price">Цена</a> <a href="#contacts">Контакты</a></nav>
+  </header>
+  <section class="hero">
+    <div>
+      <h1>Выучи Python за 30 дней</h1>
+      <p>Уроки, задачи с проверкой и повторение каждый день.</p>
+      <a class="cta" href="#price">Начать бесплатно</a>
+    </div>
+  </section>
+  <section class="features" id="features">
+    <article><h3>Задачи с тестами</h3><p>Код проверяется сразу.</p></article>
+    <article><h3>ИИ-помощник</h3><p>Объясняет ошибки.</p></article>
+    <article><h3>Повторение</h3><p>Карточки по интервалам.</p></article>
+  </section>
+  <footer id="contacts">© 2026 Камадо</footer>
+</body>
+</html>
+<<<
+check: css::root\s*\{[^}]*--[\w-]+\s*: | Цвет — переменной в :root
+check: css:justify-content\s*:\s*space-between | Шапка: justify-content: space-between
+check: css:position\s*:\s*sticky | Шапка липкая: position: sticky
+check: css:60vh | Hero высотой 60vh
+check: css:place-items\s*:\s*center | Центр hero: place-items: center
+check: css:auto-fit|auto-fill | Карточки — repeat(auto-fit, minmax(…))
+check: css:\.cta:hover | Ховер кнопки: .cta:hover
+check: css:transition | Плавность: transition
+check: css:@media | Адаптив: @media
+hint: Двигайся по блокам сверху вниз; после каждого — смотри на просмотр справа.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Курс Камадо</title>
+  <style>
+    :root { --accent: #6c5ce7; --text: #1e1b2e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, sans-serif; color: var(--text); }
+    header { position: sticky; top: 0; display: flex; justify-content: space-between; align-items: center; padding: 14px 24px; background: white; }
+    nav { display: flex; gap: 16px; }
+    nav a { color: var(--text); text-decoration: none; }
+    .hero { min-height: 60vh; display: grid; place-items: center; text-align: center; background: #f2f0ff; }
+    .cta { display: inline-block; padding: 12px 22px; border-radius: 12px; background: var(--accent); color: white; text-decoration: none; transition: transform 0.2s; }
+    .cta:hover { transform: translateY(-2px); }
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; padding: 24px; }
+    .features article { padding: 16px; border: 1px solid #e5e5f0; border-radius: 14px; }
+    footer { padding: 24px; text-align: center; color: #777; }
+    @media (max-width: 600px) {
+      nav { display: none; }
+      .hero h1 { font-size: 28px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <b>Камадо</b>
+    <nav><a href="#features">Почему</a> <a href="#price">Цена</a> <a href="#contacts">Контакты</a></nav>
+  </header>
+  <section class="hero">
+    <div>
+      <h1>Выучи Python за 30 дней</h1>
+      <p>Уроки, задачи с проверкой и повторение каждый день.</p>
+      <a class="cta" href="#price">Начать бесплатно</a>
+    </div>
+  </section>
+  <section class="features" id="features">
+    <article><h3>Задачи с тестами</h3><p>Код проверяется сразу.</p></article>
+    <article><h3>ИИ-помощник</h3><p>Объясняет ошибки.</p></article>
+    <article><h3>Повторение</h3><p>Карточки по интервалам.</p></article>
+  </section>
+  <footer id="contacts">© 2026 Камадо</footer>
+</body>
+</html>
+===
+card: Из каких блоков обычно состоит лендинг? :: Шапка с меню, hero с призывом, блок преимуществ, отзывы/цены, подвал.
+card: Как сделать карточки, которые сами переносятся по ширине? :: `grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))`.
+
+## html-18 | Проект: резюме-портфолио
+Финальный проект — твоя страница-резюме, которую не стыдно отправить: аккуратная, адаптивная, доступная и готовая к печати.
+
+Части:
+- шапка с именем, фото (`alt`!) и контактами (`mailto:`, ссылки на GitHub)
+- «Навыки» — список-«чипсы» (flex-wrap)
+- «Проекты» — карточки с картинкой (`object-fit`) и ссылками
+- «Образование» — список с датами (`time`)
+
+Стили для печати:
+
+```css
+@media print {
+  nav, .no-print { display: none; }
+  body { color: black; background: white; }
+  a::after { content: " (" attr(href) ")"; }   /* показать адреса ссылок на бумаге */
+}
+```
+
+Проверь себя: страница читается с клавиатуры (Tab), у картинок есть alt, на телефоне ничего не вылезает.
+
+?? Что делает `a::after { content: " (" attr(href) ")"; }` в @media print?
++ на печати после ссылки появится её адрес в скобках
+- удаляет ссылки
+- делает ссылки кликабельными на бумаге
+- ничего
+= attr() подставляет значение атрибута.
+
+?? Как спрятать меню при печати?
++ @media print { nav { display: none; } }
+- @media screen { nav { display: none; } }
+- nav { print: none; }
+- нельзя
+= Медиазапрос print применяется только при печати.
+
+!! {2} Шаг 1. Разметка резюме: header с h1 (имя), img с alt и контактами (mailto и ссылка), section «Навыки» со списком 5+ навыков, section «Проекты» с 2+ article (h3, ссылка), section «Образование» с `time`.
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Резюме</title></head>
+<body>
+
+</body>
+</html>
+<<<
+check: header h1 | Имя — h1 в header
+check: header img[alt] | Фото с alt в шапке
+check: a[href^="mailto:"] | Почта: mailto
+check: section ul li >= 5 | 5+ навыков списком
+check: section article >= 2 | 2+ проекта
+check: article a >= 2 | В проектах — ссылки
+check: section time | В «Образовании» — дата time
+hint: Каждая section начинается с h2.
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head><meta charset="utf-8"><title>Резюме</title></head>
+<body>
+  <header>
+    <img src="https://picsum.photos/120" alt="Фото Миши" width="120">
+    <h1>Миша Иванов</h1>
+    <p><a href="mailto:misha@example.com">misha@example.com</a> · <a href="https://github.com">GitHub</a></p>
+  </header>
+  <section>
+    <h2>Навыки</h2>
+    <ul><li>Python</li><li>C++</li><li>Java</li><li>HTML/CSS</li><li>Алгоритмы</li></ul>
+  </section>
+  <section>
+    <h2>Проекты</h2>
+    <article><h3>Телефонная книга</h3><a href="https://github.com">Код</a></article>
+    <article><h3>LRU-кэш</h3><a href="https://github.com">Код</a></article>
+  </section>
+  <section>
+    <h2>Образование</h2>
+    <p>Бакалавриат, <time datetime="2025-09">с 2025</time></p>
+  </section>
+</body>
+</html>
+===
+!! {3} Шаг 2. Стили: навыки — «чипсы» (flex-wrap, скругление), проекты — grid с картинками `object-fit: cover`, адаптив `@media (max-width: …)`, и стили печати `@media print` (скрыть `.no-print`, показать адреса ссылок через `attr(href)`).
+<<<
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Резюме</title>
+  <style>
+
+  </style>
+</head>
+<body>
+  <header>
+    <img src="https://picsum.photos/120" alt="Фото Миши" width="120">
+    <h1>Миша Иванов</h1>
+    <p><a href="mailto:misha@example.com">misha@example.com</a> · <a href="https://github.com">GitHub</a></p>
+    <button class="no-print">Скачать PDF</button>
+  </header>
+  <section>
+    <h2>Навыки</h2>
+    <ul class="skills"><li>Python</li><li>C++</li><li>Java</li><li>HTML/CSS</li><li>Алгоритмы</li></ul>
+  </section>
+  <section>
+    <h2>Проекты</h2>
+    <div class="projects">
+      <article><img src="https://picsum.photos/300/200" alt="Скриншот телефонной книги"><h3>Телефонная книга</h3><a href="https://github.com">Код</a></article>
+      <article><img src="https://picsum.photos/300/201" alt="Схема LRU-кэша"><h3>LRU-кэш</h3><a href="https://github.com">Код</a></article>
+    </div>
+  </section>
+</body>
+</html>
+<<<
+check: css:\.skills\s*\{[^}]*flex-wrap\s*:\s*wrap | Навыки — flex-wrap: wrap
+check: css:\.projects\s*\{[^}]*display\s*:\s*grid | Проекты — grid
+check: css:object-fit\s*:\s*cover | Картинки проектов: object-fit: cover
+check: css:@media\s*\(\s*max-width | Адаптив: @media (max-width: …)
+check: css:@media\s+print | Стили печати: @media print
+check: css:attr\(href\) | На печати показывай адреса: attr(href)
+check: css:\.no-print | Скрывай .no-print при печати
+hint: `@media print { .no-print { display: none; } a::after { content: " (" attr(href) ")"; } }`
+===
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Резюме</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+    .skills { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; }
+    .skills li { padding: 4px 12px; border-radius: 999px; background: #ece9ff; }
+    .projects { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+    .projects img { width: 100%; aspect-ratio: 3 / 2; object-fit: cover; border-radius: 10px; }
+    @media (max-width: 600px) { .projects { grid-template-columns: 1fr; } }
+    @media print {
+      .no-print { display: none; }
+      a::after { content: " (" attr(href) ")"; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="https://picsum.photos/120" alt="Фото Миши" width="120">
+    <h1>Миша Иванов</h1>
+    <p><a href="mailto:misha@example.com">misha@example.com</a> · <a href="https://github.com">GitHub</a></p>
+    <button class="no-print">Скачать PDF</button>
+  </header>
+  <section>
+    <h2>Навыки</h2>
+    <ul class="skills"><li>Python</li><li>C++</li><li>Java</li><li>HTML/CSS</li><li>Алгоритмы</li></ul>
+  </section>
+  <section>
+    <h2>Проекты</h2>
+    <div class="projects">
+      <article><img src="https://picsum.photos/300/200" alt="Скриншот телефонной книги"><h3>Телефонная книга</h3><a href="https://github.com">Код</a></article>
+      <article><img src="https://picsum.photos/300/201" alt="Схема LRU-кэша"><h3>LRU-кэш</h3><a href="https://github.com">Код</a></article>
+    </div>
+  </section>
+</body>
+</html>
+===
+card: Как показать адреса ссылок при печати? :: `@media print { a::after { content: " (" attr(href) ")"; } }`
+card: Что проверить перед публикацией страницы? :: alt у картинок, работа с клавиатуры (Tab), адаптив на телефоне, контраст, lang у html.
