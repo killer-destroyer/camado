@@ -785,9 +785,19 @@ button.card:hover {
     "plan plan hot"
     "quick quick hot"
     "week week focus"
+    "class energy money"
     "grow grow grow"
     "notes alarms music";
   gap: 18px;
+}
+.today-grid .class-card {
+  grid-area: class;
+}
+.today-grid .energy-card {
+  grid-area: energy;
+}
+.today-grid .money-card {
+  grid-area: money;
 }
 .today-grid .setup {
   grid-area: setup;
@@ -2803,6 +2813,8 @@ button.card:hover {
       "quick quick"
       "focus music"
       "week week"
+      "class energy"
+      "money money"
       "grow grow"
       "notes alarms";
   }
@@ -7238,4 +7250,347 @@ a.btn {
 }
 .fd-app.work {
   opacity: 0.55;
+}
+
+/* =====================================================================
+   Телефон и очень узкое окно (≤ 720px): нижняя панель, одна колонка,
+   вкладки листаются пальцем, окна — во весь экран, пластинка — сверху целиком.
+   ===================================================================== */
+.mobile-nav {
+  display: none;
+}
+@media (max-width: 720px) {
+  :root {
+    --mobile-nav: calc(62px + env(safe-area-inset-bottom, 0px));
+  }
+  .titlebar {
+    height: 22px;
+  }
+  .main {
+    left: 0;
+    bottom: var(--mobile-nav);
+  }
+  .screen {
+    padding: 28px 14px 28px;
+  }
+  .has-player .screen {
+    padding-bottom: 96px;
+  }
+  .screen-head {
+    padding-right: 0;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+  .head-tools {
+    margin-left: 0;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .display {
+    font-size: 30px;
+  }
+  .lead {
+    font-size: 15px;
+  }
+
+  /* нижняя панель */
+  .mobile-nav {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: flex;
+    justify-content: space-around;
+    align-items: stretch;
+    height: var(--mobile-nav);
+    padding: 4px 4px env(safe-area-inset-bottom, 0px);
+    border-radius: 18px 18px 0 0;
+  }
+  .mn-item {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-size: 10.5px;
+    font-weight: 600;
+    color: var(--muted);
+    border-radius: 12px;
+  }
+  .mn-item.active {
+    color: var(--accent);
+  }
+  .mn-item .nav-dot {
+    top: 6px;
+    right: calc(50% - 16px);
+  }
+  .mn-sheet-back {
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    background: rgb(0 0 0 / 0.35);
+  }
+  .mn-sheet {
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--mobile-nav) + 8px);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 12px;
+    background: color-mix(in srgb, var(--bg-2) 96%, transparent);
+    animation: pop 0.3s var(--ease) both;
+  }
+  .mn-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 12px 4px;
+    border-radius: 14px;
+    font-size: 11.5px;
+    color: var(--text);
+  }
+  .mn-cell.active {
+    background: rgb(var(--accent-rgb) / 0.18);
+    color: var(--accent);
+  }
+
+  /* мини-плеер — над нижней панелью, только главное */
+  .miniplayer {
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--mobile-nav) + 8px);
+    height: 62px;
+    gap: 10px;
+    padding: 0 10px 0 8px;
+  }
+  .miniplayer .mp-volume,
+  .miniplayer .mp-extra,
+  .miniplayer .slider {
+    display: none;
+  }
+
+  /* вкладки листаются пальцем, а не сжимаются */
+  .segmented {
+    display: flex;
+    max-width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .segmented::-webkit-scrollbar {
+    display: none;
+  }
+  .segmented .seg-thumb {
+    display: none;
+  }
+  .segmented button {
+    flex: 0 0 auto;
+  }
+  .segmented button.active {
+    background: rgb(var(--text-rgb) / 0.12);
+  }
+
+  /* сетки — в одну колонку */
+  .today-grid,
+  .tasks-layout,
+  .notes-layout,
+  .focus-layout,
+  .screen.focus .focus-layout,
+  .planner-layout,
+  .grow-course,
+  .syl-prog,
+  .money-top,
+  .money-grid,
+  .recap-grid,
+  .tk-example,
+  .tk-io,
+  .screen.grow.with-assistant .grow-body {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .today-grid {
+    grid-template-areas: none !important;
+  }
+  .today-grid > * {
+    grid-area: auto !important;
+  }
+  .exam-head {
+    flex-wrap: wrap;
+  }
+  .ticket-row {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .ticket-row .seg {
+    grid-column: 1 / -1;
+  }
+  .ne-tools {
+    flex-wrap: wrap;
+  }
+  .today-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+  .today-side {
+    align-items: flex-start;
+  }
+  .clock {
+    font-size: 54px;
+  }
+  .setup-items {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .notes-list {
+    max-height: 32vh;
+  }
+  .gc-list,
+  .syl-topics {
+    position: static;
+    max-height: 240px;
+  }
+  .track-row {
+    grid-template-columns: 34px 40px minmax(0, 1fr) 50px;
+  }
+  .track-row > :nth-child(4),
+  .track-row > :nth-child(5),
+  .track-row > :nth-child(6) {
+    display: none;
+  }
+  .coverflow {
+    margin: -10px -14px 0;
+  }
+  .cf-stage {
+    height: 300px;
+  }
+
+  /* «План»: неделя листается вбок, задания — над ней */
+  .pl-tasks {
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  .pl-grid {
+    overflow-x: auto;
+  }
+  .pl-head,
+  .pl-body {
+    min-width: 720px;
+  }
+
+  /* настройки: подпись сверху, переключатели — под ней */
+  .set-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .set-control {
+    min-width: 0;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+  .set-control .slider {
+    width: 100%;
+  }
+
+  /* окна — почти во весь экран */
+  .modal,
+  .modal.whatsnew,
+  .modal.examiner,
+  .modal.schedule-modal,
+  .modal.custom-problem {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 24px);
+    padding: 16px;
+  }
+  .modal.examiner {
+    height: calc(100vh - 24px);
+  }
+  .sch-row {
+    flex-wrap: wrap;
+  }
+  .sch-import {
+    flex-wrap: wrap;
+  }
+
+  /* плеер на весь экран: пластинка целиком сверху, под ней текст и кнопки */
+  .nowplaying {
+    --D: min(84vw, 42vh);
+  }
+  .disc-pulse {
+    left: calc(50% - var(--D) / 2);
+    top: 64px;
+  }
+  .np-tint {
+    background: linear-gradient(180deg, transparent 30%, rgb(var(--bg-rgb) / 0.55));
+  }
+  .np-top {
+    left: 8px;
+    right: 8px;
+    top: 8px;
+    gap: 8px;
+  }
+  .nowplaying.mac .np-top {
+    left: 8px;
+  }
+  .np-switches {
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex-wrap: nowrap;
+  }
+  .np-switches::-webkit-scrollbar {
+    display: none;
+  }
+  .np-switches > * {
+    flex: 0 0 auto;
+  }
+  .np-right {
+    left: 16px;
+    right: 16px;
+    top: calc(64px + var(--D) + 14px);
+    bottom: 168px;
+    gap: 12px;
+  }
+  .np-title {
+    font-size: 24px;
+  }
+  .np-bottom {
+    left: 12px;
+    right: 12px;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+  .np-controls {
+    gap: 14px;
+  }
+  .lk-current {
+    font-size: calc(30px * var(--lyrics-scale));
+  }
+  .ll-current {
+    font-size: calc(28px * var(--lyrics-scale));
+  }
+  .lyrics-karaoke,
+  .lyrics-line {
+    padding: 0 4px;
+  }
+  .nav-item::after {
+    display: none;
+  }
+}
+
+/* Сенсорный экран (телефон, планшет): кнопок «по наведению мыши» нет — показываем их всегда */
+@media (hover: none) {
+  .task-actions,
+  .cf-play,
+  .lt-actions,
+  .tr-acts .icon-btn,
+  .plb-tools,
+  .sc-actions,
+  .mp-expand {
+    opacity: 1 !important;
+  }
+  .nav-item::after {
+    display: none;
+  }
 }

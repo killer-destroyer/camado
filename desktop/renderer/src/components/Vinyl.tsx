@@ -16,6 +16,11 @@ const SEC_PER_TURN = 360 / DEG_PER_SEC;
 
 /** Где пластинка на экране (те же формулы, что в CSS: --D, left, top). */
 export function discGeometry(w: number, h: number): { D: number; cx: number; cy: number; r: number } {
+  // телефон: пластинка целиком сверху по центру (те же формулы — в CSS под @media (max-width: 720px))
+  if (w <= 720) {
+    const D = Math.min(w * 0.84, h * 0.42);
+    return { D, cx: w / 2, cy: 64 + D / 2, r: D / 2 };
+  }
   const D = Math.min(h * 1.12, w * 0.62);
   return { D, cx: D * 0.18, cy: h / 2, r: D / 2 };
 }

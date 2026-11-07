@@ -24,7 +24,9 @@ import {
   Volume2,
   VolumeX,
   Wallet,
+  MoreHorizontal,
 } from "lucide-react";
+import { useNarrow } from "../lib/narrow";
 import { fps, useFrame } from "../lib/frame";
 import { PALETTES } from "../lib/palettes";
 import { useStore } from "../lib/store";
@@ -49,7 +51,60 @@ export const NAV: { id: ScreenId; label: string; icon: typeof Sun }[] = [
   { id: "chat", label: "Камадо", icon: MessageCircle },
 ];
 
+/** Телефон: внизу 5 главных разделов и «Ещё» — остальные. */
+const MOBILE_MAIN: ScreenId[] = ["today", "tasks", "plan", "music", "chat"];
+
+function MobileNav() {
+  const screen = useStore(app, (s) => s.screen);
+  const update = useStore(app, (s) => s.update.state);
+  const [more, setMore] = useState(false);
+  const items = [...NAV, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
+  const main = items.filter((n) => MOBILE_MAIN.includes(n.id));
+  const rest = items.filter((n) => !MOBILE_MAIN.includes(n.id));
+  const inRest = rest.some((n) => n.id === screen);
+  return (
+    <>
+      <nav className="mobile-nav glass">
+        {main.map((n) => {
+          const Icon = n.icon;
+          return (
+            <button key={n.id} className={`mn-item ${screen === n.id ? "active" : ""}`} onClick={() => (setMore(false), go(n.id))}>
+              <Icon size={21} strokeWidth={screen === n.id ? 2.3 : 1.8} />
+              <span>{n.label}</span>
+            </button>
+          );
+        })}
+        <button className={`mn-item ${inRest || more ? "active" : ""}`} onClick={() => setMore(!more)}>
+          <MoreHorizontal size={21} />
+          <span>Ещё</span>
+          {update === "available" && <span className="nav-dot" />}
+        </button>
+      </nav>
+      {more && (
+        <div className="mn-sheet-back" onClick={() => setMore(false)}>
+          <div className="mn-sheet glass" onClick={(e) => e.stopPropagation()}>
+            {rest.map((n) => {
+              const Icon = n.icon;
+              return (
+                <button key={n.id} className={`mn-cell ${screen === n.id ? "active" : ""}`} onClick={() => (setMore(false), go(n.id))}>
+                  <Icon size={22} />
+                  <span>{n.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function Sidebar() {
+  const narrow = useNarrow();
+  return narrow ? <MobileNav /> : <DesktopSidebar />;
+}
+
+function DesktopSidebar() {
   const screen = useStore(app, (s) => s.screen);
   const update = useStore(app, (s) => s.update.state);
   const items = [...NAV, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
