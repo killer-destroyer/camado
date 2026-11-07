@@ -1,16 +1,16 @@
-// «Прокачка»: курсы Python, Java, C++, HTML/CSS — гайд, тест, задача с проверкой, повторение каждый день.
-// И «Программа курса»: загрузил программу предмета — темы по занятиям, материалы, задачи, подготовка в задания.
+// «Прокачка»: курсы Python, Java, C++, HTML/CSS по модулям — гайд, тест, несколько задач от простой к сложной с запуском,
+// итоговый тест модуля, задачник, библиотека, программа курса, ИИ-помощник сбоку. Каждый день — разминка и повторение.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, Brain, Check, ChevronRight, Code2, Flame, Lightbulb, Play, RefreshCw, Sparkles, Target, Wand2, X } from "lucide-react";
-import { COURSES, courseById } from "../../../shared/courses";
-import { checkHtml, sameOutput, type Course, type CourseId, type Lesson, type Quiz } from "../../../shared/courses/format";
+import { Brain, Check, ChevronRight, Code2, Flame, GraduationCap, Lightbulb, MessageCircleQuestion, Play, RefreshCw, Sparkles, Target, Wand2, X } from "lucide-react";
+import { COURSES, courseById, PROBLEMS } from "../../../shared/courses";
+import { checkHtml, problemStarter, sameOutput, type CodeTask, type Course, type CourseId, type Lesson, type Problem, type Quiz } from "../../../shared/courses/format";
 import type { RunResult } from "../../../shared/types";
 import { api } from "../lib/api";
 import { useStore } from "../lib/store";
 import { toast } from "../state/app";
 import {
+  askAssistant,
   completeLesson,
-  continueTarget,
   currentStreak,
   doneCount,
   grow,
@@ -18,6 +18,7 @@ import {
   loadTools,
   markActive,
   saveProgress,
+  setWork,
   today,
   todayDone,
   warmupQuestions,
@@ -27,13 +28,15 @@ import { CodeEditor } from "../components/CodeEditor";
 import { RichText } from "../components/RichText";
 import { Review } from "../components/Cards";
 import { Segmented } from "../components/ui";
+import { GrowAssistant } from "../components/GrowAssistant";
 import { SyllabusView } from "./GrowSyllabus";
 import { LibraryView } from "./GrowLibrary";
 
+type RunLang = "python" | "java" | "cpp";
+const STARS = ["", "★", "★★", "★★★"];
+
 export function Grow() {
   const s = useStore(grow, (x) => x);
-  const [warm, setWarm] = useState(false);
-  const [review, setReview] = useState(false);
   useEffect(() => {
     void loadGrow();
     void loadTools();
@@ -45,9 +48,10 @@ export function Grow() {
   const warmDone = p.warmupDone === today();
   const canWarm = warmupQuestions(p).length > 0;
   const course = courseById(s.tab as CourseId);
+  const assistantOpen = !!s.assistant?.open;
 
   return (
-    <div className="screen grow">
+    <div className={`screen grow ${assistantOpen ? "with-assistant" : ""}`}>
       <header className="screen-head">
         <h1 className="display">Прокачка</h1>
         <Segmented<GrowTab>
@@ -55,9 +59,10 @@ export function Grow() {
           onChange={(tab) => grow.set({ tab })}
           options={[
             ...COURSES.map((c) => ({ value: c.id as GrowTab, label: c.name })),
+            { value: "problems", label: "Задачник" },
             { value: "library", label: "Библиотека" },
             { value: "syllabus", label: "Программа курса" },
-            { value: "review", label: "Проверь мой код" },
+            { value: "review", label: "Проверь код" },
           ]}
         />
       </header>
@@ -68,7 +73,7 @@ export function Grow() {
           <b>{currentStreak(p)}</b>
           <span>{plural(currentStreak(p), "день", "дня", "дней")} подряд</span>
         </div>
-        <div className="gd-goal" title="Цель дня: занятий (урок, разминка или повторение)">
+        <div className="gd-goal" title="Цель дня: занятий (урок, задача, разминка или повторение)">
           <Target size={18} />
           <span>
             Сегодня {Math.min(doneToday, goal)}/{goal}
@@ -84,30 +89,49 @@ export function Grow() {
             ))}
           </select>
         </div>
-        <button className={`btn ${!warmDone && canWarm ? "primary" : ""}`} disabled={!canWarm} onClick={() => setWarm(true)} title={canWarm ? "3 вопроса из пройденных уроков" : "Пройди хотя бы один урок"}>
+        <button className={`btn ${!warmDone && canWarm ? "primary" : ""}`} disabled={!canWarm} onClick={() => grow.set({ modal: "warmup" })} title={canWarm ? "3 вопроса из пройденных уроков" : "Пройди хотя бы один урок"}>
           <Sparkles size={16} /> {warmDone ? "Разминка ✓" : "Разминка дня"}
         </button>
-        <button className={`btn ${s.due.length ? "glow" : ""}`} disabled={!s.due.length} onClick={() => setReview(true)} title="Карточки из пройденных уроков — по интервалам, чтобы не забывалось">
+        <button className={`btn ${s.due.length ? "glow" : ""}`} disabled={!s.due.length} onClick={() => grow.set({ modal: "review" })} title="Карточки из пройденных уроков — по интервалам, чтобы не забывалось">
           <Brain size={16} /> Повторить {s.due.length ? `(${s.due.length})` : ""}
         </button>
+        <button className={`btn ${assistantOpen ? "on" : ""}`} onClick={() => grow.set({ assistant: { open: !assistantOpen } })} title="ИИ-помощник видит урок, задачу и твой код">
+          <MessageCircleQuestion size={16} /> Спросить ИИ
+        </button>
         <div className="gd-total muted small">
-          пройдено уроков: {doneCount(p)} из {COURSES.reduce((a, c) => a + c.lessons.length, 0)}
+          уроков: {doneCount(p)} из {COURSES.reduce((a, c) => a + c.lessons.length, 0)} · задач: {Object.keys(p.problems ?? {}).length} из {PROBLEMS.length}
         </div>
       </div>
 
-      {course ? <CourseView key={course.id} course={course} /> : s.tab === "library" ? <LibraryView /> : s.tab === "syllabus" ? <SyllabusView /> : <ReviewView />}
+      <div className="grow-body">
+        <div className="grow-main">
+          {course ? (
+            <CourseView key={course.id} course={course} />
+          ) : s.tab === "problems" ? (
+            <ProblemsView />
+          ) : s.tab === "library" ? (
+            <LibraryView />
+          ) : s.tab === "syllabus" ? (
+            <SyllabusView />
+          ) : (
+            <ReviewView />
+          )}
+        </div>
+        {assistantOpen && <GrowAssistant />}
+      </div>
 
-      {warm && <WarmupModal onClose={() => setWarm(false)} />}
-      {review && (
+      {s.modal === "warmup" && <WarmupModal onClose={() => grow.set({ modal: undefined })} />}
+      {s.modal === "review" && (
         <Review
           cards={s.due}
-          onClose={() => setReview(false)}
+          onClose={() => grow.set({ modal: undefined })}
           onDone={(n) => {
             if (n > 0) void markActive();
             void loadGrow();
           }}
         />
       )}
+      {s.modal?.startsWith("exam:") && <ModuleExam courseId={s.modal.split(":")[1] as CourseId} module={s.modal.split(":").slice(2).join(":")} onClose={() => grow.set({ modal: undefined })} />}
     </div>
   );
 }
@@ -120,88 +144,177 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many;
 }
 
-// ---------- Курс ----------
+// ---------- Курс по модулям ----------
 
 function CourseView({ course }: { course: Course }) {
   const p = useStore(grow, (x) => x.progress);
   const openId = useStore(grow, (x) => x.open[course.id]);
   const lesson = course.lessons.find((l) => l.id === openId) ?? course.lessons.find((l) => !p.lessons[l.id]?.done) ?? course.lessons[0]!;
   const done = doneCount(p, course);
+  const modules = useMemo(() => {
+    const m: { name: string; lessons: Lesson[] }[] = [];
+    for (const l of course.lessons) {
+      const last = m[m.length - 1];
+      if (last && last.name === l.module) last.lessons.push(l);
+      else m.push({ name: l.module, lessons: [l] });
+    }
+    return m;
+  }, [course]);
   const openLesson = (l: Lesson) => {
-    grow.set((s) => ({ open: { ...s.open, [course.id]: l.id } }));
+    grow.set((s) => ({ open: { ...s.open, [course.id]: l.id }, task: 0 }));
     void saveProgress({ last: { course: course.id, lesson: l.id } });
     document.querySelector(".screen-wrap")?.scrollTo({ top: 0, behavior: "smooth" });
   };
+  let n = 0;
   return (
     <div className="grow-course">
       <aside className="gc-list card glass">
         <div className="gc-about">
           <b>{course.name}</b>
           <span className="muted small">
-            {done} из {course.lessons.length} уроков
+            {done} из {course.lessons.length} уроков · {course.lessons.reduce((a, l) => a + l.tasks.length, 0)} задач
           </span>
           <div className="gd-bar">
             <i style={{ width: `${(done / course.lessons.length) * 100}%` }} />
           </div>
         </div>
-        <ol>
-          {course.lessons.map((l, i) => {
-            const st = p.lessons[l.id];
-            return (
-              <li key={l.id}>
-                <button className={`gc-item ${l.id === lesson.id ? "on" : ""} ${st?.done ? "done" : ""}`} onClick={() => openLesson(l)}>
-                  <span className="gc-num">{st?.done ? <Check size={13} /> : i + 1}</span>
-                  <span className="gc-title">{l.title}</span>
+        {modules.map((m) => {
+          const key = `${course.id}:${m.name}`;
+          const best = p.exams?.[key];
+          const mDone = m.lessons.filter((l) => p.lessons[l.id]?.done).length;
+          return (
+            <div key={m.name} className="gc-module">
+              <div className="gc-mod-head">
+                <span>{m.name}</span>
+                <span className="muted small">
+                  {mDone}/{m.lessons.length}
+                </span>
+              </div>
+              <ol>
+                {m.lessons.map((l) => {
+                  n++;
+                  const st = p.lessons[l.id];
+                  return (
+                    <li key={l.id}>
+                      <button className={`gc-item ${l.id === lesson.id ? "on" : ""} ${st?.done ? "done" : ""}`} onClick={() => openLesson(l)}>
+                        <span className="gc-num">{st?.done ? <Check size={13} /> : n}</span>
+                        <span className="gc-title">{l.title}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+              {m.lessons.some((l) => l.quiz.length) && (
+                <button className={`gc-exam ${best !== undefined && best >= 80 ? "passed" : ""}`} onClick={() => grow.set({ modal: `exam:${key}` })}>
+                  <GraduationCap size={14} /> Итоговый тест модуля{best !== undefined ? ` · ${best}%` : ""}
                 </button>
-              </li>
-            );
-          })}
-        </ol>
+              )}
+            </div>
+          );
+        })}
       </aside>
-      <LessonView key={lesson.id} course={course} lesson={lesson} onNext={() => {
-        const i = course.lessons.indexOf(lesson);
-        const next = course.lessons[i + 1];
-        if (next) openLesson(next);
-      }} />
+      <LessonView
+        key={lesson.id}
+        course={course}
+        lesson={lesson}
+        index={course.lessons.indexOf(lesson)}
+        onNext={() => {
+          const next = course.lessons[course.lessons.indexOf(lesson) + 1];
+          if (next) openLesson(next);
+        }}
+      />
     </div>
   );
 }
 
-function LessonView({ course, lesson, onNext }: { course: Course; lesson: Lesson; onNext: () => void }) {
+function LessonView({ course, lesson, index, onNext }: { course: Course; lesson: Lesson; index: number; onNext: () => void }) {
   const st = useStore(grow, (x) => x.progress.lessons[lesson.id]);
-  const idx = course.lessons.indexOf(lesson);
+  const ti = useStore(grow, (x) => Math.min(x.task ?? 0, Math.max(0, lesson.tasks.length - 1)));
+  const finishReq = useStore(grow, (x) => x.finishReq);
   const [quizRight, setQuizRight] = useState(0);
-  const [solved, setSolved] = useState(!!st?.task);
+  const solved = st?.solved ?? (st?.task ? [0] : []);
   const finish = async () => {
-    // остаёмся на этом уроке (иначе список сам перескочит на следующий непройденный)
     grow.set((s) => ({ open: { ...s.open, [course.id]: lesson.id } }));
-    await completeLesson(course, lesson, { quiz: Math.max(quizRight, st?.quiz ?? 0), task: solved || st?.task });
+    await completeLesson(course, lesson, { quiz: Math.max(quizRight, st?.quiz ?? 0), task: solved.length > 0 });
     toast(`Урок пройден! Карточки урока ушли в повторение — Камадо напомнит, когда пора вспомнить.`, "ok");
   };
+  // «Засчитай урок» от ИИ-помощника
+  const seenFinish = useRef(finishReq);
+  useEffect(() => {
+    if (finishReq !== seenFinish.current) {
+      seenFinish.current = finishReq;
+      if (!st?.done) void finish();
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
+  const task = lesson.tasks[ti];
   return (
     <article className="lesson">
       <div className="lesson-head">
         <span className="eyebrow">
-          {course.name} · урок {idx + 1} из {course.lessons.length}
+          {course.name} · {lesson.module} · урок {index + 1} из {course.lessons.length}
         </span>
         <h2>{lesson.title}</h2>
       </div>
       <section className="card glass lesson-guide">
         <RichText text={lesson.guide} />
+        <button
+          className="btn sm ghost lg-ask"
+          onClick={() => {
+            const sel = String(window.getSelection() ?? "").trim();
+            askAssistant(sel ? `Объясни подробнее этот кусок урока «${lesson.title}»:\n«${sel.slice(0, 2000)}»` : `Объясни проще главное из урока «${lesson.title}» и дай ещё пример.`);
+          }}
+          title="Выдели непонятный кусок текста и нажми"
+        >
+          <MessageCircleQuestion size={15} /> Непонятно — спросить ИИ
+        </button>
       </section>
 
-      <section className="card glass lesson-quiz">
-        <h3 className="section-title">
-          <Lightbulb size={16} /> Проверь себя
-        </h3>
-        {lesson.quiz.map((q, i) => (
-          <QuizItem key={i} quiz={q} qkey={`${lesson.id}:${i}`} onAnswer={(ok) => ok && setQuizRight((n) => n + 1)} />
-        ))}
-      </section>
+      {lesson.quiz.length > 0 && (
+        <section className="card glass lesson-quiz">
+          <h3 className="section-title">
+            <Lightbulb size={16} /> Проверь себя
+          </h3>
+          {lesson.quiz.map((q, i) => (
+            <QuizItem key={i} quiz={q} qkey={`${lesson.id}:${i}`} onAnswer={(ok) => ok && setQuizRight((k) => k + 1)} />
+          ))}
+        </section>
+      )}
 
-      {lesson.task && <TaskBlock course={course} lesson={lesson} onSolved={() => setSolved(true)} />}
+      {lesson.tasks.length > 1 && (
+        <div className="task-tabs">
+          {lesson.tasks.map((t, i) => (
+            <button key={i} className={`task-tab ${i === ti ? "on" : ""} ${solved.includes(i) ? "solved" : ""}`} onClick={() => grow.set({ task: i })}>
+              {solved.includes(i) ? <Check size={13} /> : null} Задача {i + 1} <span className="stars">{STARS[t.level]}</span>
+            </button>
+          ))}
+          <span className="muted small">
+            решено {solved.length} из {lesson.tasks.length}
+          </span>
+        </div>
+      )}
 
-      <MoreTask course={course} lesson={lesson} />
+      {task && (
+        <TaskBlock
+          key={`${lesson.id}#${ti}`}
+          lang={course.lang}
+          task={task}
+          title={`${course.name} · ${lesson.title} · задача ${ti + 1} из ${lesson.tasks.length}`}
+          lessonTitle={lesson.title}
+          codeKey={ti === 0 ? lesson.id : `${lesson.id}#${ti}`}
+          solved={solved.includes(ti)}
+          onSolved={async () => {
+            const cur = grow.get().progress.lessons[lesson.id];
+            const was = cur?.solved ?? (cur?.task ? [0] : []);
+            if (was.includes(ti)) return;
+            await saveProgress({ lessons: { [lesson.id]: { ...cur, task: true, solved: [...was, ti].sort() } } });
+            await markActive();
+            const next = lesson.tasks.findIndex((_, i) => i > ti && !was.includes(i));
+            if (next > 0) toast(`Решено! Дальше — задача ${next + 1} ${STARS[lesson.tasks[next]!.level]}`, "ok");
+          }}
+        />
+      )}
+
+      <MoreTask lang={course.lang} lessonTitle={lesson.title} guide={lesson.guide} />
 
       <div className="lesson-finish">
         {st?.done ? (
@@ -213,7 +326,7 @@ function LessonView({ course, lesson, onNext }: { course: Course; lesson: Lesson
             <Check size={16} /> Урок пройден
           </button>
         )}
-        {idx + 1 < course.lessons.length && (
+        {index + 1 < course.lessons.length && (
           <button className="btn" onClick={onNext}>
             Следующий урок <ChevronRight size={16} />
           </button>
@@ -240,11 +353,7 @@ function QuizItem({ quiz, qkey, onAnswer }: { quiz: Quiz; qkey: string; onAnswer
       <RichText text={quiz.q} />
       <div className="quiz-opts">
         {quiz.options.map((o, i) => (
-          <button
-            key={i}
-            className={`quiz-opt ${picked === null ? "" : i === quiz.answer ? "right" : i === picked ? "wrong" : "dim"}`}
-            onClick={() => pick(i)}
-          >
+          <button key={i} className={`quiz-opt ${picked === null ? "" : i === quiz.answer ? "right" : i === picked ? "wrong" : "dim"}`} onClick={() => pick(i)}>
             <RichText text={o} />
           </button>
         ))}
@@ -259,16 +368,33 @@ function QuizItem({ quiz, qkey, onAnswer }: { quiz: Quiz; qkey: string; onAnswer
   );
 }
 
-// ---------- Задача ----------
+// ---------- Задача (урок или задачник) ----------
 
-function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesson; onSolved: () => void }) {
-  const task = lesson.task!;
-  const saved = useStore(grow, (x) => x.progress.code[lesson.id]);
+type TestRun = { input: string; expected: string; got: string; ok: boolean; err?: string };
+
+function TaskBlock({
+  lang,
+  task,
+  title,
+  lessonTitle,
+  codeKey,
+  solved,
+  onSolved,
+}: {
+  lang: Course["lang"];
+  task: CodeTask & { solutionLang?: string };
+  title: string;
+  lessonTitle: string;
+  codeKey: string;
+  solved: boolean;
+  onSolved: () => void | Promise<void>;
+}) {
+  const saved = useStore(grow, (x) => x.progress.code[codeKey]);
   const tools = useStore(grow, (x) => x.tools);
-  const st = useStore(grow, (x) => x.progress.lessons[lesson.id]);
+  const runReq = useStore(grow, (x) => x.runReq);
   const [code, setCode] = useState(saved ?? task.starter);
-  const [busy, setBusy] = useState<"" | "run" | "ai" | "check">("");
-  const [runs, setRuns] = useState<{ input: string; expected: string; got: string; ok: boolean; err?: string }[] | null>(null);
+  const [busy, setBusy] = useState<"" | "run" | "ai">("");
+  const [runs, setRuns] = useState<TestRun[] | null>(null);
   const [compileErr, setCompileErr] = useState("");
   const [ai, setAi] = useState<{ ok: boolean; text: string } | null>(null);
   const [failed, setFailed] = useState<string[] | null>(null);
@@ -276,33 +402,44 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
   const [showSol, setShowSol] = useState(false);
   const [custom, setCustom] = useState<string | null>(null);
   const [customOut, setCustomOut] = useState<RunResult | null>(null);
-  const isHtml = course.lang === "html";
-  const runner = !isHtml ? tools?.[course.lang as "python" | "java" | "cpp"] : undefined;
+  const isHtml = lang === "html";
+  const runner = !isHtml ? tools?.[lang as RunLang] : undefined;
 
   // код сохраняется сам
   const timer = useRef<number>(0);
   useEffect(() => {
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
-      if (code !== (saved ?? task.starter)) void saveProgress({ code: { [lesson.id]: code } });
+      if (code !== (saved ?? task.starter)) void saveProgress({ code: { [codeKey]: code } });
     }, 900);
     return () => window.clearTimeout(timer.current);
   }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const solved = async () => {
-    onSolved();
-    if (!st?.task) {
-      await saveProgress({ lessons: { [lesson.id]: { ...st, task: true } } });
-      await markActive();
-    }
-  };
+  // ИИ-помощник видит, что сейчас открыто
+  useEffect(() => {
+    setWork({
+      where: title,
+      task: task.text,
+      code,
+      lang,
+      runs: runs
+        ? runs.map((r, i) => `Тест ${i + 1}: ${r.ok ? "ok" : "ошибка"}; вход: ${r.input.slice(0, 200)}; ждали: ${r.expected.slice(0, 200)}; вышло: ${r.got.slice(0, 200)}${r.err ? `; ${r.err.slice(0, 300)}` : ""}`).join("\n")
+        : compileErr
+          ? `Ошибка компиляции:\n${compileErr.slice(0, 1500)}`
+          : failed
+            ? `Не выполнено: ${failed.join("; ")}`
+            : undefined,
+    });
+  }, [code, runs, compileErr, failed, title]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const markSolved = () => void onSolved();
 
   const runTests = async () => {
     setBusy("run");
     setAi(null);
     setCompileErr("");
     try {
-      const res = await api.grow.run(course.lang as "python", code, task.tests.map((t) => t.input));
+      const res = await api.grow.run(lang as RunLang, code, task.tests.map((t) => t.input));
       if ("error" in res) {
         toast(res.error === "not-installed" ? "Язык не установлен — проверю через ИИ" : res.error, "warn");
         return;
@@ -319,7 +456,7 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
       setRuns(rr);
       if (rr.every((r) => r.ok)) {
         toast("Все тесты пройдены! 🎉", "ok");
-        void solved();
+        markSolved();
       }
     } finally {
       setBusy("");
@@ -329,7 +466,7 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
   const runCustom = async () => {
     setBusy("run");
     try {
-      const res = await api.grow.run(course.lang as "python", code, [custom ?? ""]);
+      const res = await api.grow.run(lang as RunLang, code, [custom ?? ""]);
       if ("error" in res) return;
       setCustomOut(res[0] ?? null);
     } finally {
@@ -340,13 +477,13 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
   const askAi = async () => {
     setBusy("ai");
     try {
-      const r = await api.grow.check({ lang: course.lang, lesson: lesson.title, task: task.text, code, runs: runs ?? undefined });
+      const r = await api.grow.check({ lang, lesson: lessonTitle, task: task.text, code, runs: runs ?? undefined });
       if ("error" in r) {
         toast(r.error, "warn");
         return;
       }
       setAi({ ok: r.ok, text: r.feedback });
-      if (r.ok && (isHtml || !runner?.ok)) void solved();
+      if (r.ok && (isHtml || !runner?.ok)) markSolved();
     } finally {
       setBusy("");
     }
@@ -358,9 +495,20 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
     setFailed(f);
     if (!f.length) {
       toast("Всё сделано! 🎉", "ok");
-      void solved();
+      markSolved();
     }
   };
+
+  // «Запусти тесты» от ИИ-помощника
+  const seenRun = useRef(runReq);
+  useEffect(() => {
+    if (runReq !== seenRun.current) {
+      seenRun.current = runReq;
+      if (isHtml) checkPage();
+      else if (runner?.ok) void runTests();
+      else void askAi();
+    }
+  }); // eslint-disable-line react-hooks/exhaustive-deps
 
   // HTML: живой просмотр (без скриптов) с небольшой задержкой
   const [preview, setPreview] = useState(code);
@@ -373,7 +521,12 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
   return (
     <section className="card glass lesson-task">
       <h3 className="section-title">
-        <Code2 size={16} /> Задача {st?.task && <span className="tk-solved"><Check size={13} /> решена</span>}
+        <Code2 size={16} /> Задача <span className="stars">{STARS[task.level]}</span>
+        {solved && (
+          <span className="tk-solved">
+            <Check size={13} /> решена
+          </span>
+        )}
       </h3>
       <RichText text={task.text} />
       {!isHtml && task.tests[0] && (
@@ -389,7 +542,7 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
         </div>
       )}
       <div className={`tk-work ${isHtml ? "html" : ""}`}>
-        <CodeEditor value={code} onChange={setCode} lang={course.lang} minRows={isHtml ? 16 : 10} />
+        <CodeEditor value={code} onChange={setCode} lang={lang} minRows={isHtml ? 16 : 10} />
         {isHtml && <iframe className="tk-preview" title="Просмотр" sandbox="" srcDoc={preview} />}
       </div>
       <div className="tk-actions">
@@ -411,10 +564,13 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
           </button>
         )}
         {!isHtml && runner?.ok && (
-          <button className="btn" onClick={() => setCustom((c) => (c === null ? task.tests[0]?.input ?? "" : null))}>
+          <button className="btn" onClick={() => setCustom((c) => (c === null ? (task.tests[0]?.input ?? "") : null))}>
             Свой ввод
           </button>
         )}
+        <button className="btn ghost" onClick={() => askAssistant("Посмотри мой код к этой задаче: что не так и куда двигаться дальше? Готовое решение не пиши.")}>
+          <MessageCircleQuestion size={15} /> Спросить
+        </button>
         <button className="btn ghost" onClick={() => setShowSol((v) => !v)}>
           {showSol ? "Скрыть решение" : "Решение"}
         </button>
@@ -424,7 +580,7 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
       </div>
       {!isHtml && runner && !runner.ok && (
         <div className="tk-note muted small">
-          {course.name} на этом компьютере не найден — решение проверит ИИ. Чтобы запускать код прямо здесь: {runner.hint}.{" "}
+          Этот язык на компьютере не найден — решение проверит ИИ. Чтобы запускать код прямо здесь: {runner.hint}.{" "}
           <button className="link-btn" onClick={() => void loadTools(true)}>
             Проверить снова
           </button>
@@ -500,20 +656,21 @@ function TaskBlock({ course, lesson, onSolved }: { course: Course; lesson: Lesso
       )}
       {showSol && (
         <div className="tk-solution">
-          <RichText text={"```" + course.lang + "\n" + task.solution + "\n```"} />
+          {task.solutionLang && task.solutionLang !== lang && <p className="muted small">Эталонное решение на Python — идея та же на любом языке.</p>}
+          <RichText text={"```" + (task.solutionLang ?? lang) + "\n" + task.solution + "\n```"} />
         </div>
       )}
     </section>
   );
 }
 
-function MoreTask({ course, lesson }: { course: Course; lesson: Lesson }) {
+function MoreTask({ lang, lessonTitle, guide }: { lang: string; lessonTitle: string; guide: string }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const more = async () => {
     setBusy(true);
     try {
-      const r = await api.grow.more(course.lang, lesson.title, lesson.guide);
+      const r = await api.grow.more(lang, lessonTitle, guide);
       if ("error" in r) toast(r.error, "warn");
       else setText(r.text);
     } finally {
@@ -530,8 +687,168 @@ function MoreTask({ course, lesson }: { course: Course; lesson: Lesson }) {
           {busy ? "Придумываю…" : text ? "Другую" : "Дай задачу"}
         </button>
       </div>
-      {text ? <RichText text={text} /> : <p className="muted small">Новая задача по теме урока — чтобы закрепить. Решай в задаче выше или у себя, а проверить можно во вкладке «Проверь мой код».</p>}
+      {text ? <RichText text={text} /> : <p className="muted small">Новая задача по теме урока — чтобы закрепить. Проверить решение можно во вкладке «Проверь код».</p>}
     </section>
+  );
+}
+
+// ---------- Задачник ----------
+
+function problemTask(p: Problem, lang: RunLang): CodeTask & { solutionLang?: string } {
+  return { level: p.level, text: p.text, starter: problemStarter(lang), tests: p.tests, checks: [], hints: p.hints, solution: p.solution, solutionLang: "python" };
+}
+
+function ProblemsView() {
+  const tools = useStore(grow, (x) => x.tools);
+  const solvedMap = useStore(grow, (x) => x.progress.problems ?? {});
+  const openId = useStore(grow, (x) => x.problem);
+  const [lang, setLang] = useState<RunLang>("python");
+  const [topic, setTopic] = useState("");
+  const [level, setLevel] = useState(0);
+  const [hideSolved, setHideSolved] = useState(false);
+  const topics = useMemo(() => [...new Set(PROBLEMS.map((x) => x.topic))], []);
+  const list = PROBLEMS.filter((x) => (!topic || x.topic === topic) && (!level || x.level === level) && (!hideSolved || !solvedMap[x.id]?.length));
+  const cur = PROBLEMS.find((x) => x.id === openId) ?? list[0];
+  const LN: Record<RunLang, string> = { python: "Python", java: "Java", cpp: "C++" };
+  return (
+    <div className="problems">
+      <div className="pb-filters">
+        <Segmented<RunLang> size="sm" value={lang} onChange={setLang} options={[{ value: "python", label: "Python" }, { value: "java", label: "Java" }, { value: "cpp", label: "C++" }]} />
+        <select className="input sm" value={topic} onChange={(e) => setTopic(e.target.value)}>
+          <option value="">все темы</option>
+          {topics.map((t) => (
+            <option key={t} value={t}>
+              {t} · {PROBLEMS.filter((x) => x.topic === t).length}
+            </option>
+          ))}
+        </select>
+        <select className="input sm" value={level} onChange={(e) => setLevel(Number(e.target.value))}>
+          <option value={0}>любая сложность</option>
+          <option value={1}>★ лёгкие</option>
+          <option value={2}>★★ средние</option>
+          <option value={3}>★★★ сложные</option>
+        </select>
+        <label className="inline-toggle sm">
+          <input type="checkbox" checked={hideSolved} onChange={(e) => setHideSolved(e.target.checked)} /> скрыть решённые
+        </label>
+        <span className="muted small">
+          решено {Object.values(solvedMap).filter((v) => v.length).length} из {PROBLEMS.length}
+        </span>
+      </div>
+      <div className="grow-course">
+        <aside className="gc-list card glass">
+          <ol>
+            {list.map((x) => (
+              <li key={x.id}>
+                <button className={`gc-item ${cur?.id === x.id ? "on" : ""} ${solvedMap[x.id]?.length ? "done" : ""}`} onClick={() => grow.set({ problem: x.id })}>
+                  <span className="gc-num">{solvedMap[x.id]?.length ? <Check size={13} /> : PROBLEMS.indexOf(x) + 1}</span>
+                  <span className="gc-title">
+                    {x.title}
+                    <span className="gc-date">
+                      {x.topic} · {STARS[x.level]}
+                    </span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ol>
+        </aside>
+        {cur ? (
+          <article className="lesson">
+            <div className="lesson-head">
+              <span className="eyebrow">
+                Задачник · {cur.topic} · {STARS[cur.level]}
+                {solvedMap[cur.id]?.length ? ` · решена на ${solvedMap[cur.id]!.map((l) => LN[l as RunLang] ?? l).join(", ")}` : ""}
+              </span>
+              <h2>{cur.title}</h2>
+            </div>
+            <TaskBlock
+              key={`${cur.id}:${lang}`}
+              lang={lang}
+              task={problemTask(cur, lang)}
+              title={`Задачник · ${cur.title} (${cur.topic}) на ${LN[lang]}`}
+              lessonTitle={`${cur.title} (${cur.topic})`}
+              codeKey={`prob:${cur.id}:${lang}`}
+              solved={!!solvedMap[cur.id]?.includes(lang)}
+              onSolved={async () => {
+                const was = grow.get().progress.problems?.[cur.id] ?? [];
+                if (was.includes(lang)) return;
+                await saveProgress({ problems: { [cur.id]: [...was, lang] } });
+                await markActive();
+              }}
+            />
+            {tools && !tools[lang]?.ok && <p className="muted small">Решения проверяются запуском на тестах, когда {LN[lang]} установлен на компьютере; пока — проверка ИИ.</p>}
+          </article>
+        ) : (
+          <p className="muted">Ничего не нашлось — смени фильтр.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ---------- Итоговый тест модуля ----------
+
+function ModuleExam({ courseId, module, onClose }: { courseId: CourseId; module: string; onClose: () => void }) {
+  const course = courseById(courseId)!;
+  const key = `${courseId}:${module}`;
+  const qs = useMemo(() => {
+    const all = course.lessons.filter((l) => l.module === module).flatMap((l) => l.quiz.map((q, i) => ({ key: `${l.id}:${i}`, quiz: q })));
+    return all.sort(() => Math.random() - 0.5).slice(0, 10);
+  }, [course, module]);
+  const [i, setI] = useState(0);
+  const [right, setRight] = useState(0);
+  const [answered, setAnswered] = useState(false);
+  const cur = qs[i];
+  const pct = qs.length ? Math.round((right / qs.length) * 100) : 0;
+  const finish = async () => {
+    const best = grow.get().progress.exams?.[key] ?? 0;
+    await saveProgress({ exams: { [key]: Math.max(best, pct) } });
+    await markActive();
+    onClose();
+  };
+  return (
+    <div className="modal-back" onClick={onClose}>
+      <div className="modal glass warmup" onClick={(e) => e.stopPropagation()}>
+        <div className="card-head">
+          <GraduationCap size={18} />
+          <span>
+            Итоговый тест · {course.name} · {module}
+          </span>
+          <span className="muted small">{cur ? `${i + 1} из ${qs.length}` : ""}</span>
+          <button className="icon-btn" onClick={onClose}>
+            <X size={16} />
+          </button>
+        </div>
+        {cur ? (
+          <>
+            <QuizItem
+              key={cur.key}
+              quiz={cur.quiz}
+              qkey={cur.key}
+              onAnswer={(ok) => {
+                setAnswered(true);
+                if (ok) setRight((n) => n + 1);
+              }}
+            />
+            <button className="btn primary" disabled={!answered} onClick={() => (setAnswered(false), setI((n) => n + 1))}>
+              {i + 1 < qs.length ? "Дальше" : "Результат"}
+            </button>
+          </>
+        ) : (
+          <div className="rv-done">
+            <div className="rv-big">{pct >= 80 ? "🎓" : "📚"}</div>
+            <b>
+              {right} из {qs.length} — {pct}%
+            </b>
+            <span className="muted">{pct >= 80 ? "Модуль сдан! Можно идти дальше." : "Для зачёта нужно 80%. Повтори уроки модуля и попробуй снова — вопросы перемешаются."}</span>
+            <button className="btn primary" onClick={() => void finish()}>
+              Готово
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -602,6 +919,9 @@ function ReviewView() {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [text, setText] = useState("");
+  useEffect(() => {
+    setWork({ where: "Проверь мой код (своя лаба или задача)", code, lang });
+  }, [code, lang]);
   const go = async () => {
     if (!code.trim()) return;
     setBusy(true);
@@ -619,9 +939,7 @@ function ReviewView() {
   return (
     <div className="grow-review">
       <section className="card glass">
-        <h3 className="section-title">
-          <BookOpen size={16} /> Вставь свой код — лабу, задачу, что не работает
-        </h3>
+        <h3 className="section-title">Вставь свой код — лабу, задачу, что не работает</h3>
         <Segmented<CourseId> size="sm" value={lang} onChange={setLang} options={COURSES.map((c) => ({ value: c.id, label: c.name }))} />
         <CodeEditor value={code} onChange={setCode} lang={lang} minRows={14} />
         <textarea className="input" rows={3} placeholder="Необязательно: что должно получиться или текст ошибки" value={note} onChange={(e) => setNote(e.target.value)} />
@@ -637,6 +955,3 @@ function ReviewView() {
     </div>
   );
 }
-
-/** Для «Сегодня»: что продолжить. */
-export { continueTarget };

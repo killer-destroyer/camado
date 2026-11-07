@@ -1,6 +1,8 @@
 # Python
 
-Python — язык, с которого проще всего начать: короткий код, читается почти как текст. На нём пишут скрипты, анализ данных, нейросети, боты и олимпиадные задачи. 14 уроков от «привет, мир» до классов, рекурсии и алгоритмов.
+Python — язык, с которого проще всего начать: короткий код, читается почти как текст. На нём пишут скрипты, анализ данных, нейросети, боты и олимпиадные задачи. 30 уроков в 6 модулях — от «привет, мир» до ООП, генераторов, алгоритмов (сортировки, два указателя, стек, жадность, динамика, графы) и трёх проектов. В каждом уроке несколько задач от простой ★ до сложной ★★★, в конце модуля — итоговый тест.
+
+### Модуль: Основы
 
 ## py-01 | Первая программа: print и переменные
 Программа на Python — это команды сверху вниз. `print` выводит на экран:
@@ -68,6 +70,35 @@ hint: В сутках 24 часа, в часе 60 минут, в минуте 60
 print("Hello, Python!")
 print(24 * 60 * 60)
 ===
+!! {1} Посчитай и выведи на трёх строках: 2 в степени 20, остаток от деления 1000 на 7, и целую часть от 1000 / 7.
+<<<
+# три print
+<<<
+in:
+out: 1048576\n6\n142
+hint: Степень — `**`, остаток — `%`, целая часть — `//`.
+===
+print(2 ** 20)
+print(1000 % 7)
+print(1000 // 7)
+===
+!! {2} Есть переменные `a = 17` и `b = 5`. Поменяй их значения местами (не печатая числа напрямую) и выведи `a b` через пробел, затем строку `сумма = <a+b>` через f-строку.
+<<<
+a = 17
+b = 5
+# поменяй местами
+<<<
+in:
+out: 5 17\nсумма = 22
+hint: В Python можно поменять местами одной строкой: `a, b = b, a`.
+hint: `print(f"сумма = {a + b}")`
+===
+a = 17
+b = 5
+a, b = b, a
+print(a, b)
+print(f"сумма = {a + b}")
+===
 card: Чем отличается `/` от `//` в Python? :: `/` — обычное деление, всегда float (`7 / 2 = 3.5`).\n`//` — целая часть от деления (`7 // 2 = 3`).
 card: Как получить остаток от деления 17 на 5? :: `17 % 5` → `2`
 card: Как вставить переменную в строку? :: f-строка: `f"Мне {age} лет"`
@@ -128,6 +159,53 @@ a, b = map(int, input().split())
 print(a + b)
 print(a - b)
 print(a * b)
+===
+!! {1} Дано время в секундах (целое число). Выведи его в формате `часы минуты секунды` через пробел.
+<<<
+t = int(input())
+<<<
+in: 3725
+out: 1 2 5
+in: 59
+out: 0 0 59
+in: 86399
+out: 23 59 59
+hint: Часы — `t // 3600`, остаток секунд — `t % 3600`.
+===
+t = int(input())
+print(t // 3600, t % 3600 // 60, t % 60)
+===
+!! {2} Даны три дробных числа в одной строке — длины сторон треугольника. Выведи его периметр и площадь по формуле Герона — ровно с двумя знаками после точки (`f"{x:.2f}"`).
+<<<
+a, b, c = map(float, input().split())
+<<<
+in: 3 4 5
+out: 12.00 6.00
+in: 2.5 2.5 2.5
+out: 7.50 2.71
+hint: Полупериметр `p = (a + b + c) / 2`, площадь `(p*(p-a)*(p-b)*(p-c)) ** 0.5`.
+===
+a, b, c = map(float, input().split())
+p = (a + b + c) / 2
+s = (p * (p - a) * (p - b) * (p - c)) ** 0.5
+print(f"{a + b + c:.2f}", f"{s:.2f}")
+===
+!! {3} Дано четырёхзначное число. Выведи сумму его цифр и число, записанное задом наперёд (без ведущих нулей — как число). Не используй строки — только `//` и `%`.
+<<<
+n = int(input())
+<<<
+in: 1234
+out: 10 4321
+in: 9010
+out: 10 109
+in: 5005
+out: 10 5005
+hint: Цифры: `n // 1000`, `n // 100 % 10`, `n // 10 % 10`, `n % 10`.
+hint: Разворот: `d4 * 1000 + d3 * 100 + d2 * 10 + d1`, затем это число просто напечатать — ведущие нули пропадут сами.
+===
+n = int(input())
+a, b, c, d = n // 1000, n // 100 % 10, n // 10 % 10, n % 10
+print(a + b + c + d, d * 1000 + c * 100 + b * 10 + a)
 ===
 card: Что возвращает `input()`? :: Всегда строку (str). Число нужно превратить: `int(input())`.
 card: Как прочитать два числа из одной строки? :: `a, b = map(int, input().split())`
@@ -199,6 +277,68 @@ if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0:
     print("YES")
 else:
     print("NO")
+===
+!! {1} Даны три целых числа. Выведи наибольшее из них, не используя `max`.
+<<<
+a, b, c = map(int, input().split())
+<<<
+in: 3 9 4
+out: 9
+in: -1 -5 -2
+out: -1
+in: 7 7 1
+out: 7
+hint: Сначала сравни a и b, запомни большее, потом сравни его с c.
+===
+a, b, c = map(int, input().split())
+m = a
+if b > m:
+    m = b
+if c > m:
+    m = c
+print(m)
+===
+!! {2} Даны координаты клетки шахматной доски (столбец и строка от 1 до 8). Выведи `WHITE` или `BLACK` — её цвет. Клетка (1, 1) чёрная.
+<<<
+x, y = map(int, input().split())
+<<<
+in: 1 1
+out: BLACK
+in: 2 1
+out: WHITE
+in: 8 8
+out: BLACK
+in: 4 7
+out: WHITE
+hint: Посмотри на чётность суммы `x + y`.
+===
+x, y = map(int, input().split())
+print("BLACK" if (x + y) % 2 == 0 else "WHITE")
+===
+!! {3} Решить квадратное уравнение a·x² + b·x + c = 0 (a ≠ 0, целые). Выведи количество корней, а затем корни по возрастанию через пробел с двумя знаками после точки (`f"{x:.2f}"`). Если корней нет — только `0`.
+<<<
+a, b, c = map(int, input().split())
+<<<
+in: 1 -3 2
+out: 2 1.00 2.00
+in: 1 2 1
+out: 1 -1.00
+in: 1 0 1
+out: 0
+in: 2 -5 -3
+out: 2 -0.50 3.00
+hint: Дискриминант `d = b*b - 4*a*c`. d > 0 — два корня, d == 0 — один, d < 0 — нет.
+hint: Корни `(-b ± d ** 0.5) / (2 * a)`; отсортируй их.
+===
+a, b, c = map(int, input().split())
+d = b * b - 4 * a * c
+if d < 0:
+    print(0)
+elif d == 0:
+    print(1, f"{-b / (2 * a):.2f}")
+else:
+    r = sorted([(-b - d ** 0.5) / (2 * a), (-b + d ** 0.5) / (2 * a)])
+    print(2, f"{r[0]:.2f}", f"{r[1]:.2f}")
 ===
 card: Как в Python проверить «x от 0 до 9 включительно» одной записью? :: `0 <= x <= 9`
 card: Сколько веток if/elif/else сработает максимум? :: Одна — первая, чьё условие истинно.
@@ -281,6 +421,61 @@ for i in range(1, n + 1):
     f *= i
 print(f)
 ===
+!! {1} Дано n. Выведи таблицу умножения n×n: n строк, в каждой — произведения через пробел.
+<<<
+n = int(input())
+<<<
+in: 3
+out: 1 2 3\n2 4 6\n3 6 9
+in: 1
+out: 1
+hint: Два вложенных цикла; строку собери так: `print(*[i * j for j in range(1, n + 1)])`.
+===
+n = int(input())
+for i in range(1, n + 1):
+    print(*[i * j for j in range(1, n + 1)])
+===
+!! {2} Вводятся числа по одному в строке, последнее — 0 (его не считаем). Выведи количество чисел, их сумму и максимум через пробел.
+<<<
+<<<
+in: 5\n-2\n8\n0
+out: 3 11 8
+in: 7\n0
+out: 1 7 7
+hint: `while True:` + `x = int(input())` + `if x == 0: break`.
+===
+cnt = s = 0
+mx = None
+while True:
+    x = int(input())
+    if x == 0:
+        break
+    cnt += 1
+    s += x
+    if mx is None or x > mx:
+        mx = x
+print(cnt, s, mx)
+===
+!! {3} Дано n. Выведи все числа Фибоначчи, не превосходящие n, через пробел (1 1 2 3 5 …).
+<<<
+n = int(input())
+<<<
+in: 10
+out: 1 1 2 3 5 8
+in: 1
+out: 1 1
+in: 100
+out: 1 1 2 3 5 8 13 21 34 55 89
+hint: Храни два последних числа: `a, b = 1, 1`, затем `a, b = b, a + b`.
+===
+n = int(input())
+a, b = 1, 1
+out = []
+while a <= n:
+    out.append(a)
+    a, b = b, a + b
+print(*out)
+===
 card: Какие числа даёт `range(1, 5)`? :: 1, 2, 3, 4 — правая граница не входит.
 card: Чем `break` отличается от `continue`? :: `break` выходит из цикла, `continue` переходит к следующему шагу.
 
@@ -339,9 +534,62 @@ s = input()
 t = s.replace(" ", "").lower()
 print("YES" if t == t[::-1] else "NO")
 ===
+!! {1} Дана строка. Выведи количество гласных латинских букв в ней (a, e, i, o, u, в любом регистре).
+<<<
+s = input()
+<<<
+in: Hello World
+out: 3
+in: AEIOU xyz
+out: 5
+hint: `for ch in s.lower(): if ch in "aeiou": ...`
+===
+s = input()
+print(sum(1 for ch in s.lower() if ch in "aeiou"))
+===
+!! {2} Дана фраза. Выведи аббревиатуру: первые буквы всех слов заглавными.
+<<<
+s = input()
+<<<
+in: портативный компьютер
+out: ПК
+in: hyper text markup language
+out: HTML
+hint: `"".join(w[0].upper() for w in s.split())`
+===
+s = input()
+print("".join(w[0].upper() for w in s.split()))
+===
+!! {3} Шифр Цезаря: дана строка из латинских букв и пробелов и число k. Сдвинь каждую букву на k позиций по алфавиту (z → a по кругу), регистр сохрани, пробелы не трогай.
+<<<
+s = input()
+k = int(input())
+<<<
+in: Hello World\n3
+out: Khoor Zruog
+in: xyz\n2
+out: zab
+in: abc\n27
+out: bcd
+hint: Номер буквы: `ord(ch) - ord("a")`, новый: `(номер + k) % 26`, обратно — `chr(...)`.
+===
+s = input()
+k = int(input())
+res = []
+for ch in s:
+    if ch.islower():
+        res.append(chr((ord(ch) - 97 + k) % 26 + 97))
+    elif ch.isupper():
+        res.append(chr((ord(ch) - 65 + k) % 26 + 65))
+    else:
+        res.append(ch)
+print("".join(res))
+===
 card: Что вернёт `s[-1]`? :: Последний символ строки.
 card: Как склеить список строк через запятую? :: `", ".join(список)`
 card: Можно ли написать `s[0] = "X"`? :: Нет, строки неизменяемые. Делай новую: `"X" + s[1:]`.
+
+### Модуль: Структуры данных
 
 ## py-06 | Списки
 Список хранит много значений по порядку и **изменяется**:
@@ -406,8 +654,467 @@ if ev:
 else:
     print("NONE")
 ===
+!! {1} В строке даны числа. Сдвинь список циклически на 1 вправо (последний элемент становится первым) и выведи.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 1 2 3 4 5
+out: 5 1 2 3 4
+in: 7
+out: 7
+hint: `a[-1:] + a[:-1]`
+===
+a = list(map(int, input().split()))
+print(*(a[-1:] + a[:-1]))
+===
+!! {2} В строке даны числа. Выведи, сколько элементов больше обоих соседей (первый и последний не считаются).
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 1 5 2 6 3
+out: 2
+in: 1 2 3
+out: 0
+in: 3 1 3 1 3
+out: 1
+hint: Цикл `for i in range(1, len(a) - 1)`.
+===
+a = list(map(int, input().split()))
+print(sum(1 for i in range(1, len(a) - 1) if a[i] > a[i - 1] and a[i] > a[i + 1]))
+===
+!! {3} В строке даны числа. Удали из списка все повторы, оставив первые вхождения в исходном порядке, и выведи результат.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 3 1 3 2 1 5
+out: 3 1 2 5
+in: 4 4 4
+out: 4
+hint: Храни множество уже встреченных и добавляй в ответ только новые.
+===
+a = list(map(int, input().split()))
+seen = set()
+res = []
+for x in a:
+    if x not in seen:
+        seen.add(x)
+        res.append(x)
+print(*res)
+===
 card: Как вывести список через пробел без скобок? :: `print(*a)`
 card: Почему `b = a` не копирует список? :: Это второе имя того же списка. Копия: `a.copy()` или `a[:]`.
+
+## py-08 | Словари и множества
+**Словарь** хранит пары «ключ → значение», поиск по ключу мгновенный:
+
+```python
+ages = {"Аня": 19, "Борис": 20}
+ages["Вика"] = 18          # добавить
+print(ages["Аня"])         # 19
+print(ages.get("Гена", 0)) # 0 — если ключа нет
+for name, age in ages.items():
+    print(name, age)
+```
+
+Подсчёт — классика:
+
+```python
+cnt = {}
+for w in words:
+    cnt[w] = cnt.get(w, 0) + 1
+```
+
+**Множество** хранит уникальные значения без порядка:
+
+```python
+s = set([1, 2, 2, 3])   # {1, 2, 3}
+s.add(5)
+print(3 in s)           # True — очень быстро
+a & b, a | b, a - b     # пересечение, объединение, разность
+```
+
+?? Что выведет `len(set("банан"))`?
+- 5
++ 3
+- 2
+- 4
+= Уникальные буквы: б, а, н.
+
+?? Что будет при `d["нет_такого"]`, если ключа нет?
+- вернёт None
++ ошибка KeyError
+- вернёт 0
+- создаст ключ
+= Без ошибки — через `d.get(ключ, значение_по_умолчанию)`.
+
+!! Дана строка из слов через пробел. Выведи самое частое слово и сколько раз оно встретилось (через пробел). Если таких несколько — то, что раньше по алфавиту.
+<<<
+words = input().split()
+<<<
+in: кот пёс кот мышь пёс кот
+out: кот 3
+in: б а б а
+out: а 2
+hint: Посчитай словарём: `cnt[w] = cnt.get(w, 0) + 1`.
+hint: Найди максимум: `best = min(cnt, key=lambda w: (-cnt[w], w))`.
+===
+words = input().split()
+cnt = {}
+for w in words:
+    cnt[w] = cnt.get(w, 0) + 1
+best = min(cnt, key=lambda w: (-cnt[w], w))
+print(best, cnt[best])
+===
+!! {1} Даны два списка чисел в двух строках. Выведи по возрастанию числа, которые есть в обоих. Если таких нет — `NONE`.
+<<<
+a = set(map(int, input().split()))
+b = set(map(int, input().split()))
+<<<
+in: 1 2 3 4\n3 4 5 6
+out: 3 4
+in: 1 2\n3 4
+out: NONE
+hint: Пересечение множеств — `a & b`.
+===
+a = set(map(int, input().split()))
+b = set(map(int, input().split()))
+c = sorted(a & b)
+print(*c if c else ["NONE"])
+===
+!! {2} Дано n, затем n строк «слово перевод». Затем строка-фраза из слов. Выведи перевод фразы: каждое слово из словаря заменено, неизвестные оставлены как есть.
+<<<
+n = int(input())
+<<<
+in: 2\ncat кот\ndog пёс\ncat and dog
+out: кот and пёс
+in: 1\nhi привет\nhi hi bye
+out: привет привет bye
+hint: Собери словарь, затем `d.get(w, w)` для каждого слова.
+===
+n = int(input())
+d = {}
+for _ in range(n):
+    k, v = input().split()
+    d[k] = v
+print(*[d.get(w, w) for w in input().split()])
+===
+!! {3} Дана строка слов. Сгруппируй анаграммы: выведи группы (слова внутри группы по алфавиту через пробел), группы — по алфавиту первого слова, каждая на своей строке.
+<<<
+words = input().split()
+<<<
+in: кот ток рост сорт торс окт
+out: кот окт ток\nрост сорт торс
+in: ab ba cd
+out: ab ba\ncd
+hint: Ключ группы — отсортированные буквы: `"".join(sorted(w))`.
+===
+words = input().split()
+g = {}
+for w in words:
+    g.setdefault("".join(sorted(w)), []).append(w)
+groups = sorted(sorted(v) for v in g.values())
+for grp in groups:
+    print(*grp)
+===
+card: Как безопасно взять значение из словаря, если ключа может не быть? :: `d.get(key, default)`
+card: Почему `x in set` быстрее, чем `x in list`? :: Множество ищет по хешу за O(1), список перебирает все элементы — O(n).
+
+## py-15 | Кортежи, распаковка и enumerate/zip
+**Кортеж** — как список, но неизменяемый: `p = (3, 4)`. Его удобно возвращать из функций и использовать как ключ словаря.
+
+```python
+point = (3, 4)
+x, y = point            # распаковка
+a, *rest = [1, 2, 3, 4] # a = 1, rest = [2, 3, 4]
+first, *_, last = "abcde"
+```
+
+`enumerate` даёт номер и элемент, `zip` — идёт по нескольким спискам сразу:
+
+```python
+names = ["Аня", "Боря"]
+scores = [90, 75]
+for i, (n, s) in enumerate(zip(names, scores), start=1):
+    print(i, n, s)
+```
+
+`zip(*matrix)` транспонирует матрицу (строки ↔ столбцы). Словарь из двух списков: `dict(zip(keys, values))`.
+
+?? Что будет в `rest` после `a, *rest = (5,)`?
+- ошибка
++ пустой список []
+- None
+- (5,)
+= Звёздочка собирает «всё остальное», даже если там ничего нет.
+
+?? Что даст `list(zip([1, 2, 3], "ab"))`?
++ [(1, 'a'), (2, 'b')]
+- [(1, 'a'), (2, 'b'), (3, None)]
+- ошибка
+- [1, 'a', 2, 'b']
+= zip останавливается на самом коротком.
+
+!! {1} Даны имена в первой строке и баллы во второй. Выведи пары «номер. имя — балл» (номер с 1), каждую на своей строке.
+<<<
+names = input().split()
+scores = input().split()
+<<<
+in: аня боря вика\n90 75 88
+out: 1. аня — 90\n2. боря — 75\n3. вика — 88
+in: миша\n100
+out: 1. миша — 100
+hint: `for i, (n, s) in enumerate(zip(names, scores), start=1):`
+===
+names = input().split()
+scores = input().split()
+for i, (n, s) in enumerate(zip(names, scores), start=1):
+    print(f"{i}. {n} — {s}")
+===
+!! {2} Дана матрица: n, затем n строк по m чисел. Выведи транспонированную матрицу.
+<<<
+n = int(input())
+<<<
+in: 2\n1 2 3\n4 5 6
+out: 1 4\n2 5\n3 6
+in: 3\n1\n2\n3
+out: 1 2 3
+hint: `for col in zip(*rows): print(*col)`
+===
+n = int(input())
+rows = [list(map(int, input().split())) for _ in range(n)]
+for col in zip(*rows):
+    print(*col)
+===
+!! {3} Дан список чисел. Выведи индексы (с 0) всех элементов, равных максимуму, и сам максимум первым числом.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 3 7 2 7 1
+out: 7 1 3
+in: 5
+out: 5 0
+hint: `mx = max(a)`, затем `[i for i, x in enumerate(a) if x == mx]`.
+===
+a = list(map(int, input().split()))
+mx = max(a)
+print(mx, *[i for i, x in enumerate(a) if x == mx])
+===
+card: Как одновременно получить номер и элемент в цикле? :: `for i, x in enumerate(a):`
+card: Как транспонировать матрицу в одну строку? :: `list(zip(*m))`
+
+## py-16 | Вложенные списки и матрицы
+Матрица — список списков: `m[i][j]` — строка i, столбец j.
+
+```python
+n, m = 3, 4
+grid = [[0] * m for _ in range(n)]   # правильно
+bad = [[0] * m] * n                  # ОШИБКА: n ссылок на один и тот же список!
+grid[1][2] = 5
+for row in grid:
+    print(*row)
+```
+
+Обход соседей клетки (вверх, вниз, влево, вправо):
+
+```python
+for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+    x, y = i + dx, j + dy
+    if 0 <= x < n and 0 <= y < m:
+        ...
+```
+
+Сумма по строкам — `[sum(r) for r in grid]`, по столбцам — `[sum(c) for c in zip(*grid)]`. Главная диагональ — `grid[i][i]`.
+
+?? Что не так с `[[0] * 3] * 3`?
++ все три строки — один и тот же список
+- создаст 9 строк
+- ошибка
+- ничего, так и надо
+= Меняешь одну строку — меняются все. Нужен генератор `[[0] * 3 for _ in range(3)]`.
+
+?? Как обратиться к элементу во 2-й строке, 3-м столбце (с нуля)?
++ m[2][3]
+- m[3][2]
+- m(2, 3)
+- m[2, 3]
+= Сначала номер строки, потом столбца.
+
+!! {1} Дана квадратная матрица n×n. Выведи сумму главной и сумму побочной диагонали через пробел.
+<<<
+n = int(input())
+m = [list(map(int, input().split())) for _ in range(n)]
+<<<
+in: 3\n1 2 3\n4 5 6\n7 8 9
+out: 15 15
+in: 1\n5
+out: 5 5
+hint: Главная — `m[i][i]`, побочная — `m[i][n - 1 - i]`.
+===
+n = int(input())
+m = [list(map(int, input().split())) for _ in range(n)]
+print(sum(m[i][i] for i in range(n)), sum(m[i][n - 1 - i] for i in range(n)))
+===
+!! {2} Поле «сапёра»: даны n m и n строк из `.` и `*`. Выведи поле, где вместо каждой точки стоит число мин вокруг (8 соседей), а мины остаются `*`.
+<<<
+n, m = map(int, input().split())
+g = [input() for _ in range(n)]
+<<<
+in: 3 4\n*...\n..*.\n....
+out: *211\n12*1\n0111
+in: 1 1\n.
+out: 0
+hint: Для каждой клетки перебери dx, dy от -1 до 1 (кроме 0, 0) и посчитай `*` в границах поля.
+===
+n, m = map(int, input().split())
+g = [input() for _ in range(n)]
+for i in range(n):
+    row = []
+    for j in range(m):
+        if g[i][j] == "*":
+            row.append("*")
+            continue
+        c = 0
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                x, y = i + dx, j + dy
+                if (dx or dy) and 0 <= x < n and 0 <= y < m and g[x][y] == "*":
+                    c += 1
+        row.append(str(c))
+    print("".join(row))
+===
+!! {3} Дано n. Выведи матрицу n×n, заполненную числами от 1 до n² по спирали (по часовой стрелке от левого верхнего угла). Числа через пробел.
+<<<
+n = int(input())
+<<<
+in: 3
+out: 1 2 3\n8 9 4\n7 6 5
+in: 4
+out: 1 2 3 4\n12 13 14 5\n11 16 15 6\n10 9 8 7
+in: 1
+out: 1
+hint: Иди в текущем направлении, пока можно; упёрся в край или занятую клетку — поверни направо: (0,1) → (1,0) → (0,-1) → (-1,0).
+===
+n = int(input())
+m = [[0] * n for _ in range(n)]
+dirs = [(0, 1), (1, 0), (0, -1), (-1, 0)]
+x = y = d = 0
+for k in range(1, n * n + 1):
+    m[x][y] = k
+    nx, ny = x + dirs[d][0], y + dirs[d][1]
+    if not (0 <= nx < n and 0 <= ny < n and m[nx][ny] == 0):
+        d = (d + 1) % 4
+        nx, ny = x + dirs[d][0], y + dirs[d][1]
+    x, y = nx, ny
+for row in m:
+    print(*row)
+===
+card: Почему `[[0]*m]*n` — ошибка? :: Получится n ссылок на один и тот же список-строку. Правильно: `[[0]*m for _ in range(n)]`.
+card: Как пройти по 4 соседям клетки (i, j)? :: `for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):` и проверка границ.
+
+## py-09 | Генераторы списков, sorted и lambda
+Генератор списка — список в одну строку:
+
+```python
+squares = [x * x for x in range(10)]
+evens = [x for x in nums if x % 2 == 0]
+```
+
+`sorted` и `max`/`min` принимают `key` — по чему сравнивать:
+
+```python
+words = ["яблоко", "кот", "арбуз"]
+sorted(words, key=len)            # ['кот', 'арбуз', 'яблоко']
+sorted(words, key=len, reverse=True)
+students = [("Аня", 5), ("Боря", 3)]
+max(students, key=lambda s: s[1])   # ('Аня', 5)
+```
+
+`lambda x: выражение` — маленькая функция без имени.
+
+Ещё полезное: `enumerate(a)` — пары (номер, элемент), `zip(a, b)` — идти по двум спискам сразу, `any`/`all` — есть ли хоть один / все ли True.
+
+?? Что даст `[x * 2 for x in range(4) if x % 2]`?
+- [0, 2, 4, 6]
++ [2, 6]
+- [1, 3]
+- [0, 4]
+= Остаются нечётные x = 1 и 3, умноженные на 2.
+
+?? Что делает `key=len` в `sorted(words, key=len)`?
++ сортирует по длине слова
+- оставляет только длинные слова
+- сортирует по алфавиту
+- считает слова
+= key — функция, по результату которой сравниваются элементы.
+
+!! В первой строке n — число студентов. Дальше n строк «Имя балл». Выведи имена по убыванию балла; при равенстве — по алфавиту. Каждое имя на своей строке.
+<<<
+n = int(input())
+<<<
+in: 4\nАня 90\nБоря 75\nВика 90\nГлеб 60
+out: Аня\nВика\nБоря\nГлеб
+in: 2\nЯна 50\nАлекс 50
+out: Алекс\nЯна
+hint: Собери список пар: `name, score = input().split()`, балл переведи в int.
+hint: `sorted(people, key=lambda p: (-p[1], p[0]))`
+===
+n = int(input())
+people = []
+for _ in range(n):
+    name, score = input().split()
+    people.append((name, int(score)))
+for name, _ in sorted(people, key=lambda p: (-p[1], p[0])):
+    print(name)
+===
+!! {1} В строке даны числа. Одной строкой с генератором списка выведи квадраты нечётных чисел.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 1 2 3 4 5
+out: 1 9 25
+in: 2 4
+out: 
+hint: `[x * x for x in a if x % 2]`
+===
+a = list(map(int, input().split()))
+print(*[x * x for x in a if x % 2])
+===
+!! {2} Дана строка слов. Отсортируй слова по длине, а при равной длине — по алфавиту, и выведи.
+<<<
+words = input().split()
+<<<
+in: банан кот яблоко арбуз ёж
+out: ёж кот арбуз банан яблоко
+in: bb a ccc aa
+out: a aa bb ccc
+hint: `sorted(words, key=lambda w: (len(w), w))`
+===
+words = input().split()
+print(*sorted(words, key=lambda w: (len(w), w)))
+===
+!! {3} Дано n, затем n строк «имя предмет балл». Для каждого предмета (по алфавиту) выведи «предмет лучший_студент балл»; при равенстве баллов — студент, первый по алфавиту.
+<<<
+n = int(input())
+<<<
+in: 4\nаня матан 90\nборя матан 95\nвика физика 80\nгена физика 80
+out: матан боря 95\nфизика вика 80
+in: 1\nмиша алгоритмы 70
+out: алгоритмы миша 70
+hint: Собери словарь предмет → список (балл, имя), потом `min(lst, key=lambda x: (-x[0], x[1]))`.
+===
+n = int(input())
+d = {}
+for _ in range(n):
+    name, subj, score = input().split()
+    d.setdefault(subj, []).append((int(score), name))
+for subj in sorted(d):
+    sc, name = min(d[subj], key=lambda x: (-x[0], x[1]))
+    print(subj, name, sc)
+===
+card: Как отсортировать по убыванию числа, а при равенстве по имени? :: `key=lambda p: (-p.score, p.name)` — кортеж сравнивается по порядку.
+card: Что делает `enumerate(a)`? :: Даёт пары (номер, элемент): `for i, x in enumerate(a)`.
+
+### Модуль: Функции и ошибки
 
 ## py-07 | Функции
 Функция — именованный кусок кода, который можно вызывать много раз:
@@ -486,128 +1193,208 @@ def is_prime(n):
 k = int(input())
 print(*[n for n in range(2, k + 1) if is_prime(n)])
 ===
+!! {1} Напиши функцию `digits_sum(n)` — сумма цифр числа. Даны числа в строке — выведи сумму цифр каждого через пробел.
+<<<
+def digits_sum(n):
+    pass
+
+nums = list(map(int, input().split()))
+<<<
+in: 123 9 1000
+out: 6 9 1
+in: 99999
+out: 45
+hint: `sum(int(c) for c in str(n))` или циклом с `% 10`.
+===
+def digits_sum(n):
+    return sum(int(c) for c in str(abs(n)))
+
+nums = list(map(int, input().split()))
+print(*[digits_sum(x) for x in nums])
+===
+!! {2} Напиши функцию `stats(a)`, которая возвращает три значения: минимум, максимум и среднее (с 2 знаками). Даны числа — выведи результат через пробел.
+<<<
+def stats(a):
+    pass
+
+a = list(map(int, input().split()))
+<<<
+in: 3 1 4 1 5
+out: 1 5 2.80
+in: 10
+out: 10 10 10.00
+hint: Функция может вернуть кортеж: `return mn, mx, avg`.
+===
+def stats(a):
+    return min(a), max(a), round(sum(a) / len(a), 2)
+
+a = list(map(int, input().split()))
+mn, mx, avg = stats(a)
+print(mn, mx, f"{avg:.2f}")
+===
+!! {3} Функция `is_palindrome_number(n)` без строк. Дано k — выведи количество чисел-палиндромов от 1 до k.
+<<<
+def is_palindrome_number(n):
+    pass
+
+k = int(input())
+<<<
+in: 100
+out: 18
+in: 9
+out: 9
+in: 1000
+out: 108
+hint: Разверни число циклом: `r = r * 10 + n % 10`, `n //= 10`, и сравни с исходным.
+===
+def is_palindrome_number(n):
+    r, m = 0, n
+    while m:
+        r = r * 10 + m % 10
+        m //= 10
+    return r == n
+
+k = int(input())
+print(sum(1 for x in range(1, k + 1) if is_palindrome_number(x)))
+===
 card: Что вернёт функция без `return`? :: `None`
 card: Почему проверка простоты идёт только до √n? :: Если n = a·b и a > √n, то b < √n — делитель уже нашёлся бы раньше.
 
-## py-08 | Словари и множества
-**Словарь** хранит пары «ключ → значение», поиск по ключу мгновенный:
+## py-17 | Области видимости, *args и **kwargs
+Переменная, созданная внутри функции, **локальная**. Читать глобальные можно, а чтобы изменить — нужен `global` (лучше так не делать — возвращай значение).
 
 ```python
-ages = {"Аня": 19, "Борис": 20}
-ages["Вика"] = 18          # добавить
-print(ages["Аня"])         # 19
-print(ages.get("Гена", 0)) # 0 — если ключа нет
-for name, age in ages.items():
-    print(name, age)
+count = 0
+def inc():
+    global count
+    count += 1
 ```
 
-Подсчёт — классика:
+Любое число аргументов:
 
 ```python
-cnt = {}
-for w in words:
-    cnt[w] = cnt.get(w, 0) + 1
+def total(*nums):          # nums — кортеж
+    return sum(nums)
+total(1, 2, 3)
+
+def show(**opts):          # opts — словарь
+    for k, v in opts.items():
+        print(k, v)
+show(color="red", size=3)
 ```
 
-**Множество** хранит уникальные значения без порядка:
+Распаковка при вызове: `f(*список)`, `f(**словарь)`.
+
+**Значение по умолчанию — изменяемый объект** — классическая ловушка:
 
 ```python
-s = set([1, 2, 2, 3])   # {1, 2, 3}
-s.add(5)
-print(3 in s)           # True — очень быстро
-a & b, a | b, a - b     # пересечение, объединение, разность
+def add(x, lst=[]):   # список создаётся ОДИН раз!
+    lst.append(x)
+    return lst
+add(1); add(2)        # [1, 2] — неожиданно
 ```
 
-?? Что выведет `len(set("банан"))`?
-- 5
-+ 3
-- 2
-- 4
-= Уникальные буквы: б, а, н.
+Правильно: `lst=None` и внутри `if lst is None: lst = []`.
 
-?? Что будет при `d["нет_такого"]`, если ключа нет?
-- вернёт None
-+ ошибка KeyError
-- вернёт 0
-- создаст ключ
-= Без ошибки — через `d.get(ключ, значение_по_умолчанию)`.
+**Функции — тоже значения**: их можно передавать и возвращать.
 
-!! Дана строка из слов через пробел. Выведи самое частое слово и сколько раз оно встретилось (через пробел). Если таких несколько — то, что раньше по алфавиту.
+```python
+def make_mul(k):
+    return lambda x: x * k
+triple = make_mul(3)
+```
+
+?? Что выведет код?
+```python
+def f(x, lst=[]):
+    lst.append(x)
+    return len(lst)
+f(1)
+print(f(2))
+```
+- 1
++ 2
+- ошибка
+- 0
+= Список по умолчанию общий для всех вызовов.
+
+?? Что такое `nums` в `def f(*nums)`?
++ кортеж всех переданных аргументов
+- список
+- словарь
+- первый аргумент
+= `**opts` — словарь именованных аргументов.
+
+!! {1} Напиши функцию `avg(*nums)`, которая возвращает среднее любого количества чисел (0, если чисел нет). Даны числа — выведи среднее с 2 знаками.
 <<<
-words = input().split()
+def avg(*nums):
+    pass
+
+a = list(map(float, input().split()))
 <<<
-in: кот пёс кот мышь пёс кот
-out: кот 3
-in: б а б а
-out: а 2
-hint: Посчитай словарём: `cnt[w] = cnt.get(w, 0) + 1`.
-hint: Найди максимум: `best = min(cnt, key=lambda w: (-cnt[w], w))`.
+in: 1 2 3 4
+out: 2.50
+in: 5
+out: 5.00
+hint: `return sum(nums) / len(nums) if nums else 0` и вызов `avg(*a)`.
 ===
-words = input().split()
-cnt = {}
-for w in words:
-    cnt[w] = cnt.get(w, 0) + 1
-best = min(cnt, key=lambda w: (-cnt[w], w))
-print(best, cnt[best])
+def avg(*nums):
+    return sum(nums) / len(nums) if nums else 0
+
+a = list(map(float, input().split()))
+print(f"{avg(*a):.2f}")
 ===
-card: Как безопасно взять значение из словаря, если ключа может не быть? :: `d.get(key, default)`
-card: Почему `x in set` быстрее, чем `x in list`? :: Множество ищет по хешу за O(1), список перебирает все элементы — O(n).
-
-## py-09 | Генераторы списков, sorted и lambda
-Генератор списка — список в одну строку:
-
-```python
-squares = [x * x for x in range(10)]
-evens = [x for x in nums if x % 2 == 0]
-```
-
-`sorted` и `max`/`min` принимают `key` — по чему сравнивать:
-
-```python
-words = ["яблоко", "кот", "арбуз"]
-sorted(words, key=len)            # ['кот', 'арбуз', 'яблоко']
-sorted(words, key=len, reverse=True)
-students = [("Аня", 5), ("Боря", 3)]
-max(students, key=lambda s: s[1])   # ('Аня', 5)
-```
-
-`lambda x: выражение` — маленькая функция без имени.
-
-Ещё полезное: `enumerate(a)` — пары (номер, элемент), `zip(a, b)` — идти по двум спискам сразу, `any`/`all` — есть ли хоть один / все ли True.
-
-?? Что даст `[x * 2 for x in range(4) if x % 2]`?
-- [0, 2, 4, 6]
-+ [2, 6]
-- [1, 3]
-- [0, 4]
-= Остаются нечётные x = 1 и 3, умноженные на 2.
-
-?? Что делает `key=len` в `sorted(words, key=len)`?
-+ сортирует по длине слова
-- оставляет только длинные слова
-- сортирует по алфавиту
-- считает слова
-= key — функция, по результату которой сравниваются элементы.
-
-!! В первой строке n — число студентов. Дальше n строк «Имя балл». Выведи имена по убыванию балла; при равенстве — по алфавиту. Каждое имя на своей строке.
+!! {2} Функция `make_counter()` возвращает функцию, которая при каждом вызове возвращает следующее число 1, 2, 3… (используй `nonlocal`). Дано n — вызови счётчик n раз и выведи значения через пробел.
 <<<
+def make_counter():
+    pass
+
 n = int(input())
 <<<
-in: 4\nАня 90\nБоря 75\nВика 90\nГлеб 60
-out: Аня\nВика\nБоря\nГлеб
-hint: Собери список пар: `name, score = input().split()`, балл переведи в int.
-hint: `sorted(people, key=lambda p: (-p[1], p[0]))`
+in: 5
+out: 1 2 3 4 5
+in: 1
+out: 1
+hint: Внутри: `c = 0; def nxt(): nonlocal c; c += 1; return c; return nxt`.
 ===
+def make_counter():
+    c = 0
+    def nxt():
+        nonlocal c
+        c += 1
+        return c
+    return nxt
+
 n = int(input())
-people = []
-for _ in range(n):
-    name, score = input().split()
-    people.append((name, int(score)))
-for name, _ in sorted(people, key=lambda p: (-p[1], p[0])):
-    print(name)
+cnt = make_counter()
+print(*[cnt() for _ in range(n)])
 ===
-card: Как отсортировать по убыванию числа, а при равенстве по имени? :: `key=lambda p: (-p.score, p.name)` — кортеж сравнивается по порядку.
-card: Что делает `enumerate(a)`? :: Даёт пары (номер, элемент): `for i, x in enumerate(a)`.
+!! {3} Функция высшего порядка `apply_all(funcs, x)` — применяет функции по цепочке. Дано число и строка команд (`double`, `inc`, `square`, `neg`) — выведи результат.
+<<<
+def apply_all(funcs, x):
+    pass
+
+x = int(input())
+cmds = input().split()
+<<<
+in: 3\ninc double square
+out: 64
+in: 5\nneg inc
+out: -4
+hint: Словарь имя → lambda: `{"double": lambda v: v * 2, ...}`, затем цикл по функциям.
+===
+def apply_all(funcs, x):
+    for f in funcs:
+        x = f(x)
+    return x
+
+ops = {"double": lambda v: v * 2, "inc": lambda v: v + 1, "square": lambda v: v * v, "neg": lambda v: -v}
+x = int(input())
+cmds = input().split()
+print(apply_all([ops[c] for c in cmds], x))
+===
+card: Чем опасен изменяемый аргумент по умолчанию (`lst=[]`)? :: Он создаётся один раз и общий для всех вызовов. Используй `None` и создавай внутри.
+card: Что делает `nonlocal`? :: Позволяет изменить переменную внешней (но не глобальной) функции из вложенной.
 
 ## py-10 | Ошибки и исключения
 Когда что-то идёт не так, Python бросает **исключение**: `ValueError`, `ZeroDivisionError`, `KeyError`, `IndexError`… Их можно поймать:
@@ -671,6 +1458,8 @@ lines = sys.stdin.read().split("\n")
 <<<
 in: 10\nабв\n-3\n2.5\n7
 out: 14 2
+in: x\ny
+out: 0 2
 hint: Пустые строки (например, в конце) пропусти: `if not line.strip(): continue`.
 hint: В цикле: `try: s += int(line) except ValueError: bad += 1`.
 ===
@@ -687,8 +1476,201 @@ for line in lines:
         bad += 1
 print(s, bad)
 ===
+!! {1} Дано два числа a и b (могут быть не числами). Выведи a / b с 2 знаками после точки; если b равно 0 — `делить на ноль нельзя`; если что-то не число — `ошибка ввода`.
+<<<
+a, b = input().split()
+<<<
+in: 7 2
+out: 3.50
+in: 1 0
+out: делить на ноль нельзя
+in: 5 abc
+out: ошибка ввода
+hint: `try: x = float(a) ... except ValueError: ...` и отдельно `except ZeroDivisionError`.
+===
+a, b = input().split()
+try:
+    print(f"{float(a) / float(b):.2f}")
+except ZeroDivisionError:
+    print("делить на ноль нельзя")
+except ValueError:
+    print("ошибка ввода")
+===
+!! {2} Напиши функцию `parse_age(s)`, которая бросает `ValueError("…")`, если возраст не целое число от 0 до 150. Даны строки до конца ввода — для каждой выведи `ok` или `bad`.
+<<<
+import sys
+
+def parse_age(s):
+    pass
+<<<
+in: 18\n-3\nсто\n150\n151
+out: ok\nbad\nbad\nok\nbad
+in: 0\n 42 \n4.5
+out: ok\nok\nbad
+hint: Внутри: `n = int(s)` (сам бросит ValueError), затем `if not 0 <= n <= 150: raise ValueError("вне диапазона")`.
+===
+import sys
+
+def parse_age(s):
+    n = int(s)
+    if not 0 <= n <= 150:
+        raise ValueError("вне диапазона")
+    return n
+
+for line in sys.stdin.read().split("\n"):
+    if not line.strip():
+        continue
+    try:
+        parse_age(line.strip())
+        print("ok")
+    except ValueError:
+        print("bad")
+===
 card: Когда выполняется блок `finally`? :: Всегда: и после успеха, и после пойманной ошибки.
 card: Как бросить свою ошибку? :: `raise ValueError("сообщение")`
+
+## py-12 | Рекурсия
+Рекурсия — когда функция вызывает саму себя на задаче поменьше. Обязательно нужен **базовый случай**, где она останавливается:
+
+```python
+def fact(n):
+    if n == 0:        # базовый случай
+        return 1
+    return n * fact(n - 1)
+```
+
+Классика — перебор вариантов:
+
+```python
+def gen(prefix, n):
+    if len(prefix) == n:
+        print(prefix)
+        return
+    for ch in "01":
+        gen(prefix + ch, n)
+```
+
+Наивная рекурсия бывает медленной: `fib(n) = fib(n-1) + fib(n-2)` считает одно и то же много раз. Лечится **запоминанием**:
+
+```python
+from functools import lru_cache
+
+@lru_cache(None)
+def fib(n):
+    return n if n < 2 else fib(n - 1) + fib(n - 2)
+```
+
+Глубина рекурсии в Python ограничена (~1000 вызовов).
+
+?? Что будет, если у рекурсии нет базового случая?
+- вернёт 0
++ бесконечные вызовы → RecursionError
+- функция выполнится один раз
+- ничего
+= Каждый вызов порождает новый, пока не кончится стек.
+
+?? Сколько строк выведет `gen("", 3)` из примера выше?
+- 3
+- 6
++ 8
+- 9
+= Все строки из 0 и 1 длины 3: 2³ = 8.
+
+!! Дано n. Выведи все правильные скобочные последовательности из n пар круглых скобок в лексикографическом порядке («(» меньше «)»), каждую на своей строке.
+<<<
+n = int(input())
+<<<
+in: 2
+out: (())\n()()
+in: 3
+out: ((()))\n(()())\n(())()\n()(())\n()()()
+hint: Рекурсия с параметрами: строка, сколько открыто, сколько закрыто.
+hint: Открывать можно, пока open < n; закрывать — пока close < open. Сначала пробуй «(».
+===
+n = int(input())
+
+def gen(s, op, cl):
+    if len(s) == 2 * n:
+        print(s)
+        return
+    if op < n:
+        gen(s + "(", op + 1, cl)
+    if cl < op:
+        gen(s + ")", op, cl + 1)
+
+gen("", 0, 0)
+===
+!! {1} Рекурсивно посчитай сумму цифр числа (без циклов и строк).
+<<<
+def dsum(n):
+    pass
+
+print(dsum(int(input())))
+<<<
+in: 12345
+out: 15
+in: 7
+out: 7
+hint: База: `n < 10` → `n`. Иначе `n % 10 + dsum(n // 10)`.
+===
+def dsum(n):
+    return n if n < 10 else n % 10 + dsum(n // 10)
+
+print(dsum(int(input())))
+===
+!! {2} Быстрое возведение в степень: рекурсивно посчитай a^n по модулю m за O(log n) (n до 10^18).
+<<<
+def power(a, n, m):
+    pass
+
+a, n, m = map(int, input().split())
+<<<
+in: 2 10 1000
+out: 24
+in: 3 1000000000000 1000000007
+out: 570188345
+in: 7 0 13
+out: 1
+hint: Если n чётное: `power(a, n // 2) ** 2`; если нечётное: `a * power(a, n - 1)`. Всё по модулю m.
+===
+def power(a, n, m):
+    if n == 0:
+        return 1 % m
+    if n % 2 == 0:
+        h = power(a, n // 2, m)
+        return h * h % m
+    return a * power(a, n - 1, m) % m
+
+a, n, m = map(int, input().split())
+print(power(a, n, m))
+===
+!! {3} Дано n и k. Выведи все сочетания из n чисел 1..n по k в лексикографическом порядке, каждое на своей строке.
+<<<
+n, k = map(int, input().split())
+<<<
+in: 4 2
+out: 1 2\n1 3\n1 4\n2 3\n2 4\n3 4
+in: 3 3
+out: 1 2 3
+hint: Рекурсия `gen(start, chosen)`: если в chosen k чисел — печатай; иначе перебирай x от start до n.
+===
+n, k = map(int, input().split())
+
+def gen(start, chosen):
+    if len(chosen) == k:
+        print(*chosen)
+        return
+    for x in range(start, n + 1):
+        chosen.append(x)
+        gen(x + 1, chosen)
+        chosen.pop()
+
+gen(1, [])
+===
+card: Что такое базовый случай рекурсии? :: Условие, при котором функция не вызывает себя и сразу возвращает ответ.
+card: Как ускорить рекурсию с повторяющимися вызовами? :: Запоминать результаты: `@lru_cache(None)` из functools.
+
+### Модуль: ООП
 
 ## py-11 | Классы и объекты
 Класс — шаблон для объектов со своими данными (полями) и действиями (методами):
@@ -766,82 +1748,489 @@ rects = [Rect(*map(int, input().split())) for _ in range(n)]
 best = max(rects, key=lambda r: r.area())
 print(best.area(), best.perimeter())
 ===
+!! {1} Класс `Counter` с методами `inc()`, `dec()` (не ниже нуля) и `value()`. Дана строка команд из символов `+` и `-` — выведи итоговое значение.
+<<<
+class Counter:
+    pass
+
+cmds = input()
+<<<
+in: +++-+
+out: 3
+in: --+-
+out: 0
+hint: В `__init__` заведи `self.n = 0`; в `dec` проверь `if self.n > 0`.
+===
+class Counter:
+    def __init__(self):
+        self.n = 0
+
+    def inc(self):
+        self.n += 1
+
+    def dec(self):
+        if self.n > 0:
+            self.n -= 1
+
+    def value(self):
+        return self.n
+
+cmds = input()
+c = Counter()
+for ch in cmds:
+    if ch == "+":
+        c.inc()
+    elif ch == "-":
+        c.dec()
+print(c.value())
+===
+!! {2} Класс `Vector(x, y)` с методом `length()` и сложением через метод `add(other)`, возвращающим новый вектор. Дано n векторов — выведи сумму (x y) и её длину с 2 знаками.
+<<<
+class Vector:
+    pass
+
+n = int(input())
+<<<
+in: 2\n3 0\n0 4
+out: 3 4 5.00
+in: 3\n1 1\n1 1\n-2 -2
+out: 0 0 0.00
+hint: `length`: `(self.x ** 2 + self.y ** 2) ** 0.5`.
+===
+class Vector:
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+
+    def add(self, other):
+        return Vector(self.x + other.x, self.y + other.y)
+
+    def length(self):
+        return (self.x ** 2 + self.y ** 2) ** 0.5
+
+n = int(input())
+s = Vector(0, 0)
+for _ in range(n):
+    s = s.add(Vector(*map(int, input().split())))
+print(s.x, s.y, f"{s.length():.2f}")
+===
 card: Что делает метод `__str__`? :: Задаёт, как объект выглядит в `print` и `str()`.
 card: Как унаследовать класс B от A? :: `class B(A):`
 
-## py-12 | Рекурсия
-Рекурсия — когда функция вызывает саму себя на задаче поменьше. Обязательно нужен **базовый случай**, где она останавливается:
+## py-18 | Наследование и полиморфизм
+Наследник получает поля и методы родителя и может их **переопределить**:
 
 ```python
-def fact(n):
-    if n == 0:        # базовый случай
-        return 1
-    return n * fact(n - 1)
+class Animal:
+    def __init__(self, name):
+        self.name = name
+    def speak(self):
+        return "..."
+
+class Dog(Animal):
+    def speak(self):
+        return "Гав"
+
+class Puppy(Dog):
+    def __init__(self, name, age):
+        super().__init__(name)   # вызвать конструктор родителя
+        self.age = age
 ```
 
-Классика — перебор вариантов:
+**Полиморфизм**: один и тот же вызов работает для разных классов.
 
 ```python
-def gen(prefix, n):
-    if len(prefix) == n:
-        print(prefix)
-        return
-    for ch in "01":
-        gen(prefix + ch, n)
+for a in [Dog("Рекс"), Animal("Кто-то")]:
+    print(a.name, a.speak())
 ```
 
-Наивная рекурсия бывает медленной: `fib(n) = fib(n-1) + fib(n-2)` считает одно и то же много раз. Лечится **запоминанием**:
+`isinstance(x, Dog)` — проверка типа с учётом наследования. Абстрактный «шаблон» — модуль `abc` (`ABC`, `@abstractmethod`): от такого класса нельзя создать объект, пока методы не реализованы.
 
-```python
-from functools import lru_cache
+?? Что делает `super().__init__(name)`?
++ вызывает конструктор родительского класса
+- создаёт новый объект родителя
+- удаляет родителя
+- ничего, это украшение
+= Так наследник не дублирует код инициализации.
 
-@lru_cache(None)
-def fib(n):
-    return n if n < 2 else fib(n - 1) + fib(n - 2)
-```
+?? `isinstance(Puppy("a", 1), Animal)` — что вернёт?
++ True
+- False
+- ошибка
+- None
+= Puppy → Dog → Animal: щенок — тоже животное.
 
-Глубина рекурсии в Python ограничена (~1000 вызовов).
+!! {1} Классы `Shape` (метод `area()`), `Rect(w, h)`, `Circle(r)` (π = 3.14159). Дано n строк `rect w h` или `circle r` — выведи площади с 2 знаками через пробел.
+<<<
+class Shape:
+    def area(self):
+        raise NotImplementedError
 
-?? Что будет, если у рекурсии нет базового случая?
-- вернёт 0
-+ бесконечные вызовы → RecursionError
-- функция выполнится один раз
-- ничего
-= Каждый вызов порождает новый, пока не кончится стек.
+n = int(input())
+<<<
+in: 2\nrect 2 3\ncircle 1
+out: 6.00 3.14
+in: 1\ncircle 2.5
+out: 19.63
+hint: Наследники переопределяют `area`. Создавай объект по первому слову строки.
+===
+class Shape:
+    def area(self):
+        raise NotImplementedError
 
-?? Сколько строк выведет `gen("", 3)` из примера выше?
-- 3
-- 6
-+ 8
-- 9
-= Все строки из 0 и 1 длины 3: 2³ = 8.
+class Rect(Shape):
+    def __init__(self, w, h):
+        self.w, self.h = w, h
+    def area(self):
+        return self.w * self.h
 
-!! Дано n. Выведи все правильные скобочные последовательности из n пар круглых скобок в лексикографическом порядке («(» меньше «)»), каждую на своей строке.
+class Circle(Shape):
+    def __init__(self, r):
+        self.r = r
+    def area(self):
+        return 3.14159 * self.r ** 2
+
+n = int(input())
+shapes = []
+for _ in range(n):
+    kind, *nums = input().split()
+    nums = list(map(float, nums))
+    shapes.append(Rect(*nums) if kind == "rect" else Circle(*nums))
+print(*[f"{s.area():.2f}" for s in shapes])
+===
+!! {2} Иерархия сотрудников: `Employee(name, base)` с методом `salary()` = base; `Manager` — base × 1.5; `Intern` — base / 2. Дано n строк «тип имя оклад» — выведи имена по убыванию зарплаты и их зарплаты (целые, округление вниз).
 <<<
 n = int(input())
 <<<
-in: 2
-out: (())\n()()
-in: 3
-out: ((()))\n(()())\n(())()\n()(())\n()()()
-hint: Рекурсия с параметрами: строка, сколько открыто, сколько закрыто.
-hint: Открывать можно, пока open < n; закрывать — пока close < open. Сначала пробуй «(».
+in: 3\nemployee аня 100\nmanager боря 100\nintern вика 300
+out: боря 150\nвика 150\nаня 100
+in: 1\nmanager гена 41
+out: гена 61
+hint: У наследников переопредели `salary`. Сортировка — `key=lambda e: -e.salary()`.
 ===
+class Employee:
+    def __init__(self, name, base):
+        self.name, self.base = name, base
+    def salary(self):
+        return self.base
+
+class Manager(Employee):
+    def salary(self):
+        return self.base * 1.5
+
+class Intern(Employee):
+    def salary(self):
+        return self.base / 2
+
+kinds = {"employee": Employee, "manager": Manager, "intern": Intern}
 n = int(input())
-
-def gen(s, op, cl):
-    if len(s) == 2 * n:
-        print(s)
-        return
-    if op < n:
-        gen(s + "(", op + 1, cl)
-    if cl < op:
-        gen(s + ")", op, cl + 1)
-
-gen("", 0, 0)
+staff = []
+for _ in range(n):
+    k, name, base = input().split()
+    staff.append(kinds[k](name, int(base)))
+for e in sorted(staff, key=lambda e: -e.salary()):
+    print(e.name, int(e.salary()))
 ===
-card: Что такое базовый случай рекурсии? :: Условие, при котором функция не вызывает себя и сразу возвращает ответ.
-card: Как ускорить рекурсию с повторяющимися вызовами? :: Запоминать результаты: `@lru_cache(None)` из functools.
+!! {3} Мини-банк: `Account(owner)` с `deposit`, `withdraw` (бросает `ValueError`, если не хватает) и `SavingsAccount` с методом `add_interest(p)` (процент вниз до целого). Даны команды до `end`: `open тип имя`, `dep имя сумма`, `wd имя сумма`, `int имя p`. На ошибку снятия выведи `нет денег у имя`. В конце выведи всех по имени: «имя баланс».
+<<<
+<<<
+in: open basic аня\nopen savings боря\ndep аня 100\ndep боря 1000\nwd аня 150\nint боря 5\nwd боря 50\nend
+out: нет денег у аня\nаня 100\nборя 1000
+in: open savings вика\nint вика 10\ndep вика 55\nint вика 10\nwd вика 61\nwd вика 60\nend
+out: нет денег у вика\nвика 0
+hint: Храни счета в словаре по имени. `int` — только для SavingsAccount (проверь `isinstance`).
+===
+class Account:
+    def __init__(self, owner):
+        self.owner, self.balance = owner, 0
+    def deposit(self, x):
+        self.balance += x
+    def withdraw(self, x):
+        if x > self.balance:
+            raise ValueError("мало денег")
+        self.balance -= x
+
+class SavingsAccount(Account):
+    def add_interest(self, p):
+        self.balance += self.balance * p // 100
+
+acc = {}
+while True:
+    parts = input().split()
+    if parts[0] == "end":
+        break
+    cmd, name = parts[0], parts[2] if parts[0] == "open" else parts[1]
+    if cmd == "open":
+        acc[name] = SavingsAccount(name) if parts[1] == "savings" else Account(name)
+    elif cmd == "dep":
+        acc[name].deposit(int(parts[2]))
+    elif cmd == "wd":
+        try:
+            acc[name].withdraw(int(parts[2]))
+        except ValueError:
+            print(f"нет денег у {name}")
+    elif cmd == "int" and isinstance(acc[name], SavingsAccount):
+        acc[name].add_interest(int(parts[2]))
+for name in sorted(acc):
+    print(name, acc[name].balance)
+===
+card: Что такое полиморфизм? :: Один и тот же вызов метода работает по-своему для объектов разных классов.
+card: Как вызвать метод родителя из наследника? :: `super().метод(...)`
+
+## py-19 | Магические методы и dataclass
+Методы с двойным подчёркиванием задают поведение объекта в операторах:
+
+```python
+class Frac:
+    def __init__(self, a, b):
+        self.a, self.b = a, b
+    def __add__(self, o):              # f1 + f2
+        return Frac(self.a * o.b + o.a * self.b, self.b * o.b)
+    def __eq__(self, o):               # f1 == f2
+        return self.a * o.b == o.a * self.b
+    def __lt__(self, o):               # f1 < f2, sorted
+        return self.a * o.b < o.a * self.b
+    def __str__(self):                 # print
+        return f"{self.a}/{self.b}"
+    def __len__(self): ...             # len(obj)
+```
+
+`__repr__` — как объект выглядит в отладке и в списках.
+
+**dataclass** пишет `__init__`, `__repr__`, `__eq__` сам:
+
+```python
+from dataclasses import dataclass
+
+@dataclass(order=True)    # order=True даёт <, >, sorted
+class Point:
+    x: int
+    y: int = 0
+```
+
+?? Какой метод вызывается при `a + b`?
++ __add__
+- __plus__
+- __sum__
+- add
+= Аналогично: `__sub__`, `__mul__`, `__lt__` для `<`.
+
+?? Что даёт `@dataclass`?
++ автоматически __init__, __repr__ и __eq__ по полям
+- ускоряет класс
+- запрещает наследование
+- превращает класс в словарь
+= С `order=True` ещё и сравнение для сортировки.
+
+!! {1} Класс `Frac` с `__add__` и `__str__` (дробь сокращена, знаменатель положительный). Даны две дроби `a/b` — выведи сумму.
+<<<
+from math import gcd
+
+class Frac:
+    pass
+
+x, y = input().split()
+<<<
+in: 1/2 1/3
+out: 5/6
+in: 2/4 1/2
+out: 1/1
+in: 1/6 -1/6
+out: 0/1
+hint: Сокращай в `__init__`: `g = gcd(a, b)`, раздели оба на g; если b < 0 — поменяй знаки.
+===
+from math import gcd
+
+class Frac:
+    def __init__(self, a, b):
+        g = gcd(a, b) or 1
+        a, b = a // g, b // g
+        if b < 0:
+            a, b = -a, -b
+        self.a, self.b = a, b
+    def __add__(self, o):
+        return Frac(self.a * o.b + o.a * self.b, self.b * o.b)
+    def __str__(self):
+        return f"{self.a}/{self.b}"
+
+x, y = input().split()
+f1 = Frac(*map(int, x.split("/")))
+f2 = Frac(*map(int, y.split("/")))
+print(f1 + f2)
+===
+!! {2} С помощью `@dataclass(order=True)` опиши `Student(score, name)` так, чтобы сортировка шла по баллу, а при равенстве по имени. Дано n строк «имя балл» — выведи имена от лучшего к худшему (по убыванию балла, при равенстве — по алфавиту).
+<<<
+from dataclasses import dataclass
+
+n = int(input())
+<<<
+in: 3\nаня 90\nборя 95\nвика 90
+out: боря\nаня\nвика
+in: 1\nмиша 1
+out: миша
+hint: Порядок полей задаёт порядок сравнения. Для убывания балла храни `neg_score = -балл` первым полем.
+===
+from dataclasses import dataclass
+
+@dataclass(order=True)
+class Student:
+    neg_score: int
+    name: str
+
+n = int(input())
+st = []
+for _ in range(n):
+    name, sc = input().split()
+    st.append(Student(-int(sc), name))
+for s in sorted(st):
+    print(s.name)
+===
+!! {3} Класс `Matrix` с `__mul__` (умножение матриц) и `__str__`. Даны две матрицы (размеры, затем строки) — выведи произведение.
+<<<
+class Matrix:
+    pass
+<<<
+in: 2 2\n1 2\n3 4\n2 2\n5 6\n7 8
+out: 19 22\n43 50
+in: 1 3\n1 2 3\n3 1\n4\n5\n6
+out: 32
+hint: Элемент результата `c[i][j] = sum(a[i][k] * b[k][j] for k in ...)`.
+===
+class Matrix:
+    def __init__(self, rows):
+        self.rows = rows
+    def __mul__(self, o):
+        n, m, p = len(self.rows), len(o.rows), len(o.rows[0])
+        return Matrix([[sum(self.rows[i][k] * o.rows[k][j] for k in range(m)) for j in range(p)] for i in range(n)])
+    def __str__(self):
+        return "\n".join(" ".join(map(str, r)) for r in self.rows)
+
+def read():
+    n, m = map(int, input().split())
+    return Matrix([list(map(int, input().split())) for _ in range(n)])
+
+a = read()
+b = read()
+print(a * b)
+===
+card: Какой метод задаёт вид объекта в print? :: `__str__` (а `__repr__` — в отладке и списках).
+card: Что даёт `@dataclass(order=True)`? :: Сравнение объектов (<, >) по полям в порядке объявления — можно сортировать.
+
+## py-20 | Итераторы и генераторы
+Генератор выдаёт значения по одному через `yield` и не хранит всё в памяти:
+
+```python
+def squares(n):
+    for i in range(n):
+        yield i * i
+
+for x in squares(5):
+    print(x)          # 0 1 4 9 16
+
+g = (x * x for x in range(10**9))   # генераторное выражение — не создаёт огромный список
+next(g)   # 0
+```
+
+Генератор можно бесконечный:
+
+```python
+def naturals():
+    n = 1
+    while True:
+        yield n
+        n += 1
+```
+
+Полезное из `itertools`: `islice(gen, k)` — первые k значений, `count()`, `cycle()`, `chain(a, b)`, `accumulate(a)` — префиксные суммы.
+
+?? Что вернёт вызов функции с `yield` внутри?
++ объект-генератор, который выдаёт значения по требованию
+- первое значение
+- список всех значений
+- None
+= Код функции начинает выполняться только при `next()` или в цикле.
+
+?? Чем `(x for x in a)` отличается от `[x for x in a]`?
++ первое — ленивый генератор, второе — готовый список в памяти
+- ничем
+- первое быстрее всегда
+- первое — кортеж
+= Генератор можно пройти только один раз.
+
+!! {1} Напиши генератор `evens(n)`, выдающий чётные числа от 0 до n включительно. Выведи их через пробел.
+<<<
+def evens(n):
+    pass
+
+n = int(input())
+<<<
+in: 10
+out: 0 2 4 6 8 10
+in: 1
+out: 0
+hint: `for i in range(0, n + 1, 2): yield i`
+===
+def evens(n):
+    for i in range(0, n + 1, 2):
+        yield i
+
+n = int(input())
+print(*evens(n))
+===
+!! {2} Бесконечный генератор простых чисел `primes()`. Дано k — выведи первые k простых через `itertools.islice`.
+<<<
+from itertools import islice
+
+def primes():
+    pass
+
+k = int(input())
+<<<
+in: 10
+out: 2 3 5 7 11 13 17 19 23 29
+in: 1
+out: 2
+hint: Перебирай n = 2, 3, 4…; храни найденные простые и проверяй делимость только на них, пока `p * p <= n`.
+===
+from itertools import islice
+
+def primes():
+    found = []
+    n = 2
+    while True:
+        if all(n % p for p in found if p * p <= n):
+            found.append(n)
+            yield n
+        n += 1
+
+k = int(input())
+print(*islice(primes(), k))
+===
+!! {3} Генератор `chunks(a, k)` разбивает список на куски по k элементов (последний может быть короче). Даны числа и k — выведи суммы кусков через пробел.
+<<<
+def chunks(a, k):
+    pass
+
+a = list(map(int, input().split()))
+k = int(input())
+<<<
+in: 1 2 3 4 5 6 7\n3
+out: 6 15 7
+in: 5 5\n5
+out: 10
+hint: `for i in range(0, len(a), k): yield a[i:i + k]`
+===
+def chunks(a, k):
+    for i in range(0, len(a), k):
+        yield a[i:i + k]
+
+a = list(map(int, input().split()))
+k = int(input())
+print(*[sum(c) for c in chunks(a, k)])
+===
+card: Что делает `yield`? :: Отдаёт очередное значение генератора и «замораживает» функцию до следующего запроса.
+card: Как взять первые k значений бесконечного генератора? :: `itertools.islice(gen, k)`
+
+### Модуль: Алгоритмы
 
 ## py-13 | Сложность и бинарный поиск
 Важно не только «работает», но и «как быстро». Сложность считают в O-нотации — как растёт число действий от размера n:
@@ -893,6 +2282,8 @@ q = list(map(int, input().split()))
 <<<
 in: 1 3 3 5 8\n0 3 6 10
 out: 0 3 4 5
+in: 5\n5 4 6
+out: 1 0 1
 hint: bisect_right(a, x) возвращает позицию после последнего элемента ≤ x — это и есть количество.
 ===
 from bisect import bisect_right
@@ -900,8 +2291,398 @@ a = list(map(int, input().split()))
 q = list(map(int, input().split()))
 print(*[bisect_right(a, x) for x in q])
 ===
+!! {1} Дан отсортированный список и число x. Своим бинарным поиском выведи индекс первого вхождения x или -1.
+<<<
+a = list(map(int, input().split()))
+x = int(input())
+<<<
+in: 1 2 2 2 5 7\n2
+out: 1
+in: 1 3 5\n4
+out: -1
+hint: Ищи левую границу: при `a[mid] >= x` двигай `hi = mid`, иначе `lo = mid + 1`.
+===
+a = list(map(int, input().split()))
+x = int(input())
+lo, hi = 0, len(a)
+while lo < hi:
+    mid = (lo + hi) // 2
+    if a[mid] >= x:
+        hi = mid
+    else:
+        lo = mid + 1
+print(lo if lo < len(a) and a[lo] == x else -1)
+===
+!! {3} Бинпоиск по ответу: дано число n (до 10^18). Выведи целую часть квадратного корня из n, не используя `**` и `math`.
+<<<
+n = int(input())
+<<<
+in: 17
+out: 4
+in: 1000000000000000000
+out: 1000000000
+in: 0
+out: 0
+hint: Ищи наибольшее x, у которого `x * x <= n`, на отрезке [0, n].
+===
+n = int(input())
+lo, hi = 0, n + 1
+while hi - lo > 1:
+    mid = (lo + hi) // 2
+    if mid * mid <= n:
+        lo = mid
+    else:
+        hi = mid
+print(lo)
+===
 card: Какая сложность у бинарного поиска? :: O(log n) — каждый шаг отбрасывает половину.
 card: Какая сложность у `x in list` и `x in set`? :: list — O(n), set — O(1) в среднем.
+
+## py-21 | Сортировки своими руками
+Встроенная `sorted` работает за O(n log n), но понимать, как устроены сортировки, нужно на любом экзамене.
+
+**Пузырёк** — O(n²): соседние элементы меняются местами, пока всё не упорядочится.
+
+**Сортировка слиянием** — O(n log n): делим пополам, сортируем половины рекурсивно, сливаем:
+
+```python
+def merge_sort(a):
+    if len(a) <= 1:
+        return a
+    mid = len(a) // 2
+    left, right = merge_sort(a[:mid]), merge_sort(a[mid:])
+    res, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            res.append(left[i]); i += 1
+        else:
+            res.append(right[j]); j += 1
+    return res + left[i:] + right[j:]
+```
+
+**Быстрая сортировка** — выбираем опорный элемент, раскладываем на «меньше» и «больше». **Подсчётом** — O(n + k), если числа маленькие (например, оценки 0..100).
+
+**Устойчивая** сортировка не меняет порядок равных элементов (sorted в Python — устойчивая).
+
+?? Какая сложность у сортировки слиянием?
++ O(n log n)
+- O(n²)
+- O(n)
+- O(log n)
+= log n уровней деления, на каждом — O(n) на слияние.
+
+?? Когда сортировка подсчётом лучше sorted?
++ когда значения — небольшие целые в известном диапазоне
+- всегда
+- для строк
+- никогда
+= O(n + k), где k — размер диапазона значений.
+
+!! {1} Реализуй сортировку пузырьком и выведи, сколько обменов она сделала, а затем отсортированный список.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 3 1 2
+out: 2\n1 2 3
+in: 1 2 3
+out: 0\n1 2 3
+in: 5 4 3 2 1
+out: 10\n1 2 3 4 5
+hint: Два цикла: внешний n раз, внутренний сравнивает `a[j] > a[j + 1]` и меняет, увеличивая счётчик.
+===
+a = list(map(int, input().split()))
+swaps = 0
+for i in range(len(a)):
+    for j in range(len(a) - 1 - i):
+        if a[j] > a[j + 1]:
+            a[j], a[j + 1] = a[j + 1], a[j]
+            swaps += 1
+print(swaps)
+print(*a)
+===
+!! {2} Реализуй сортировку слиянием (без sorted) и выведи результат.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 5 2 9 1 5 6
+out: 1 2 5 5 6 9
+in: 1
+out: 1
+in: 3 -1 0 -1
+out: -1 -1 0 3
+hint: Код слияния — в гайде. База рекурсии: длина ≤ 1.
+===
+def merge_sort(a):
+    if len(a) <= 1:
+        return a
+    mid = len(a) // 2
+    left, right = merge_sort(a[:mid]), merge_sort(a[mid:])
+    res, i, j = [], 0, 0
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            res.append(left[i]); i += 1
+        else:
+            res.append(right[j]); j += 1
+    return res + left[i:] + right[j:]
+
+a = list(map(int, input().split()))
+print(*merge_sort(a))
+===
+!! {3} Число инверсий — пар i < j, где a[i] > a[j]. Посчитай за O(n log n) через слияние (n до 10^5).
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 2 4 1 3 5
+out: 3
+in: 5 4 3 2 1
+out: 10
+in: 1 2 3
+out: 0
+hint: При слиянии, когда берёшь элемент из правой половины, все оставшиеся в левой больше него — прибавь `len(left) - i`.
+===
+import sys
+sys.setrecursionlimit(10000)
+
+def sort_count(a):
+    if len(a) <= 1:
+        return a, 0
+    mid = len(a) // 2
+    left, x = sort_count(a[:mid])
+    right, y = sort_count(a[mid:])
+    res, i, j, inv = [], 0, 0, x + y
+    while i < len(left) and j < len(right):
+        if left[i] <= right[j]:
+            res.append(left[i]); i += 1
+        else:
+            res.append(right[j]); j += 1
+            inv += len(left) - i
+    return res + left[i:] + right[j:], inv
+
+a = list(map(int, input().split()))
+print(sort_count(a)[1])
+===
+card: Какая сортировка устойчивая и что это значит? :: Устойчивая не меняет порядок равных элементов. sorted в Python и сортировка слиянием — устойчивые.
+card: Сложность пузырька и слияния? :: Пузырёк — O(n²), слияние — O(n log n).
+
+## py-22 | Два указателя и префиксные суммы
+**Префиксные суммы**: `pref[i]` — сумма первых i элементов. Сумма на отрезке [l, r) за O(1):
+
+```python
+pref = [0]
+for x in a:
+    pref.append(pref[-1] + x)
+seg = pref[r] - pref[l]
+```
+
+**Два указателя** — два индекса двигаются по массиву в одну сторону, и вместо O(n²) получается O(n). Пример: в отсортированном массиве найти пару с суммой k:
+
+```python
+i, j = 0, len(a) - 1
+while i < j:
+    s = a[i] + a[j]
+    if s == k: break
+    if s < k: i += 1
+    else: j -= 1
+```
+
+**Скользящее окно**: самый длинный отрезок с суммой ≤ S (числа положительные) — правый край идёт вперёд, левый подтягивается, когда сумма превысила S.
+
+?? Чему равна сумма a[2..4] (включительно), если есть pref (pref[0] = 0)?
++ pref[5] - pref[2]
+- pref[4] - pref[2]
+- pref[4] - pref[1]
+- pref[5] - pref[1]
+= pref[5] — сумма a[0..4], вычитаем a[0..1] = pref[2].
+
+?? Почему два указателя работают за O(n)?
++ каждый указатель проходит массив не больше одного раза
+- потому что массив отсортирован
+- это O(n²)
+- они пропускают элементы
+= Суммарно указатели делают не более 2n шагов.
+
+!! {1} Даны числа и запросы «l r» (индексы с 1, включительно). Для каждого запроса выведи сумму на отрезке, используя префиксные суммы.
+<<<
+a = list(map(int, input().split()))
+q = int(input())
+<<<
+in: 1 2 3 4 5\n3\n1 5\n2 3\n4 4
+out: 15\n5\n4
+in: 10\n1\n1 1
+out: 10
+hint: `pref[r] - pref[l - 1]`.
+===
+a = list(map(int, input().split()))
+q = int(input())
+pref = [0]
+for x in a:
+    pref.append(pref[-1] + x)
+for _ in range(q):
+    l, r = map(int, input().split())
+    print(pref[r] - pref[l - 1])
+===
+!! {2} Дан отсортированный массив и k. Двумя указателями выведи количество пар i < j с a[i] + a[j] = k (числа различные).
+<<<
+a = list(map(int, input().split()))
+k = int(input())
+<<<
+in: 1 2 3 4 5 6\n7
+out: 3
+in: 1 3 5\n10
+out: 0
+hint: При совпадении суммы считай пару и сдвинь оба указателя.
+===
+a = list(map(int, input().split()))
+k = int(input())
+i, j, cnt = 0, len(a) - 1, 0
+while i < j:
+    s = a[i] + a[j]
+    if s == k:
+        cnt += 1
+        i += 1
+        j -= 1
+    elif s < k:
+        i += 1
+    else:
+        j -= 1
+print(cnt)
+===
+!! {3} Даны положительные числа и S. Найди длину самого длинного отрезка подряд идущих чисел с суммой не больше S (скользящее окно, O(n)).
+<<<
+a = list(map(int, input().split()))
+s = int(input())
+<<<
+in: 1 2 1 0 1 1 0\n4
+out: 5
+in: 5 5 5\n4
+out: 0
+in: 2 1 3 2\n6
+out: 3
+hint: Правый край r идёт по массиву, добавляя a[r]; пока сумма > S — вычитай a[l] и двигай l. Длина окна — r - l + 1.
+===
+a = list(map(int, input().split()))
+s = int(input())
+l = cur = best = 0
+for r, x in enumerate(a):
+    cur += x
+    while cur > s:
+        cur -= a[l]
+        l += 1
+    best = max(best, r - l + 1)
+print(best)
+===
+card: Как за O(1) найти сумму на отрезке? :: Префиксные суммы: `pref[r] - pref[l]` (сумма a[l..r-1]).
+card: Что такое скользящее окно? :: Два указателя-границы отрезка: правый расширяет окно, левый сужает, когда нарушено условие. O(n).
+
+## py-23 | Стек и очередь
+**Стек** (LIFO — последний пришёл, первый ушёл) — обычный список: `append` и `pop`.
+**Очередь** (FIFO) — `collections.deque`: `append` и `popleft`.
+
+Классика стека — проверка скобок:
+
+```python
+pairs = {")": "(", "]": "[", "}": "{"}
+st = []
+for ch in s:
+    if ch in "([{":
+        st.append(ch)
+    elif ch in pairs:
+        if not st or st.pop() != pairs[ch]:
+            print("NO"); break
+```
+
+Ещё: вычисление выражений в обратной польской записи, «ближайший больший элемент справа» (монотонный стек), отмена действий (Ctrl+Z).
+
+Очередь — обработка задач по порядку, обход в ширину (BFS).
+
+?? Какую структуру взять для «отменить последнее действие»?
++ стек
+- очередь
+- множество
+- словарь
+= Отменяется последнее сделанное — LIFO.
+
+?? Почему для очереди берут deque, а не list?
++ list.pop(0) работает за O(n), deque.popleft() — за O(1)
+- list не умеет pop
+- deque занимает меньше памяти всегда
+- без разницы
+= При pop(0) список сдвигает все элементы.
+
+!! {1} Дана строка из скобок `()[]{}`. Выведи `YES`, если скобки расставлены правильно, иначе `NO`.
+<<<
+s = input()
+<<<
+in: ([]{})
+out: YES
+in: ([)]
+out: NO
+in: ((
+out: NO
+in: {}
+out: YES
+hint: Стек открывающих; на закрывающей сравнивай с вершиной.
+===
+s = input()
+pairs = {")": "(", "]": "[", "}": "{"}
+st = []
+ok = True
+for ch in s:
+    if ch in "([{":
+        st.append(ch)
+    elif ch in pairs:
+        if not st or st.pop() != pairs[ch]:
+            ok = False
+            break
+print("YES" if ok and not st else "NO")
+===
+!! {2} Вычисли выражение в обратной польской записи: числа и операции `+ - *` через пробел.
+<<<
+tokens = input().split()
+<<<
+in: 3 4 + 2 *
+out: 14
+in: 5 1 2 + 4 * + 3 -
+out: 14
+in: 7
+out: 7
+hint: Число — в стек. Операция — сними два числа (сначала второй операнд!), вычисли, положи результат.
+===
+tokens = input().split()
+st = []
+for t in tokens:
+    if t in "+-*":
+        b, a = st.pop(), st.pop()
+        st.append(a + b if t == "+" else a - b if t == "-" else a * b)
+    else:
+        st.append(int(t))
+print(st[-1])
+===
+!! {3} Для каждого элемента массива найди ближайший справа элемент, который больше него (или -1). За O(n) — монотонным стеком.
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 2 1 2 4 3
+out: 4 2 4 -1 -1
+in: 5 4 3
+out: -1 -1 -1
+in: 1 2 3
+out: 2 3 -1
+hint: Иди справа налево; со стека снимай всё, что ≤ текущего; вершина (если есть) — ответ; потом положи текущий.
+===
+a = list(map(int, input().split()))
+res = [-1] * len(a)
+st = []
+for i in range(len(a) - 1, -1, -1):
+    while st and st[-1] <= a[i]:
+        st.pop()
+    if st:
+        res[i] = st[-1]
+    st.append(a[i])
+print(*res)
+===
+card: Чем стек отличается от очереди? :: Стек — LIFO (последний пришёл — первый ушёл), очередь — FIFO (первый пришёл — первый ушёл).
+card: Как проверить правильность скобок? :: Стек открывающих скобок: на закрывающей — вершина должна быть парной, в конце стек пуст.
 
 ## py-14 | Стандартная библиотека: collections, itertools, math
 Многое уже написано — не изобретай заново.
@@ -951,6 +2732,8 @@ n, m = map(int, input().split())
 <<<
 in: 5 4\n1 2\n2 3\n1 4\n4 3\n1
 out: 0 1 2 1 -1
+in: 3 1\n2 3\n3
+out: -1 1 0
 hint: Список смежности: `g = [[] for _ in range(n + 1)]`.
 hint: BFS: в очередь s, dist[s] = 0; берём вершину, для соседей с dist == -1 ставим dist + 1 и кладём в очередь.
 ===
@@ -973,5 +2756,847 @@ while q:
             q.append(to)
 print(*dist[1:])
 ===
+!! {1} Дана строка. С помощью `Counter` выведи три самые частые буквы (без пробелов) и их количество — каждую на своей строке «буква число». При равенстве — по алфавиту.
+<<<
+from collections import Counter
+s = input()
+<<<
+in: абракадабра
+out: а 5\nб 2\nр 2
+in: hello world
+out: l 3\no 2\nd 1
+hint: `sorted(cnt.items(), key=lambda p: (-p[1], p[0]))[:3]`
+===
+from collections import Counter
+s = input()
+cnt = Counter(ch for ch in s if ch != " ")
+for ch, c in sorted(cnt.items(), key=lambda p: (-p[1], p[0]))[:3]:
+    print(ch, c)
+===
+!! {2} Дан список чисел и k. С помощью `itertools.combinations` посчитай, сколько пар чисел (разных позиций) дают в сумме ровно k.
+<<<
+from itertools import combinations
+a = list(map(int, input().split()))
+k = int(input())
+<<<
+in: 1 2 3 4 5\n6
+out: 2
+in: 1 1 1\n2
+out: 3
+hint: `sum(1 for x, y in combinations(a, 2) if x + y == k)`
+===
+from itertools import combinations
+a = list(map(int, input().split()))
+k = int(input())
+print(sum(1 for x, y in combinations(a, 2) if x + y == k))
+===
 card: Что делает `Counter(список)`? :: Считает, сколько раз встречается каждый элемент: словарь элемент → количество.
 card: Какая структура нужна для обхода графа в ширину (BFS)? :: Очередь — `collections.deque`.
+
+## py-24 | Жадные алгоритмы
+**Жадный алгоритм** на каждом шаге делает локально лучший выбор. Работает не всегда — нужно уметь доказать (или проверить на контрпримере).
+
+Классика: **выбор заявок** — максимум непересекающихся отрезков. Сортируем по концу и берём каждый, что начинается после конца последнего взятого:
+
+```python
+segs.sort(key=lambda s: s[1])
+end, cnt = -10**18, 0
+for l, r in segs:
+    if l >= end:
+        cnt += 1
+        end = r
+```
+
+**Сдача монетами** 1, 5, 10, 50 — жадно берём крупные. Но для монет 1, 3, 4 и суммы 6 жадность даёт 4+1+1 (3 монеты), а оптимум 3+3 (2) — здесь нужно ДП.
+
+**Рюкзак с дроблением** — берём по убыванию «цена за килограмм».
+
+?? Почему в задаче о заявках сортируют по концу, а не по началу?
++ так освобождается больше места для следующих отрезков
+- так быстрее сортировать
+- без разницы
+- сортируют по длине
+= Отрезок, который раньше заканчивается, оставляет максимум времени остальным.
+
+?? Монеты 1, 3, 4, сумма 6. Что даст жадный алгоритм?
+- 2 монеты
++ 3 монеты (4 + 1 + 1)
+- 6 монет
+- не найдёт ответ
+= Жадность здесь не оптимальна — нужна динамика.
+
+!! {1} Монеты 1, 2, 5, 10, 50, 100. Дана сумма — выведи минимальное число монет (жадно).
+<<<
+n = int(input())
+<<<
+in: 289
+out: 9
+in: 7
+out: 2
+in: 0
+out: 0
+hint: Иди от крупных монет: `cnt += n // c; n %= c`.
+===
+n = int(input())
+cnt = 0
+for c in (100, 50, 10, 5, 2, 1):
+    cnt += n // c
+    n %= c
+print(cnt)
+===
+!! {2} Дано n отрезков «l r». Выбери максимум попарно непересекающихся (касание концами разрешено) и выведи их количество.
+<<<
+n = int(input())
+<<<
+in: 4\n1 3\n2 5\n3 7\n6 8
+out: 2
+in: 3\n1 10\n2 3\n4 5
+out: 2
+hint: Сортируй по правому концу; бери отрезок, если `l >= end`.
+===
+n = int(input())
+segs = [tuple(map(int, input().split())) for _ in range(n)]
+segs.sort(key=lambda s: s[1])
+end, cnt = -10**18, 0
+for l, r in segs:
+    if l >= end:
+        cnt += 1
+        end = r
+print(cnt)
+===
+!! {3} Рюкзак с дроблением: вместимость W, затем n строк «вес цена». Можно брать часть предмета. Выведи максимальную цену с 2 знаками.
+<<<
+w, n = map(int, input().split())
+<<<
+in: 50 3\n10 60\n20 100\n30 120
+out: 240.00
+in: 5 1\n10 100
+out: 50.00
+hint: Сортируй по `цена / вес` по убыванию; бери целиком, пока влезает, остаток — дробью.
+===
+w, n = map(int, input().split())
+items = [tuple(map(int, input().split())) for _ in range(n)]
+items.sort(key=lambda it: -it[1] / it[0])
+total = 0.0
+for wt, price in items:
+    take = min(wt, w)
+    total += price * take / wt
+    w -= take
+    if w == 0:
+        break
+print(f"{total:.2f}")
+===
+card: Когда жадный алгоритм можно применять? :: Когда доказано, что локально лучший выбор ведёт к оптимуму (иначе ищи контрпример и бери ДП).
+card: Как решать задачу о максимуме непересекающихся отрезков? :: Отсортировать по правому концу и жадно брать каждый, начинающийся не раньше конца предыдущего.
+
+## py-25 | Динамическое программирование
+**ДП** — решение через ответы на подзадачи, запомненные в таблице.
+
+Четыре вопроса: что храним в `dp[i]`, база, переход, где ответ.
+
+**Лестница**: сколькими способами подняться на n ступенек шагами 1 и 2 — `dp[i] = dp[i-1] + dp[i-2]`.
+
+**Монеты** (минимум монет для суммы):
+
+```python
+INF = float("inf")
+dp = [0] + [INF] * s
+for x in range(1, s + 1):
+    for c in coins:
+        if c <= x:
+            dp[x] = min(dp[x], dp[x - c] + 1)
+```
+
+**Рюкзак 0/1**: `dp[w]` — лучшая цена при весе ≤ w; перебираем предметы и веса **с конца**, чтобы предмет не взять дважды.
+
+**НВП** (наибольшая возрастающая подпоследовательность) — за O(n²) или за O(n log n) с бинпоиском.
+
+?? Чем рюкзак 0/1 отличается от «дробного»?
++ предмет берут целиком или не берут — жадность не работает, нужна ДП
+- ничем
+- в 0/1 предметы можно делить
+- 0/1 решается сортировкой
+= Перебор весов с конца гарантирует, что каждый предмет учтён один раз.
+
+?? Что нужно для ДП, кроме перехода?
++ база (ответы для маленьких случаев) и порядок вычисления
+- только рекурсия
+- сортировка
+- граф
+= Без базы таблицу не с чего заполнять.
+
+!! {1} Сколькими способами можно подняться на n ступенек, шагая на 1, 2 или 3? (n до 70)
+<<<
+n = int(input())
+<<<
+in: 4
+out: 7
+in: 1
+out: 1
+in: 30
+out: 53798080
+hint: `dp[0] = 1`, `dp[i] = dp[i-1] + dp[i-2] + dp[i-3]` (с проверкой индексов).
+===
+n = int(input())
+dp = [0] * (n + 1)
+dp[0] = 1
+for i in range(1, n + 1):
+    dp[i] = sum(dp[i - k] for k in (1, 2, 3) if i - k >= 0)
+print(dp[n])
+===
+!! {2} Даны номиналы монет и сумма S. Выведи минимальное число монет или -1, если набрать нельзя.
+<<<
+coins = list(map(int, input().split()))
+s = int(input())
+<<<
+in: 1 3 4\n6
+out: 2
+in: 2\n3
+out: -1
+in: 1 5 10 25\n63
+out: 6
+hint: Код — в гайде; в конце `dp[s]` бесконечность → -1.
+===
+coins = list(map(int, input().split()))
+s = int(input())
+INF = float("inf")
+dp = [0] + [INF] * s
+for x in range(1, s + 1):
+    for c in coins:
+        if c <= x and dp[x - c] + 1 < dp[x]:
+            dp[x] = dp[x - c] + 1
+print(dp[s] if dp[s] != INF else -1)
+===
+!! {3} Рюкзак 0/1: W и n, затем n строк «вес цена». Выведи максимальную цену предметов с суммарным весом ≤ W.
+<<<
+w, n = map(int, input().split())
+<<<
+in: 10 4\n5 10\n4 40\n6 30\n3 50
+out: 90
+in: 1 2\n2 100\n3 200
+out: 0
+hint: `dp = [0] * (W + 1)`; для каждого предмета `for x in range(W, wt - 1, -1): dp[x] = max(dp[x], dp[x - wt] + price)`.
+===
+w, n = map(int, input().split())
+dp = [0] * (w + 1)
+for _ in range(n):
+    wt, price = map(int, input().split())
+    for x in range(w, wt - 1, -1):
+        dp[x] = max(dp[x], dp[x - wt] + price)
+print(dp[w])
+===
+!! {3} Наибольшая возрастающая подпоследовательность: выведи её длину (строго возрастающая, n до 2000).
+<<<
+a = list(map(int, input().split()))
+<<<
+in: 10 9 2 5 3 7 101 18
+out: 4
+in: 5 5 5
+out: 1
+in: 1 2 3 4
+out: 4
+hint: `dp[i]` — длина НВП, заканчивающейся в i: `1 + max(dp[j] for j < i if a[j] < a[i])`.
+===
+a = list(map(int, input().split()))
+dp = [1] * len(a)
+for i in range(len(a)):
+    for j in range(i):
+        if a[j] < a[i]:
+            dp[i] = max(dp[i], dp[j] + 1)
+print(max(dp))
+===
+card: Переход в задаче о минимуме монет? :: `dp[x] = min(dp[x - c] + 1)` по всем монетам c ≤ x, база `dp[0] = 0`.
+card: Почему в рюкзаке 0/1 веса перебирают с конца? :: Чтобы при обновлении dp[x] использовалось значение без текущего предмета — иначе его возьмут дважды.
+
+## py-26 | Графы: DFS, компоненты, топологическая сортировка
+Граф храним **списком смежности**: `g = [[] for _ in range(n + 1)]`, для ребра `g[u].append(v)`.
+
+**DFS** — обход в глубину (рекурсивно или стеком):
+
+```python
+import sys
+sys.setrecursionlimit(10**6)
+used = [False] * (n + 1)
+def dfs(v):
+    used[v] = True
+    for to in g[v]:
+        if not used[to]:
+            dfs(to)
+```
+
+Применения: **компоненты связности** (сколько раз запускали dfs), **поиск цикла**, **топологическая сортировка** (порядок дел с зависимостями): вершину кладём в ответ после обхода всех её потомков, потом разворачиваем.
+
+BFS (очередь) — кратчайшие пути по числу рёбер; Дейкстра — с весами.
+
+?? Как посчитать число компонент связности?
++ запускать DFS из каждой непосещённой вершины и считать запуски
+- посчитать рёбра
+- BFS из вершины 1
+- отсортировать вершины
+= Каждый новый запуск обходит целую новую компоненту.
+
+?? Когда топологическая сортировка невозможна?
++ когда в ориентированном графе есть цикл
+- когда граф несвязный
+- когда вершин больше 100
+- всегда возможна
+= В цикле нет «первого» дела.
+
+!! {1} Дан неориентированный граф: n m и m рёбер. Выведи количество компонент связности.
+<<<
+n, m = map(int, input().split())
+<<<
+in: 5 3\n1 2\n2 3\n4 5
+out: 2
+in: 3 0
+out: 3
+in: 4 3\n1 2\n2 3\n3 4
+out: 1
+hint: Для обхода удобно стеком: `st = [v]; while st: ...` — без проблем с глубиной рекурсии.
+===
+n, m = map(int, input().split())
+g = [[] for _ in range(n + 1)]
+for _ in range(m):
+    u, v = map(int, input().split())
+    g[u].append(v)
+    g[v].append(u)
+used = [False] * (n + 1)
+comp = 0
+for s in range(1, n + 1):
+    if used[s]:
+        continue
+    comp += 1
+    st = [s]
+    used[s] = True
+    while st:
+        v = st.pop()
+        for to in g[v]:
+            if not used[to]:
+                used[to] = True
+                st.append(to)
+print(comp)
+===
+!! {2} Дано n дел и m зависимостей «a b» (a нужно сделать раньше b). Выведи порядок дел (при выборе — сначала дело с меньшим номером) или `IMPOSSIBLE`, если есть цикл.
+<<<
+n, m = map(int, input().split())
+<<<
+in: 4 3\n1 2\n1 3\n3 4
+out: 1 2 3 4
+in: 3 3\n1 2\n2 3\n3 1
+out: IMPOSSIBLE
+in: 3 0
+out: 1 2 3
+hint: Алгоритм Кана: считай входящие степени; в очередь с приоритетом (heapq) — вершины со степенью 0.
+===
+import heapq
+n, m = map(int, input().split())
+g = [[] for _ in range(n + 1)]
+deg = [0] * (n + 1)
+for _ in range(m):
+    a, b = map(int, input().split())
+    g[a].append(b)
+    deg[b] += 1
+h = [v for v in range(1, n + 1) if deg[v] == 0]
+heapq.heapify(h)
+order = []
+while h:
+    v = heapq.heappop(h)
+    order.append(v)
+    for to in g[v]:
+        deg[to] -= 1
+        if deg[to] == 0:
+            heapq.heappush(h, to)
+print(*order if len(order) == n else ["IMPOSSIBLE"])
+===
+!! {3} Лабиринт: n m, затем n строк из `.` (проход), `#` (стена), `S` (старт), `F` (финиш). Выведи длину кратчайшего пути из S в F (шаги по 4 направлениям) или -1.
+<<<
+from collections import deque
+n, m = map(int, input().split())
+g = [input() for _ in range(n)]
+<<<
+in: 3 4\nS..#\n.#..\n...F
+out: 5
+in: 2 2\nS#\n#F
+out: -1
+hint: BFS по клеткам: dist[i][j], очередь из стартовой клетки.
+===
+from collections import deque
+n, m = map(int, input().split())
+g = [input() for _ in range(n)]
+for i in range(n):
+    for j in range(m):
+        if g[i][j] == "S":
+            start = (i, j)
+dist = [[-1] * m for _ in range(n)]
+dist[start[0]][start[1]] = 0
+q = deque([start])
+ans = -1
+while q:
+    x, y = q.popleft()
+    if g[x][y] == "F":
+        ans = dist[x][y]
+        break
+    for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+        nx, ny = x + dx, y + dy
+        if 0 <= nx < n and 0 <= ny < m and g[nx][ny] != "#" and dist[nx][ny] == -1:
+            dist[nx][ny] = dist[x][y] + 1
+            q.append((nx, ny))
+print(ans)
+===
+card: Что такое топологическая сортировка? :: Порядок вершин ориентированного графа без циклов, где каждое ребро идёт «вперёд». Алгоритм Кана — по вершинам с нулевой входящей степенью.
+card: Чем DFS отличается от BFS? :: DFS идёт вглубь (стек/рекурсия) — компоненты, циклы. BFS идёт слоями (очередь) — кратчайший путь по числу рёбер.
+
+### Модуль: Практика и проекты
+
+## py-27 | Строки на продвинутом уровне и регулярные выражения
+Форматирование: `f"{x:.3f}"` (3 знака), `f"{n:05d}"` (ведущие нули), `f"{s:>10}"` (выравнивание вправо), `f"{n:,}"` (разряды).
+
+Полезные методы: `s.startswith()`, `s.endswith()`, `s.isdigit()`, `s.partition(":")`, `s.center(20, "*")`, `s.title()`.
+
+**Регулярные выражения** (`import re`) ищут шаблоны в тексте:
+
+```python
+import re
+re.findall(r"\d+", "в 2026 году 12 месяцев")   # ['2026', '12']
+re.sub(r"\s+", " ", "много   пробелов")         # 'много пробелов'
+re.fullmatch(r"[a-z]+@[a-z]+\.[a-z]+", email)   # проверка email
+m = re.search(r"(\d{2}):(\d{2})", "встреча в 14:30")
+m.group(1), m.group(2)                          # '14', '30'
+```
+
+Основное: `\d` цифра, `\w` буква/цифра, `\s` пробел, `.` любой символ, `+` один или больше, `*` ноль или больше, `?` необязательно, `{2}` ровно 2, `[...]` набор, `(...)` группа. Строку шаблона пишут с `r"..."`.
+
+?? Что найдёт `re.findall(r"\d+", "a1b22c333")`?
++ ['1', '22', '333']
+- ['1', '2', '2', '3', '3', '3']
+- [1, 22, 333]
+- '122333'
+= `\d+` — подряд идущие цифры, результаты — строки.
+
+?? Что выведет `f"{7:03d}"`?
++ 007
+- 7.000
+- 3007
+- 7
+= Ширина 3, дополнение нулями.
+
+!! {1} Дан текст. Выведи сумму всех целых чисел в нём (знак минус перед числом учитывай).
+<<<
+import re
+s = input()
+<<<
+in: у меня 3 яблока и -1 груша, итого 2
+out: 4
+in: чисел нет
+out: 0
+hint: `re.findall(r"-?\d+", s)`
+===
+import re
+s = input()
+print(sum(int(x) for x in re.findall(r"-?\d+", s)))
+===
+!! {2} Даны строки до конца ввода. Для каждой выведи `ok`, если это корректное время `ЧЧ:ММ` (00:00–23:59), иначе `bad`.
+<<<
+import re, sys
+<<<
+in: 14:30\n24:00\n9:15\n23:59\n12:60
+out: ok\nbad\nbad\nok\nbad
+in: 00:00\n19:5\n07:07
+out: ok\nbad\nok
+hint: Шаблон `([01]\d|2[0-3]):[0-5]\d` и `re.fullmatch`.
+===
+import re, sys
+for line in sys.stdin.read().split("\n"):
+    if line.strip():
+        print("ok" if re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", line.strip()) else "bad")
+===
+!! {3} Дан текст. Выведи 3 самых частых слова (слово — буквы, регистр не важен) с количеством «слово число», при равенстве — по алфавиту.
+<<<
+import re
+from collections import Counter
+s = input()
+<<<
+in: Кот и пёс. Пёс и кот! И ещё кот.
+out: и 3\nкот 3\nпёс 2
+in: a b c
+out: a 1\nb 1\nc 1
+hint: `re.findall(r"[a-zа-яё]+", s.lower())`
+===
+import re
+from collections import Counter
+s = input()
+cnt = Counter(re.findall(r"[a-zа-яё]+", s.lower()))
+for w, c in sorted(cnt.items(), key=lambda p: (-p[1], p[0]))[:3]:
+    print(w, c)
+===
+card: Что значат `\d`, `\w`, `\s` в регулярках? :: Цифра, буква/цифра/подчёркивание, пробельный символ.
+card: Чем re.search отличается от re.fullmatch? :: search ищет шаблон где угодно в строке, fullmatch требует, чтобы вся строка совпала с шаблоном.
+
+## py-28 | Проект: телефонная книга
+Соберём всё вместе в маленькую программу с командами. Так устроены реальные консольные утилиты и многие лабы.
+
+Структура:
+1. Данные — словарь `имя → список телефонов`.
+2. Цикл чтения команд до `exit`.
+3. Каждая команда — отдельная функция; неизвестная команда — понятная ошибка.
+
+```python
+book = {}
+
+def add(name, phone):
+    book.setdefault(name, [])
+    if phone not in book[name]:
+        book[name].append(phone)
+
+handlers = {"add": add}
+while True:
+    cmd, *args = input().split()
+    if cmd == "exit":
+        break
+    handlers[cmd](*args)
+```
+
+Словарь «команда → функция» вместо длинной цепочки if/elif — частый и красивый приём.
+
+?? Зачем словарь «команда → функция»?
++ чтобы не писать длинную цепочку if/elif и легко добавлять команды
+- так быстрее работает процессор
+- иначе нельзя вызвать функцию
+- для сортировки команд
+= Новая команда — одна строка в словаре.
+
+?? Что сделает `cmd, *args = "add Аня 123".split()`?
++ cmd = "add", args = ["Аня", "123"]
+- ошибка
+- cmd = "add Аня 123"
+- args = "Аня 123"
+= Распаковка со звёздочкой собирает остаток в список.
+
+!! {1} Шаг 1. Команды: `add имя телефон`, `get имя` (телефоны через пробел в порядке добавления или `нет такого`), `exit`.
+<<<
+book = {}
+<<<
+in: add аня 111\nadd аня 222\nget аня\nget боря\nexit
+out: 111 222\nнет такого
+in: add миша 5\nadd миша 5\nget миша\nexit
+out: 5
+hint: Не добавляй одинаковый телефон дважды.
+===
+book = {}
+while True:
+    cmd, *args = input().split()
+    if cmd == "exit":
+        break
+    if cmd == "add":
+        name, phone = args
+        book.setdefault(name, [])
+        if phone not in book[name]:
+            book[name].append(phone)
+    elif cmd == "get":
+        print(*book[args[0]] if args[0] in book else ["нет такого"])
+===
+!! {2} Шаг 2. Добавь `del имя` (или `нет такого`), `list` — все контакты по алфавиту «имя: телефоны», `find часть` — имена, содержащие часть (по алфавиту) или `ничего`.
+<<<
+book = {}
+<<<
+in: add боря 2\nadd аня 1\nadd анна 3\nlist\nfind ан\ndel боря\ndel вика\nlist\nfind я\nexit
+out: анна: 3\nаня: 1\nборя: 2\nанна аня\nнет такого\nанна: 3\nаня: 1\nаня
+in: list\nfind а\nadd дима 7\nadd дима 8\nlist\nexit
+out: ничего\nдима: 7, 8
+hint: `", ".join(...)` для телефонов; поиск — `if part in name`.
+===
+book = {}
+while True:
+    cmd, *args = input().split()
+    if cmd == "exit":
+        break
+    if cmd == "add":
+        name, phone = args
+        book.setdefault(name, [])
+        if phone not in book[name]:
+            book[name].append(phone)
+    elif cmd == "get":
+        print(*book[args[0]] if args[0] in book else ["нет такого"])
+    elif cmd == "del":
+        if args[0] in book:
+            del book[args[0]]
+        else:
+            print("нет такого")
+    elif cmd == "list":
+        for name in sorted(book):
+            print(f"{name}: {', '.join(book[name])}")
+    elif cmd == "find":
+        found = sorted(n for n in book if args[0] in n)
+        print(*found if found else ["ничего"])
+===
+!! {3} Шаг 3. Перепиши на классе `PhoneBook` с методами и словарём команд. Добавь `undo` — отменить последнее успешное изменение (`add` или `del`), если отменять нечего — `нечего отменять`. Команды и вывод — как в шаге 2.
+<<<
+class PhoneBook:
+    pass
+<<<
+in: add аня 1\nadd аня 2\nundo\nget аня\ndel аня\nget аня\nundo\nget аня\nundo\nundo\nexit
+out: 1\nнет такого\n1\nнечего отменять
+in: undo\nadd миша 5\nadd вика 6\nlist\nundo\nlist\nfind ми\nexit
+out: нечего отменять\nвика: 6\nмиша: 5\nмиша: 5\nмиша
+hint: Храни стек истории: для add — («add», имя, телефон), для del — («del», имя, список телефонов).
+===
+class PhoneBook:
+    def __init__(self):
+        self.book = {}
+        self.history = []
+
+    def add(self, name, phone):
+        lst = self.book.setdefault(name, [])
+        if phone not in lst:
+            lst.append(phone)
+            self.history.append(("add", name, phone))
+
+    def get(self, name):
+        print(*self.book[name] if name in self.book else ["нет такого"])
+
+    def delete(self, name):
+        if name in self.book:
+            self.history.append(("del", name, self.book.pop(name)))
+        else:
+            print("нет такого")
+
+    def list(self):
+        for name in sorted(self.book):
+            print(f"{name}: {', '.join(self.book[name])}")
+
+    def find(self, part):
+        found = sorted(n for n in self.book if part in n)
+        print(*found if found else ["ничего"])
+
+    def undo(self):
+        if not self.history:
+            print("нечего отменять")
+            return
+        kind, name, data = self.history.pop()
+        if kind == "add":
+            self.book[name].remove(data)
+            if not self.book[name]:
+                del self.book[name]
+        else:
+            self.book[name] = data
+
+pb = PhoneBook()
+handlers = {"add": pb.add, "get": pb.get, "del": pb.delete, "list": pb.list, "find": pb.find, "undo": pb.undo}
+while True:
+    cmd, *args = input().split()
+    if cmd == "exit":
+        break
+    handlers[cmd](*args)
+===
+card: Как красиво разобрать команду из строки? :: `cmd, *args = line.split()` и словарь `команда → функция`.
+card: Как сделать «отмену» действий? :: Стек истории: каждое изменение кладёт запись, undo снимает последнюю и возвращает состояние.
+
+## py-29 | Проект: анализ оценок (файлы, CSV, статистика)
+Реальные данные часто приходят таблицей CSV: значения через запятую.
+
+```python
+import csv, io
+data = "имя,предмет,балл\nаня,матан,90\n"
+for row in csv.DictReader(io.StringIO(data)):
+    print(row["имя"], int(row["балл"]))
+```
+
+Из файла: `with open("grades.csv", encoding="utf-8") as f: rows = list(csv.DictReader(f))`.
+
+Статистика: `statistics.mean`, `median`, `stdev`. Группировка — `defaultdict(list)`.
+
+Хорошая программа разделена на части: чтение данных → обработка (чистые функции) → вывод. Так её легко тестировать.
+
+?? Что делает `csv.DictReader`?
++ читает строки CSV как словари «заголовок → значение»
+- пишет CSV-файл
+- сортирует таблицу
+- читает только числа
+= Первая строка файла — названия столбцов.
+
+?? Медиана [1, 3, 100] — это…
++ 3
+- 34.67
+- 100
+- 1
+= Среднее по порядку значение — устойчиво к выбросам.
+
+!! {1} На вход — CSV (до конца ввода) со столбцами `имя,предмет,балл`. Выведи средний балл каждого студента (по алфавиту) с 1 знаком: «имя среднее».
+<<<
+import csv, sys
+rows = list(csv.DictReader(sys.stdin))
+<<<
+in: имя,предмет,балл\nаня,матан,90\nаня,физика,80\nборя,матан,70
+out: аня 85.0\nборя 70.0
+in: имя,предмет,балл\nмиша,алгоритмы,100
+out: миша 100.0
+hint: `defaultdict(list)`: имя → список баллов; `sum / len`.
+===
+import csv, sys
+from collections import defaultdict
+rows = list(csv.DictReader(sys.stdin))
+d = defaultdict(list)
+for r in rows:
+    d[r["имя"]].append(int(r["балл"]))
+for name in sorted(d):
+    print(name, f"{sum(d[name]) / len(d[name]):.1f}")
+===
+!! {2} То же CSV. Для каждого предмета (по алфавиту) выведи «предмет среднее медиана максимум» (среднее и медиана с 1 знаком).
+<<<
+import csv, sys, statistics
+rows = list(csv.DictReader(sys.stdin))
+<<<
+in: имя,предмет,балл\nаня,матан,90\nборя,матан,70\nвика,матан,100\nаня,физика,80
+out: матан 86.7 90.0 100\nфизика 80.0 80.0 80
+in: имя,предмет,балл\nаня,алгебра,60\nборя,алгебра,61
+out: алгебра 60.5 60.5 61
+hint: `statistics.mean(lst)`, `statistics.median(lst)`.
+===
+import csv, sys, statistics
+from collections import defaultdict
+rows = list(csv.DictReader(sys.stdin))
+d = defaultdict(list)
+for r in rows:
+    d[r["предмет"]].append(int(r["балл"]))
+for subj in sorted(d):
+    v = d[subj]
+    print(subj, f"{statistics.mean(v):.1f}", f"{statistics.median(v):.1f}", max(v))
+===
+!! {3} То же CSV, но в строках бывает мусор (нет балла, балл не число, балл вне 0..100) — такие строки пропускай и в конце выведи `пропущено N`. Выведи рейтинг студентов по убыванию среднего (при равенстве — по алфавиту): «место. имя среднее» (среднее с 1 знаком).
+<<<
+import csv, sys
+rows = list(csv.DictReader(sys.stdin))
+<<<
+in: имя,предмет,балл\nаня,матан,90\nборя,матан,abc\nвика,матан,95\nаня,физика,100\nгена,физика,\nборя,физика,85\nдима,матан,120
+out: 1. аня 95.0\n2. вика 95.0\n3. боря 85.0\nпропущено 3
+in: имя,предмет,балл\nюля,матан,0\nёж,матан,0
+out: 1. юля 0.0\n2. ёж 0.0\nпропущено 0
+hint: Проверяй `try: b = int(r["балл"])` и `0 <= b <= 100`; иначе `skipped += 1`.
+===
+import csv, sys
+from collections import defaultdict
+rows = list(csv.DictReader(sys.stdin))
+d = defaultdict(list)
+skipped = 0
+for r in rows:
+    try:
+        b = int(r.get("балл") or "")
+    except ValueError:
+        skipped += 1
+        continue
+    if not 0 <= b <= 100:
+        skipped += 1
+        continue
+    d[r["имя"]].append(b)
+avg = {n: sum(v) / len(v) for n, v in d.items()}
+for i, name in enumerate(sorted(avg, key=lambda n: (-avg[n], n)), start=1):
+    print(f"{i}. {name} {avg[name]:.1f}")
+print(f"пропущено {skipped}")
+===
+card: Как читать CSV со строкой заголовков? :: `csv.DictReader(файл)` — каждая строка как словарь по названиям столбцов.
+card: Почему медиана бывает лучше среднего? :: Она не «уезжает» из-за выбросов (одного огромного или нулевого значения).
+
+## py-30 | Проект: текстовая игра «Угадай число» и симуляции
+Финальный проект модуля: логика игры отдельно от ввода-вывода — тогда её можно проверить тестами.
+
+```python
+def check(secret, guess):
+    if guess < secret: return "больше"
+    if guess > secret: return "меньше"
+    return "угадал"
+```
+
+Для случайностей — `random`, но в тестах нужна предсказуемость: `random.seed(42)` делает последовательность одинаковой при каждом запуске.
+
+**Симуляция** — моделируем процесс по шагам: очередь в столовой, распространение «пожара» по клеткам, игра «Жизнь» Конвея.
+
+Совет для любого проекта: сначала самый простой рабочий вариант, потом улучшения маленькими шагами, после каждого — запуск.
+
+?? Зачем `random.seed(42)`?
++ чтобы случайные числа шли одинаково при каждом запуске — для тестов и отладки
+- чтобы числа были «случайнее»
+- чтобы random работал быстрее
+- это обязательно перед random
+= Одинаковое зерно — одинаковая последовательность.
+
+?? Зачем отделять логику игры от input/print?
++ логику можно проверить тестами и переиспользовать
+- так короче код
+- иначе не запустится
+- ради скорости
+= Чистые функции легко тестировать.
+
+!! {1} «Угадай число»: в первой строке загаданное число, дальше попытки до угадывания. На каждую попытку выведи `больше`, `меньше` или `угадал за K` (K — номер попытки).
+<<<
+secret = int(input())
+<<<
+in: 42\n50\n25\n42
+out: меньше\nбольше\nугадал за 3
+in: 7\n7
+out: угадал за 1
+hint: Счётчик попыток и цикл `while True`.
+===
+secret = int(input())
+k = 0
+while True:
+    g = int(input())
+    k += 1
+    if g < secret:
+        print("больше")
+    elif g > secret:
+        print("меньше")
+    else:
+        print(f"угадал за {k}")
+        break
+===
+!! {2} Бот угадывает число от 1 до n бинарным поиском, а ответы `<`, `>`, `=` (загаданное меньше/больше/равно) даны во входе после n. Выведи по порядку все догадки бота через пробел.
+<<<
+n = int(input())
+<<<
+in: 100\n<\n>\n=
+out: 50 25 37
+in: 10\n=
+out: 5
+hint: Догадка `mid = (lo + hi) // 2`; на `<` — `hi = mid - 1`, на `>` — `lo = mid + 1`.
+===
+n = int(input())
+lo, hi = 1, n
+guesses = []
+while True:
+    mid = (lo + hi) // 2
+    guesses.append(mid)
+    ans = input().strip()
+    if ans == "=":
+        break
+    if ans == "<":
+        hi = mid - 1
+    else:
+        lo = mid + 1
+print(*guesses)
+===
+!! {3} Игра «Жизнь» Конвея: дано n m k и поле из `.` и `#` (живая). Сделай k шагов и выведи поле. Правила: живая клетка с 2 или 3 живыми соседями (из 8) выживает, мёртвая с ровно 3 — оживает. За краем поля клеток нет.
+<<<
+n, m, k = map(int, input().split())
+g = [list(input()) for _ in range(n)]
+<<<
+in: 3 3 1\n.#.\n.#.\n.#.
+out: ...\n###\n...
+in: 4 4 2\n....\n.##.\n.##.\n....
+out: ....\n.##.\n.##.\n....
+hint: Новое поле считай по старому целиком (не меняй клетки на ходу).
+===
+n, m, k = map(int, input().split())
+g = [list(input()) for _ in range(n)]
+for _ in range(k):
+    ng = [["."] * m for _ in range(n)]
+    for i in range(n):
+        for j in range(m):
+            c = sum(1 for dx in (-1, 0, 1) for dy in (-1, 0, 1) if (dx or dy) and 0 <= i + dx < n and 0 <= j + dy < m and g[i + dx][j + dy] == "#")
+            if (g[i][j] == "#" and c in (2, 3)) or (g[i][j] == "." and c == 3):
+                ng[i][j] = "#"
+    g = ng
+for row in g:
+    print("".join(row))
+===
+card: Как сделать случайность воспроизводимой? :: `random.seed(число)` перед генерацией.
+card: Как писать симуляцию по шагам правильно? :: Считать новое состояние по старому целиком, не меняя клетки «на ходу».

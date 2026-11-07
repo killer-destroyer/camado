@@ -20,6 +20,17 @@ interface GrowState {
   libSection?: string;
   /** Панель ИИ-помощника: открыта ли и что спросить сразу. */
   assistant?: { open: boolean; ask?: string; n?: number };
+  /** Открытое окно: разминка, повторение, итоговый тест «exam:курс:модуль». */
+  modal?: string;
+  /** Номер открытой задачи урока. */
+  task?: number;
+  /** Открытая задача задачника. */
+  problem?: string;
+  /** Просьбы от ИИ-помощника: запустить тесты, засчитать урок (счётчики). */
+  runReq?: number;
+  finishReq?: number;
+  /** Что сейчас открыто — для ИИ-помощника. */
+  work?: { where: string; task?: string; code?: string; lang?: string; runs?: string };
 }
 
 export const CARD_SUBJECT = (c: Course) => `Прокачка · ${c.name}`;
@@ -113,4 +124,9 @@ export async function completeLesson(c: Course, l: Lesson, extra: { quiz?: numbe
 /** Открыть ИИ-помощника и сразу задать вопрос (из читалки, выделенного текста, задачи). */
 export function askAssistant(ask?: string): void {
   grow.set((s) => ({ assistant: { open: true, ask, n: (s.assistant?.n ?? 0) + 1 } }));
+}
+
+/** Задача/код на экране — чтобы ИИ-помощник видел контекст. */
+export function setWork(work: GrowState["work"]): void {
+  grow.set({ work });
 }

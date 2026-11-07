@@ -6598,3 +6598,184 @@ a.btn {
 .textLayer ::selection {
   background: rgb(var(--accent-rgb) / 0.35);
 }
+
+/* ---------- 1.1.0: модули, задачи, задачник, ИИ-помощник ---------- */
+.grow-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.screen.grow.with-assistant .grow-body {
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+}
+.grow-main {
+  min-width: 0;
+}
+.gc-module {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 6px;
+  border-top: 1px solid rgb(var(--text-rgb) / 0.07);
+}
+.gc-module:first-of-type {
+  border-top: 0;
+}
+.gc-mod-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 6px 2px;
+}
+.gc-exam {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 650;
+  color: var(--accent);
+  background: rgb(var(--accent-rgb) / 0.1);
+}
+.gc-exam.passed {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 12%, transparent);
+}
+.stars {
+  color: var(--u-hot);
+  letter-spacing: 1px;
+  font-size: 0.9em;
+}
+.task-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.task-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 650;
+  background: rgb(var(--text-rgb) / 0.06);
+  border: 1px solid rgb(var(--text-rgb) / 0.08);
+}
+.task-tab.on {
+  background: rgb(var(--accent-rgb) / 0.2);
+  border-color: rgb(var(--accent-rgb) / 0.5);
+}
+.task-tab.solved {
+  color: var(--good);
+}
+.lg-ask {
+  align-self: flex-start;
+}
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.pb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.pb-filters select {
+  width: auto;
+}
+.grow-assistant {
+  position: sticky;
+  top: 0;
+  height: calc(100vh - 230px);
+  min-height: 380px;
+  padding: 14px;
+  gap: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.ga-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ga-head .muted {
+  flex: 1;
+}
+.ga-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 2px;
+}
+.ga-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.ga-msg {
+  max-width: 100%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.ga-msg.user {
+  align-self: flex-end;
+  background: rgb(var(--accent-rgb) / 0.22);
+  white-space: pre-wrap;
+}
+.ga-msg.assistant {
+  align-self: stretch;
+  background: rgb(var(--text-rgb) / 0.05);
+}
+.ga-msg .rich p {
+  margin: 4px 0;
+}
+.ga-msg .rt-code {
+  font-size: 12px;
+}
+.ga-msg.typing {
+  color: var(--muted);
+}
+.ga-input {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+.ga-input textarea {
+  flex: 1;
+  resize: none;
+}
+.btn.on {
+  background: rgb(var(--accent-rgb) / 0.2);
+  border-color: rgb(var(--accent-rgb) / 0.5);
+}
+@media (max-width: 1250px) {
+  .screen.grow.with-assistant .grow-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grow-assistant {
+    position: fixed;
+    right: 18px;
+    bottom: 90px;
+    width: min(380px, calc(100vw - 36px));
+    height: min(560px, calc(100vh - 160px));
+    z-index: 40;
+  }
+}

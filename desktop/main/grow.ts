@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { BrowserWindow, Dialog } from "electron";
 import type { CamadoCore } from "../../src/core.js";
-import { checkSolution, moreExercise, reviewCode, type CheckInput } from "../../src/camado/grow.js";
+import { checkSolution, growAssist, moreExercise, reviewCode, type AssistContext, type CheckInput } from "../../src/camado/grow.js";
 import { parseProgramme, topicPractice, type Programme, type ProgrammeTopic } from "../../src/camado/syllabus.js";
 import type { Store } from "../../src/store.js";
 import { localToUtc } from "../../src/time.js";
@@ -49,6 +49,8 @@ export function growHandlers(deps: {
         ...patch,
         lessons: { ...cur.lessons, ...(patch.lessons ?? {}) },
         code: { ...cur.code, ...(patch.code ?? {}) },
+        exams: { ...(cur.exams ?? {}), ...(patch.exams ?? {}) },
+        problems: { ...(cur.problems ?? {}), ...(patch.problems ?? {}) },
         wrong: { ...cur.wrong, ...(patch.wrong ?? {}) },
         days: patch.days ? [...new Set([...cur.days, ...patch.days])].sort().slice(-400) : cur.days,
       };
@@ -67,6 +69,8 @@ export function growHandlers(deps: {
     },
     "grow.check": (input: CheckInput) => withAi(() => checkSolution(core.llm, input)),
     "grow.more": (lang: string, lesson: string, guide: string) => withAi(async () => ({ text: await moreExercise(core.llm, lang, lesson, guide) })),
+    "grow.ask": (ctx: AssistContext, history: { role: "user" | "assistant"; content: string }[], message: string) =>
+      withAi(() => growAssist(core.llm, ctx, Array.isArray(history) ? history : [], String(message).slice(0, 8000))),
     "grow.review": (lang: string, code: string, note?: string) => withAi(async () => ({ text: await reviewCode(core.llm, lang, code, note) })),
     /** Карточки пройденного урока — в общее повторение (по интервалам). */
     "grow.cards": (subject: string, cards: { question: string; answer: string }[]) =>

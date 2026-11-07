@@ -37,6 +37,8 @@ export interface HtmlCheck {
 }
 
 export interface CodeTask {
+  /** 1 — разминка, 2 — средне, 3 — посложнее. */
+  level: 1 | 2 | 3;
   text: string;
   starter: string;
   tests: { input: string; output: string }[];
@@ -48,9 +50,12 @@ export interface CodeTask {
 export interface Lesson {
   id: string;
   title: string;
+  /** Модуль курса: «Основы», «Структуры данных», «ООП»… */
+  module: string;
   guide: string;
   quiz: Quiz[];
-  task?: CodeTask;
+  /** Задачи урока от простой к сложной. */
+  tasks: CodeTask[];
   cards: { question: string; answer: string }[];
 }
 
@@ -63,18 +68,48 @@ export interface Course {
   lessons: Lesson[];
 }
 
+/** Задача из задачника: решается на любом из языков (ввод → вывод). */
+export interface Problem {
+  id: string;
+  title: string;
+  topic: string;
+  level: 1 | 2 | 3;
+  text: string;
+  tests: { input: string; output: string }[];
+  hints: string[];
+  /** Эталонное решение на Python. */
+  solution: string;
+}
+
 const unescape = (s: string) => s.replace(/\\n/g, "\n").replace(/\\t/g, "\t");
+
+type TaskDraft = { level: 1 | 2 | 3; text: string[]; starter: string[]; tests: { input: string; output: string }[]; checks: HtmlCheck[]; hints: string[]; solution: string[] };
+
+const newTask = (head: string): TaskDraft => {
+  const m = /^\{([123])\}\s*/.exec(head);
+  return { level: (m ? Number(m[1]) : 1) as 1 | 2 | 3, text: [m ? head.slice(m[0].length) : head], starter: [], tests: [], checks: [], hints: [], solution: [] };
+};
+const finishTask = (t: TaskDraft): CodeTask => ({
+  level: t.level,
+  text: t.text.join("\n").trim(),
+  starter: t.starter.join("\n"),
+  tests: t.tests,
+  checks: t.checks,
+  hints: t.hints,
+  solution: t.solution.join("\n"),
+});
 
 export function parseCourse(id: CourseId, name: string, lang: Course["lang"], text: string): Course {
   const lines = text.replace(/\r/g, "").split("\n");
   const lessons: Lesson[] = [];
-  let about: string[] = [];
+  const about: string[] = [];
+  let module = "Основы";
   let lesson: Lesson | null = null;
   type Mode = "guide" | "quiz" | "task" | "starter" | "solution";
   let mode: Mode = "guide";
   let guide: string[] = [];
   let quiz: { q: string[]; options: string[]; answer: number; why: string } | null = null;
-  let task: (Omit<CodeTask, "text" | "starter" | "solution"> & { text: string[]; starter: string[]; solution: string[] }) | null = null;
+  let task: TaskDraft | null = null;
   let fence = false;
   let pendingIn: string | null = null;
 
@@ -85,28 +120,21 @@ export function parseCourse(id: CourseId, name: string, lang: Course["lang"], te
     }
     quiz = null;
   };
+  const flushTask = () => {
+    if (lesson && task) lesson.tasks.push(finishTask(task));
+    task = null;
+  };
   const flushLesson = () => {
     flushQuiz();
+    flushTask();
     if (!lesson) return;
     lesson.guide = guide.join("\n").trim();
-    if (task) {
-      lesson.task = {
-        text: task.text.join("\n").trim(),
-        starter: task.starter.join("\n"),
-        tests: task.tests,
-        checks: task.checks,
-        hints: task.hints,
-        solution: task.solution.join("\n"),
-      };
-    }
     lessons.push(lesson);
     lesson = null;
-    task = null;
     guide = [];
   };
 
-  for (const raw of lines) {
-    const line = raw;
+  for (const line of lines) {
     // заготовка и решение — как есть, до закрывающей строки
     if (mode === "starter") {
       if (line.trim() === "<<<") mode = "task";
@@ -118,17 +146,25 @@ export function parseCourse(id: CourseId, name: string, lang: Course["lang"], te
       else task!.solution.push(line);
       continue;
     }
-    if (line.trimStart().startsWith("```")) fence = !fence;
-    if (fence || line.trimStart().startsWith("```")) {
+    const fenceLine = line.trimStart().startsWith("```");
+    if (fenceLine) fence = !fence;
+    if (fence || fenceLine) {
       if (mode === "guide") (lesson ? guide : about).push(line);
       else if (mode === "quiz" && quiz) quiz.q.push(line);
       else if (mode === "task" && task) task.text.push(line);
       continue;
     }
+    const mod = /^### +Модуль(?: *\d+)?[.:]? *(.+)$/.exec(line);
+    if (mod) {
+      flushLesson();
+      module = mod[1]!.trim();
+      mode = "guide";
+      continue;
+    }
     const m = /^## +([\w-]+) *\| *(.+)$/.exec(line);
     if (m) {
       flushLesson();
-      lesson = { id: m[1]!, title: m[2]!.trim(), guide: "", quiz: [], cards: [] };
+      lesson = { id: m[1]!, title: m[2]!.trim(), module, guide: "", quiz: [], tasks: [], cards: [] };
       mode = "guide";
       continue;
     }
@@ -139,13 +175,15 @@ export function parseCourse(id: CourseId, name: string, lang: Course["lang"], te
     }
     if (line.startsWith("?? ")) {
       flushQuiz();
+      flushTask();
       quiz = { q: [line.slice(3)], options: [], answer: -1, why: "" };
       mode = "quiz";
       continue;
     }
     if (line.startsWith("!! ")) {
       flushQuiz();
-      task = { text: [line.slice(3)], starter: [], tests: [], checks: [], hints: [], solution: [] };
+      flushTask();
+      task = newTask(line.slice(3));
       mode = "task";
       continue;
     }
@@ -166,8 +204,10 @@ export function parseCourse(id: CourseId, name: string, lang: Course["lang"], te
     if (mode === "task" && task) {
       if (line.trim() === "<<<") mode = "starter";
       else if (line.trim() === "===") mode = "solution";
-      else if (line.startsWith("in:")) pendingIn = unescape(line.slice(3).trim());
-      else if (line.startsWith("out:")) {
+      else if (line.startsWith("in:")) {
+        if (pendingIn !== null) throw new Error(`${lesson.id}: после in: нет out: (запусти scripts/fill-outputs)`);
+        pendingIn = unescape(line.slice(3).trim());
+      } else if (line.startsWith("out:")) {
         task.tests.push({ input: pendingIn ?? "", output: unescape(line.slice(4).trim()) });
         pendingIn = null;
       } else if (line.startsWith("hint: ")) task.hints.push(line.slice(6));
@@ -180,8 +220,63 @@ export function parseCourse(id: CourseId, name: string, lang: Course["lang"], te
     }
     guide.push(line);
   }
+  if (pendingIn !== null) throw new Error(`после in: нет out: (запусти scripts/fill-outputs)`);
   flushLesson();
   return { id, name, lang, about: about.join("\n").trim(), lessons };
+}
+
+/**
+ * Задачник:
+ *   ## p-001 | Название | Тема | 2
+ *   Условие…
+ *   in: …   out: …
+ *   hint: …
+ *   ===  решение на Python  ===
+ */
+export function parseProblems(text: string): Problem[] {
+  const out: Problem[] = [];
+  let cur: (Omit<Problem, "text" | "solution"> & { text: string[]; solution: string[] }) | null = null;
+  let mode: "text" | "solution" = "text";
+  let pendingIn: string | null = null;
+  const flush = () => {
+    if (!cur) return;
+    if (pendingIn !== null) throw new Error(`${cur.id}: после in: нет out:`);
+    out.push({ ...cur, text: cur.text.join("\n").trim(), solution: cur.solution.join("\n") });
+    cur = null;
+  };
+  for (const line of text.replace(/\r/g, "").split("\n")) {
+    if (mode === "solution") {
+      if (line.trim() === "===") mode = "text";
+      else cur!.solution.push(line);
+      continue;
+    }
+    const m = /^## +([\w-]+) *\| *([^|]+)\| *([^|]+)\| *([123]) *$/.exec(line);
+    if (m) {
+      flush();
+      cur = { id: m[1]!, title: m[2]!.trim(), topic: m[3]!.trim(), level: Number(m[4]) as 1 | 2 | 3, text: [], tests: [], hints: [], solution: [] };
+      continue;
+    }
+    if (!cur) continue;
+    if (line.trim() === "===") mode = "solution";
+    else if (line.startsWith("in:")) {
+      if (pendingIn !== null) throw new Error(`${cur.id}: после in: нет out:`);
+      pendingIn = unescape(line.slice(3).trim());
+    } else if (line.startsWith("out:")) {
+      cur.tests.push({ input: pendingIn ?? "", output: unescape(line.slice(4).trim()) });
+      pendingIn = null;
+    } else if (line.startsWith("hint: ")) cur.hints.push(line.slice(6));
+    else cur.text.push(line);
+  }
+  flush();
+  return out;
+}
+
+/** Заготовка для задачи из задачника на нужном языке. */
+export function problemStarter(lang: "python" | "java" | "cpp"): string {
+  if (lang === "python") return "import sys\n\ndata = sys.stdin.read().split()\n# твоё решение\n";
+  if (lang === "java")
+    return "import java.io.*;\nimport java.util.*;\n\npublic class Main {\n    public static void main(String[] args) throws IOException {\n        BufferedReader br = new BufferedReader(new InputStreamReader(System.in));\n        // твоё решение\n    }\n}\n";
+  return "#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    ios::sync_with_stdio(false);\n    cin.tie(nullptr);\n    // твоё решение\n    return 0;\n}\n";
 }
 
 /** Сравнение вывода: без пробелов в конце строк и пустых строк в конце. */

@@ -173,10 +173,24 @@ export interface BookSource {
   url: string;
 }
 
+/** Что ИИ-помощник просит сделать в «Прокачке». */
+export type GrowAction =
+  | { type: "open_lesson"; course: string; lesson: string }
+  | { type: "open_tab"; tab: string }
+  | { type: "run_tests" }
+  | { type: "complete_lesson" }
+  | { type: "warmup" }
+  | { type: "review" }
+  | { type: "task"; level: number };
+
 /** Прогресс «Прокачки». */
 export interface GrowProgress {
   /** Урок → когда пройден (ГГГГ-ММ-ДД), сколько верных в тесте, решена ли задача. */
-  lessons: Record<string, { done?: string; quiz?: number; task?: boolean }>;
+  lessons: Record<string, { done?: string; quiz?: number; task?: boolean; solved?: number[] }>;
+  /** Итоговые тесты модулей: «курс:модуль» → лучший результат в процентах. */
+  exams?: Record<string, number>;
+  /** Задачник: задача → на каких языках решена. */
+  problems?: Record<string, string[]>;
   /** Дни, когда занимался (ГГГГ-ММ-ДД) — для серии. */
   days: string[];
   /** Вопросы, на которых ошибался: ключ «урок:номер» → сколько раз. Такие чаще в разминке. */
@@ -308,6 +322,12 @@ export interface CamadoApi {
     check(input: { lang: string; lesson: string; task: string; code: string; runs?: { input: string; expected: string; got: string; ok: boolean }[] }): Promise<{ ok: boolean; feedback: string } | { error: string }>;
     more(lang: string, lesson: string, guide: string): Promise<{ text: string } | { error: string }>;
     review(lang: string, code: string, note?: string): Promise<{ text: string } | { error: string }>;
+    /** ИИ-помощник «Прокачки»: ответ и что сделать в окне. */
+    ask(
+      ctx: { where: string; task?: string; code?: string; lang?: string; runs?: string; catalog: string },
+      history: { role: "user" | "assistant"; content: string }[],
+      message: string,
+    ): Promise<{ answer: string; actions: GrowAction[] } | { error: string }>;
     cards(subject: string, cards: { question: string; answer: string }[]): Promise<number>;
   };
   books: {

@@ -1,9 +1,10 @@
 // Все курсы «Прокачки». Тексты уроков — в .md рядом, сюда попадают при сборке.
-import { parseCourse, type Course, type CourseId } from "./format";
+import { parseCourse, parseProblems, type Course, type CourseId } from "./format";
 import python from "./python.md?raw";
 import java from "./java.md?raw";
 import cpp from "./cpp.md?raw";
 import html from "./html.md?raw";
+import problems from "./problems.md?raw";
 
 export const COURSES: Course[] = [
   parseCourse("python", "Python", "python", python),
@@ -13,3 +14,6 @@ export const COURSES: Course[] = [
 ];
 
 export const courseById = (id: CourseId): Course | undefined => COURSES.find((c) => c.id === id);
+
+/** Задачник: задачи на любом языке (ввод → вывод). */
+export const PROBLEMS = parseProblems(problems);

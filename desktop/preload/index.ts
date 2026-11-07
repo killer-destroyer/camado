@@ -39,6 +39,7 @@ const api: CamadoApi = {
     check: call("grow.check") as CamadoApi["grow"]["check"],
     more: call("grow.more") as CamadoApi["grow"]["more"],
     review: call("grow.review") as CamadoApi["grow"]["review"],
+    ask: call("grow.ask") as CamadoApi["grow"]["ask"],
     cards: call("grow.cards") as CamadoApi["grow"]["cards"],
   },
   books: {

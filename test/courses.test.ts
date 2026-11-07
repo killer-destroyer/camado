@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parseCourse, sameOutput, streak, warmupFor, type CourseId } from "../desktop/shared/courses/format.js";
+import { parseCourse, parseProblems, sameOutput, streak, warmupFor, type CodeTask, type CourseId } from "../desktop/shared/courses/format.js";
 import { detectTools, hasRunner, runCode } from "../desktop/main/runner.js";
 
 const FILES: [CourseId, string, "python" | "java" | "cpp" | "html"][] = [
@@ -9,12 +9,14 @@ const FILES: [CourseId, string, "python" | "java" | "cpp" | "html"][] = [
   ["cpp", "C++", "cpp"],
   ["html", "HTML и CSS", "html"],
 ];
+const problems = parseProblems(readFileSync(new URL("../desktop/shared/courses/problems.md", import.meta.url), "utf8"));
 const courses = FILES.map(([id, name, lang]) => parseCourse(id, name, lang, readFileSync(new URL(`../desktop/shared/courses/${id}.md`, import.meta.url), "utf8")));
 
 describe("курсы «Прокачки»", () => {
   it.each(courses.map((c) => [c.id, c] as const))("%s: уроки собраны полностью", (_id, c) => {
     expect(c.about.length).toBeGreaterThan(40);
-    expect(c.lessons.length).toBeGreaterThanOrEqual(8);
+    expect(c.lessons.length).toBeGreaterThanOrEqual(c.lang === "html" ? 16 : 26);
+    expect(new Set(c.lessons.map((l) => l.module)).size).toBeGreaterThanOrEqual(4);
     const ids = new Set<string>();
     for (const l of c.lessons) {
       expect(ids.has(l.id), l.id).toBe(false);
@@ -26,45 +28,56 @@ describe("курсы «Прокачки»", () => {
         expect(q.answer, `${l.id}: ${q.q}`).toBeGreaterThanOrEqual(0);
         expect(q.why.length, `${l.id}: ${q.q}`).toBeGreaterThan(5);
       }
-      expect(l.task, l.id).toBeDefined();
-      expect(l.task!.solution.trim().length, l.id).toBeGreaterThan(5);
-      expect(l.task!.hints.length, l.id).toBeGreaterThanOrEqual(1);
-      if (c.lang === "html") expect(l.task!.checks.length, l.id).toBeGreaterThanOrEqual(1);
-      else expect(l.task!.tests.length, l.id).toBeGreaterThanOrEqual(1);
+      expect(l.tasks.length, l.id).toBeGreaterThanOrEqual(c.lang === "html" ? 2 : 3);
+      for (const [ti, t0] of l.tasks.entries()) {
+      const id = `${l.id}#${ti + 1}`;
+      expect(t0.solution.trim().length, id).toBeGreaterThan(5);
+      expect(t0.hints.length, id).toBeGreaterThanOrEqual(1);
+      expect(t0.text.length, id).toBeGreaterThan(20);
+      if (c.lang === "html") expect(t0.checks.length, id).toBeGreaterThanOrEqual(1);
+      else expect(t0.tests.length >= 2 || t0.tests[0]?.input === "", id).toBe(true);
+      }
       expect(l.cards.length, l.id).toBeGreaterThanOrEqual(2);
     }
   });
 
-  // Решения из уроков правда проходят свои тесты (где установлен язык).
-  for (const c of courses.filter((x) => x.lang !== "html")) {
-    it(`${c.id}: решения проходят тесты`, async () => {
-      const tools = await detectTools();
-      const lang = c.lang as "python" | "java" | "cpp";
-      if (!hasRunner(tools, lang)) return;
-      for (const l of c.lessons) {
-        const t = l.task!;
-        const res = await runCode(tools, lang, t.solution, t.tests.map((x) => x.input), 15000);
-        if ("error" in res) throw new Error(res.error);
-        res.forEach((r, i) => {
-          expect(r.ok, `${l.id} тест ${i + 1}: ${r.stderr}`).toBe(true);
-          expect(sameOutput(r.stdout, t.tests[i]!.output), `${l.id} тест ${i + 1}: получилось\n${r.stdout}\nожидалось\n${t.tests[i]!.output}`).toBe(true);
-        });
-      }
-    }, 240_000);
-  }
-
-  it("заготовки не решают задачу сами", async () => {
+  // Решения всех задач правда проходят свои тесты (где установлен язык), а заготовки — нет.
+  const check = async (lang: "python" | "java" | "cpp", items: { id: string; t: Pick<CodeTask, "tests" | "solution" | "starter"> }[]) => {
     const tools = await detectTools();
-    for (const c of courses.filter((x) => x.lang !== "html" && hasRunner(tools, x.lang as "python"))) {
-      for (const l of c.lessons) {
-        const t = l.task!;
-        const res = await runCode(tools, c.lang as "python", t.starter, t.tests.map((x) => x.input), 15000);
-        if ("error" in res) continue;
-        const allOk = res.every((r, i) => r.ok && sameOutput(r.stdout, t.tests[i]!.output));
-        expect(allOk, `${l.id}: заготовка уже проходит тесты`).toBe(false);
+    if (!hasRunner(tools, lang)) return;
+    for (const { id, t } of items) {
+      const res = await runCode(tools, lang, t.solution, t.tests.map((x) => x.input), 20000);
+      if ("error" in res) throw new Error(res.error);
+      res.forEach((r, i) => {
+        expect(r.ok, `${id} тест ${i + 1}: ${r.stderr}`).toBe(true);
+        expect(sameOutput(r.stdout, t.tests[i]!.output), `${id} тест ${i + 1}: получилось\n${r.stdout}\nожидалось\n${t.tests[i]!.output}`).toBe(true);
+      });
+      if (t.starter.trim()) {
+        const st = await runCode(tools, lang, t.starter, t.tests.map((x) => x.input), 20000);
+        if (!("error" in st)) expect(st.every((r, i) => r.ok && sameOutput(r.stdout, t.tests[i]!.output)), `${id}: заготовка уже проходит тесты`).toBe(false);
       }
     }
-  }, 240_000);
+  };
+  for (const c of courses.filter((x) => x.lang !== "html")) {
+    it(`${c.id}: решения всех задач проходят тесты`, async () => {
+      await check(
+        c.lang as "python",
+        c.lessons.flatMap((l) => l.tasks.map((t, i) => ({ id: `${l.id}#${i + 1}`, t }))),
+      );
+    }, 900_000);
+  }
+
+  it("задачник: задачи собраны и эталонные решения проходят тесты", async () => {
+    expect(problems.length).toBeGreaterThanOrEqual(150);
+    const ids = new Set(problems.map((p) => p.id));
+    expect(ids.size).toBe(problems.length);
+    for (const p of problems) {
+      expect(p.text.length, p.id).toBeGreaterThan(30);
+      expect(p.tests.length, p.id).toBeGreaterThanOrEqual(2);
+      expect(p.hints.length, p.id).toBeGreaterThanOrEqual(1);
+    }
+    await check("python", problems.map((p) => ({ id: p.id, t: { tests: p.tests, solution: p.solution, starter: "" } })));
+  }, 900_000);
 
   it("серия дней и разминка", () => {
     expect(streak(["2026-11-05", "2026-11-06", "2026-11-07"], "2026-11-07")).toBe(3);
