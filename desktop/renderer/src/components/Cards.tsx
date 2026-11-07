@@ -76,10 +76,14 @@ export function NoteCards({ note, onClose, onReview }: { note: Note; onClose: ()
 }
 
 /** Повторение: вопрос → «Показать ответ» → «Не помню / Трудно / Помню». */
-export function Review({ cards, onClose }: { cards: Card[]; onClose: () => void }) {
+export function Review({ cards, onClose: close, onDone }: { cards: Card[]; onClose: () => void; onDone?: (reviewed: number) => void }) {
   const [queue, setQueue] = useState(cards);
   const [shown, setShown] = useState(false);
   const [done, setDone] = useState(0);
+  const onClose = () => {
+    onDone?.(done);
+    close();
+  };
   const cur = queue[0];
   const grade = async (g: 0 | 1 | 2) => {
     if (!cur) return;

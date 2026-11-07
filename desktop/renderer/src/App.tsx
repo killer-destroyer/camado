@@ -21,6 +21,8 @@ import { OverlayFeed } from "./components/Overlay";
 import { NowPlayingFeed } from "./components/Mini";
 import { Chat } from "./screens/Chat";
 import { Focus } from "./screens/Focus";
+import { Grow } from "./screens/Grow";
+import { grow, type GrowTab } from "./state/grow";
 import { Music } from "./screens/Music";
 import { Notes } from "./screens/Notes";
 import { Links } from "./screens/Links";
@@ -37,6 +39,7 @@ const SCREENS: Record<ScreenId, () => React.JSX.Element> = {
   session: Session,
   notes: Notes,
   links: Links,
+  grow: Grow,
   music: Music,
   focus: Focus,
   chat: Chat,
@@ -130,7 +133,7 @@ export function App() {
       else if (e.key === "ArrowRight" && app.get().nowPlaying) seek(position() + 5);
       else if (e.key === "ArrowLeft" && app.get().nowPlaying) seek(position() - 5);
       else if (/^[1-9]$/.test(e.key) && e.altKey) {
-        const ids: ScreenId[] = ["today", "tasks", "plan", "session", "notes", "links", "music", "focus", "chat"];
+        const ids: ScreenId[] = ["today", "tasks", "plan", "session", "notes", "links", "grow", "music", "focus", "chat"];
         go(ids[Number(e.key) - 1]!);
       }
     };
@@ -155,7 +158,10 @@ export function App() {
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
-      else if (name === "focus-break") {
+      else if (name.startsWith("grow-")) {
+        go("grow");
+        grow.set({ tab: name.slice(5) as GrowTab });
+      } else if (name === "focus-break") {
         go("focus");
         setFocusMode("short");
       }

@@ -147,6 +147,50 @@ export type TaskInput = {
 
 export type TaskPatch = Partial<Pick<Task, "subject" | "title" | "details" | "kind" | "dueAt" | "status">>;
 
+/** Прогресс «Прокачки». */
+export interface GrowProgress {
+  /** Урок → когда пройден (ГГГГ-ММ-ДД), сколько верных в тесте, решена ли задача. */
+  lessons: Record<string, { done?: string; quiz?: number; task?: boolean }>;
+  /** Дни, когда занимался (ГГГГ-ММ-ДД) — для серии. */
+  days: string[];
+  /** Вопросы, на которых ошибался: ключ «урок:номер» → сколько раз. Такие чаще в разминке. */
+  wrong: Record<string, number>;
+  /** Код в редакторе по урокам. */
+  code: Record<string, string>;
+  /** Цель: занятий в день (урок, задача, разминка или повторение). */
+  goal: number;
+  /** Разминка дня пройдена: ГГГГ-ММ-ДД. */
+  warmupDone?: string;
+  /** Сколько занятий сегодня (урок, задача, разминка, повторение) — для цели дня. */
+  acts?: { day: string; n: number };
+  last?: { course: string; lesson: string };
+}
+
+export interface RunResult {
+  ok: boolean;
+  stdout: string;
+  stderr: string;
+  timeout?: boolean;
+  compile?: boolean;
+}
+
+export interface ProgrammeTopic {
+  n: number;
+  title: string;
+  date?: string;
+  reading?: string;
+  done?: boolean;
+  taskId?: number;
+}
+
+export interface Programme {
+  id: string;
+  subject: string;
+  topics: ProgrammeTopic[];
+  literature: string[];
+  addedAt: string;
+}
+
 /** То, что окно может попросить у фоновой части. Реализация — desktop/preload. */
 export interface CamadoApi {
   info(): Promise<AppInfo>;
@@ -228,6 +272,25 @@ export interface CamadoApi {
   focus: {
     add(input: { subject?: string | null; minutes: number; startedAt: string }): Promise<FocusSession>;
     list(sinceIso: string): Promise<FocusSession[]>;
+  };
+  grow: {
+    get(): Promise<GrowProgress>;
+    save(patch: Partial<GrowProgress>): Promise<GrowProgress>;
+    /** Установлены ли Python, Java, C++ (и как поставить). */
+    tools(force?: boolean): Promise<Record<"python" | "java" | "cpp", { ok: boolean; hint: string }>>;
+    run(lang: "python" | "java" | "cpp", code: string, inputs: string[]): Promise<RunResult[] | { error: string }>;
+    check(input: { lang: string; lesson: string; task: string; code: string; runs?: { input: string; expected: string; got: string; ok: boolean }[] }): Promise<{ ok: boolean; feedback: string } | { error: string }>;
+    more(lang: string, lesson: string, guide: string): Promise<{ text: string } | { error: string }>;
+    review(lang: string, code: string, note?: string): Promise<{ text: string } | { error: string }>;
+    cards(subject: string, cards: { question: string; answer: string }[]): Promise<number>;
+  };
+  itmo: {
+    list(): Promise<Programme[]>;
+    import(input: { text?: string; pickFile?: boolean; subject?: string }): Promise<{ programme: Programme } | { cancelled: true } | { error: string }>;
+    topic(id: string, n: number, patch: Partial<Pick<ProgrammeTopic, "done" | "date" | "title">>): Promise<Programme | undefined>;
+    remove(id: string): Promise<void>;
+    plan(id: string): Promise<{ added: number }>;
+    practice(subject: string, topic: string, reading?: string): Promise<{ text: string } | { error: string }>;
   };
   chat: {
     history(): Promise<ChatEntry[]>;

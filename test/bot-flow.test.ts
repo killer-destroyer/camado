@@ -79,8 +79,49 @@ function setup(opts: { envKey?: string; owner?: () => number | undefined; pairin
     return { replies, methods: calls.map((c) => c.method) };
   };
 
-  return { store, ai, send, checked };
+  const press = async (data: string, fromId = OWNER) => {
+    calls.length = 0;
+    await bot.handleUpdate({
+      update_id: messageId++,
+      callback_query: {
+        id: String(messageId),
+        chat_instance: "x",
+        data,
+        from: { id: fromId, is_bot: false, first_name: "Я" },
+        message: { message_id: 1, date: Math.floor(Date.now() / 1000), chat: { id: fromId, type: "private", first_name: "Я" }, text: "…" },
+      },
+    } as never);
+    return calls;
+  };
+
+  return { store, ai, send, checked, press };
 }
+
+describe("повторение карточек в Telegram (/review)", () => {
+  it("показывает вопрос, ответ по кнопке и переносит карточку после оценки", async () => {
+    const { store, send, press } = setup();
+    expect((await send("/review")).replies[0]).toContain("Повторять пока нечего");
+    store.addCards([{ question: "Что вернёт `len([1, 2])`?", answer: "**2**", subject: "Прокачка · Python" }]);
+    const first = await send("/review");
+    expect(first.replies[0]).toContain("Что вернёт len([1, 2])?");
+    expect(first.replies[0]).not.toContain("2\n");
+    const id = store.listCards()[0]!.id;
+    const shown = await press(`rv:show:${id}`);
+    const edit = shown.find((c) => c.method === "editMessageText")!;
+    expect(String(edit.payload.text)).toContain("💡 2");
+    const graded = await press(`rv:g:${id}:2`);
+    expect(String(graded.find((c) => c.method === "editMessageText")!.payload.text)).toContain("Повторять пока нечего");
+    expect(store.listCards({ dueBefore: new Date() })).toHaveLength(0);
+  });
+
+  it("чужие нажатия игнорирует", async () => {
+    const { store, press } = setup();
+    store.addCards([{ question: "q", answer: "a" }]);
+    const id = store.listCards()[0]!.id;
+    expect(await press(`rv:g:${id}:2`, 222)).toHaveLength(0);
+    expect(store.listCards({ dueBefore: new Date() })).toHaveLength(1);
+  });
+});
 
 describe("бот без ключа (ручной режим)", () => {
   it("/add записывает задание, /dz показывает, /done закрывает", async () => {

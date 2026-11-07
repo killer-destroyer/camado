@@ -43,6 +43,7 @@ import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
+import { growHandlers } from "./grow.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -208,6 +209,7 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
 }
 
 const handlers: Record<string, Handler> = {
+  ...growHandlers({ store, core, timeZone: config.CAMADO_TIMEZONE, withAi, dialog, win: () => win }),
   info: (): AppInfo => ({
     platform: process.platform,
     version: app.getVersion(),

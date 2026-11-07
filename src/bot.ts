@@ -1,4 +1,4 @@
-import { Bot, type Context } from "grammy";
+import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { MessageOrigin } from "grammy/types";
 import type { Camado } from "./camado/brain.js";
 import { formatTask, formatTaskList } from "./camado/format.js";
@@ -29,6 +29,7 @@ const MANUAL_HELP = `Записать задание:
 /dz — открытые задания
 /subject Физика | Иванов И.И. | сдавать в Moodle, только PDF
 /subjects — карточки предметов
+/review — повторить карточки (уроки «Прокачки», конспекты)
 /settings — настройки · /id — твой Telegram ID`;
 
 const AI_HELP = `Просто пиши мне обычным текстом:
@@ -102,6 +103,7 @@ export const BOT_COMMANDS = [
   { command: "exam", description: "записать экзамен" },
   { command: "lab", description: "записать лабу" },
   { command: "done", description: "отметить сделанным" },
+  { command: "review", description: "повторить карточки (курсы, конспекты)" },
   { command: "subjects", description: "мои предметы" },
   { command: "settings", description: "настройки" },
   { command: "spend", description: "траты на ИИ" },
@@ -320,6 +322,40 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     return ctx.reply([...bySubject].map(([k, v]) => `${k}:\n${v.join("\n")}`).join("\n\n"), { link_preview_options: { is_disabled: true } });
   });
 
+  // ---------- Повторение карточек (из конспектов и «Прокачки») ----------
+  const dueCards = () => store.listCards({ dueBefore: new Date() });
+  const cardText = (head: string, q: string, a?: string) =>
+    [head, "", `❓ ${plainCard(q)}`, ...(a !== undefined ? ["", `💡 ${plainCard(a)}`] : [])].join("\n").slice(0, 4000);
+  const showCard = async (ctx: Context, edit: boolean) => {
+    const due = dueCards();
+    const c = due[0];
+    if (!c) {
+      const text = "Повторять пока нечего 🎉 Новые карточки появятся сами — из пройденных уроков и конспектов.";
+      return edit ? ctx.editMessageText(text) : ctx.reply(text);
+    }
+    const text = cardText(`🧠 Повторение · осталось ${due.length}${c.subject ? ` · ${c.subject}` : ""}`, c.question);
+    const kb = new InlineKeyboard().text("Показать ответ", `rv:show:${c.id}`).text("Хватит", "rv:stop");
+    return edit ? ctx.editMessageText(text, { reply_markup: kb }) : ctx.reply(text, { reply_markup: kb });
+  };
+  bot.command("review", (ctx) => showCard(ctx, false));
+  bot.callbackQuery(/^rv:show:(\d+)$/, async (ctx) => {
+    const id = Number(ctx.match[1]);
+    const c = store.listCards().find((x) => x.id === id);
+    await ctx.answerCallbackQuery();
+    if (!c) return showCard(ctx, true);
+    const kb = new InlineKeyboard().text("Не помню", `rv:g:${id}:0`).text("Трудно", `rv:g:${id}:1`).text("Помню", `rv:g:${id}:2`);
+    return ctx.editMessageText(cardText(`🧠 Повторение${c.subject ? ` · ${c.subject}` : ""}`, c.question, c.answer), { reply_markup: kb });
+  });
+  bot.callbackQuery(/^rv:g:(\d+):([012])$/, async (ctx) => {
+    store.reviewCard(Number(ctx.match[1]), Number(ctx.match[2]) as 0 | 1 | 2);
+    await ctx.answerCallbackQuery({ text: ["Покажу ещё раз скоро", "Повторим чуть раньше", "Отлично!"][Number(ctx.match[2])] });
+    return showCard(ctx, true);
+  });
+  bot.callbackQuery("rv:stop", async (ctx) => {
+    await ctx.answerCallbackQuery();
+    return ctx.editMessageText(`Остановились. Осталось карточек: ${dueCards().length}. Продолжить — /review`);
+  });
+
   bot.command("spend", (ctx) =>
     ctx.reply(
       `В этом месяце потрачено ~$${llm.spentThisMonth().toFixed(2)} из лимита $${config.CAMADO_MONTHLY_BUDGET_USD}.`,
@@ -431,4 +467,13 @@ async function replyLong(ctx: Context, text: string): Promise<void> {
   // Telegram показал бы **звёздочки** и ## решётки как есть — убираем разметку, если модель её всё же написала.
   const plain = text.replace(/\*\*(.+?)\*\*/g, "$1").replace(/__(.+?)__/g, "$1").replace(/^#{1,6}\s+/gm, "").replace(/\\([$*_])/g, "$1");
   for (const chunk of splitMessage(plain)) await ctx.reply(chunk, { link_preview_options: { is_disabled: true } });
+}
+
+/** Карточка для Telegram: без разметки ``` и звёздочек (Telegram показал бы их как есть). */
+export function plainCard(text: string): string {
+  return text
+    .replace(/```[\w+#-]*\n?/g, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .trim();
 }

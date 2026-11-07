@@ -1,6 +1,6 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
 import { useEffect, useState } from "react";
-import { AlarmClock, ArrowRight, Check, Flame, ListChecks, MessageCircle, Music2, NotebookPen, Play, SendHorizontal, Sparkles, Timer, X, Zap } from "lucide-react";
+import { AlarmClock, ArrowRight, Check, Flame, ListChecks, MessageCircle, Music2, NotebookPen, Play, Rocket, SendHorizontal, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
 import { MediaButtons } from "../components/MediaButtons";
 import { LevelBadge } from "../components/Achievements";
@@ -11,6 +11,7 @@ import { countdown, greeting, KIND_LABEL, plural, urgency } from "../lib/format"
 import { useStore } from "../lib/store";
 import { app, go, toast } from "../state/app";
 import { data } from "../state/data";
+import { continueTarget, currentStreak, doneCount, grow, loadGrow, todayDone, type GrowTab } from "../state/grow";
 import { focus, focusToday, setMode, start as startFocus } from "../state/focus";
 import { nowMeta, player } from "../state/player";
 import { MiniSpectrum } from "../components/Visualizer";
@@ -359,6 +360,49 @@ function FirstSteps() {
 }
 
 /** Быстрый чат: одна строка — Enter — и ты в «Камадо», где уже идёт ответ. */
+/** «Прокачка» на главной: серия, что продолжить, разминка и повторение. */
+function GrowCard() {
+  const g = useStore(grow, (x) => x);
+  useEffect(() => {
+    void loadGrow();
+  }, []);
+  const p = g.progress;
+  const target = continueTarget(p);
+  const n = currentStreak(p);
+  const open = (tab?: GrowTab, lesson?: string) => {
+    if (tab && lesson) grow.set((s) => ({ tab, open: { ...s.open, [tab]: lesson } }));
+    go("grow");
+  };
+  return (
+    <div className="card glass grow-card">
+      <div className={`gd-streak ${n ? "on" : ""}`} title="Дней подряд с занятиями">
+        <Flame size={20} />
+        <b>{n}</b>
+      </div>
+      <div className="gc-main">
+        <span className="muted small">Прокачка{p.goal ? ` · сегодня ${Math.min(todayDone(p), p.goal)}/${p.goal}` : ""}</span>
+        {target ? (
+          <b>
+            {doneCount(p) ? "Продолжить" : "Начни"}: {target.course.name} · {target.lesson.title}
+          </b>
+        ) : (
+          <b>Все курсы пройдены — повторяй и бери задачи от ИИ</b>
+        )}
+      </div>
+      {target && (
+        <button className="btn primary" onClick={() => open(target.course.id, target.lesson.id)}>
+          <Rocket size={16} /> Урок
+        </button>
+      )}
+      {g.due.length > 0 && (
+        <button className="btn glow" onClick={() => open()}>
+          Повторить {g.due.length}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function QuickAsk() {
   const [text, setText] = useState("");
   const send = () => {
@@ -490,6 +534,8 @@ export function Today() {
         </button>
 
         <Week />
+
+        <GrowCard />
 
         <Reminders />
 

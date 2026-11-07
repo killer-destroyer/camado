@@ -8,7 +8,7 @@ import type { AppSettings } from "../shared/settings.js";
 import type { Playlist } from "../../src/store.js";
 import type { NowPlayingState, Track } from "../shared/types.js";
 
-const SCREENS = ["today", "tasks", "plan", "session", "notes", "links", "music", "focus", "chat", "settings"] as const;
+const SCREENS = ["today", "tasks", "plan", "session", "notes", "links", "grow", "music", "focus", "chat", "settings"] as const;
 const PALETTE_IDS = ["midnight", "sakura", "tokyo", "sunset", "matcha", "ocean", "cherry", "nord", "dracula", "y2k", "mono", "vanilla"] as const;
 const SCENES = ["random", "rain", "blackhole", "picture", "warp", "aurora", "ocean", "synthwave", "fire", "lava", "dots", "jelly", "turntable"] as const;
 const EQ = ["flat", "bass", "vocal", "calm", "headphones", "night", "bright", "club"] as const;
@@ -66,9 +66,9 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
   return [
     defineTool({
       name: "app_open",
-      description: "Открыть окно Камадо на нужном экране (сегодня, задания, план, сессия, заметки, ссылки, музыка, фокус, чат, настройки) или плеер «Сейчас играет».",
+      description: "Открыть окно Камадо на нужном экране (сегодня, задания, план, сессия, заметки, ссылки, прокачка — курсы программирования и программа ИТМО, музыка, фокус, чат, настройки) или плеер «Сейчас играет».",
       schema: z.object({
-        screen: z.enum(SCREENS).describe("today — главная, tasks — задания, plan — план недели, session — сессия, notes — заметки, links — ссылки, music — музыка, focus — фокус, chat — чат, settings — настройки"),
+        screen: z.enum(SCREENS).describe("today — главная, tasks — задания, plan — план недели, session — сессия, notes — заметки, links — ссылки, grow — прокачка (курсы Python/Java/C++/HTML, программа ИТМО), music — музыка, focus — фокус, chat — чат, settings — настройки"),
         now_playing: z.boolean().optional().describe("true — открыть большой плеер с пластинкой"),
       }),
       run: (i) => {
