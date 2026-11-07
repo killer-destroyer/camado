@@ -1,28 +1,29 @@
-// «Программа ИТМО»: загрузил программу предмета (PDF, текст, скриншот) — темы по занятиям,
-// к каждой — конспект в Викиконспектах, книги ИТМО, задачи от ИИ; подготовка раскладывается в задания.
+// «Программа курса»: загрузил программу предмета (PDF, текст, скриншот) — темы по занятиям,
+// к каждой — поиск в своих источниках, книги из своей библиотеки, задачи от ИИ; подготовка раскладывается в задания.
 import { useEffect, useState } from "react";
 import { BookMarked, CalendarPlus, Check, ExternalLink, FileUp, GraduationCap, ListChecks, Sparkles, Trash2 } from "lucide-react";
-import { booksFor, bookUrl } from "../../../shared/itmoBooks";
 import type { Programme, ProgrammeTopic } from "../../../shared/types";
 import { api } from "../lib/api";
 import { toast } from "../state/app";
-import { markActive } from "../state/grow";
+import { grow, markActive } from "../state/grow";
+import { books, loadBooks, sourceUrl } from "../state/books";
+import { sameSubject } from "../../../../src/subjects";
+import { useStore } from "../lib/store";
 import { RichText } from "../components/RichText";
 import { plural } from "../lib/format";
 import { Empty } from "../components/ui";
 
-const wikiUrl = (topic: string) => `https://neerc.ifmo.ru/wiki/index.php?search=${encodeURIComponent(topic)}`;
 
-export function ItmoView() {
+export function SyllabusView() {
   const [list, setList] = useState<Programme[]>([]);
   const [open, setOpen] = useState<string | null>(null);
-  const reload = async () => setList(await api.itmo.list());
+  const reload = async () => setList(await api.syllabus.list());
   useEffect(() => {
     void reload();
   }, []);
   const cur = list.find((p) => p.id === open) ?? list[0];
   return (
-    <div className="itmo">
+    <div className="syl">
       <ImportBox
         onDone={(p) => {
           void reload();
@@ -32,8 +33,8 @@ export function ItmoView() {
       />
       {list.length === 0 ? (
         <Empty icon={<GraduationCap size={30} />} title="Пока нет ни одной программы" text="Скинь программу предмета — Камадо разложит темы по занятиям и подберёт материалы.">
-          <div className="itmo-help muted small">
-            Где взять: my.itmo.ru → Учёба → дисциплина → «Рабочая программа» (PDF), или скриншот страницы с темами по неделям.
+          <div className="syl-help muted small">
+            Где взять: в личном кабинете вуза у дисциплины обычно есть «Рабочая программа» (PDF) — или сделай скриншот страницы с темами по неделям.
           </div>
         </Empty>
       ) : (
@@ -60,7 +61,7 @@ function ImportBox({ onDone, compact }: { onDone: (p: Programme) => void; compac
   const run = async (pickFile: boolean) => {
     setBusy(true);
     try {
-      const r = await api.itmo.import({ text: pickFile ? undefined : text, pickFile, subject });
+      const r = await api.syllabus.import({ text: pickFile ? undefined : text, pickFile, subject });
       if ("cancelled" in r) return;
       if ("error" in r) {
         toast(r.error, "warn");
@@ -82,7 +83,7 @@ function ImportBox({ onDone, compact }: { onDone: (p: Programme) => void; compac
       </button>
     );
   return (
-    <section className="card glass itmo-import">
+    <section className="card glass syl-import">
       <h3 className="section-title">
         <FileUp size={16} /> Программа предмета
       </h3>
@@ -108,23 +109,27 @@ function ImportBox({ onDone, compact }: { onDone: (p: Programme) => void; compac
 
 function ProgrammeView({ prog, onChange, onRemoved }: { prog: Programme; onChange: (p: Programme) => void; onRemoved: () => void }) {
   const [topic, setTopic] = useState<ProgrammeTopic | null>(prog.topics.find((t) => !t.done) ?? prog.topics[0] ?? null);
-  const books = booksFor(prog.subject);
+  const lib = useStore(books, (x) => x.list);
+  useEffect(() => {
+    void loadBooks();
+  }, []);
+  const subjBooks = lib.filter((b) => sameSubject(b.section, prog.subject) || b.section.toLocaleLowerCase("ru").includes(prog.subject.toLocaleLowerCase("ru")));
   const done = prog.topics.filter((t) => t.done).length;
   const withDates = prog.topics.filter((t) => t.date).length;
   const toggle = async (t: ProgrammeTopic) => {
-    const p = await api.itmo.topic(prog.id, t.n, { done: !t.done });
+    const p = await api.syllabus.topic(prog.id, t.n, { done: !t.done });
     if (p) onChange(p);
     if (!t.done) void markActive();
   };
   const plan = async () => {
-    const r = await api.itmo.plan(prog.id);
+    const r = await api.syllabus.plan(prog.id);
     toast(r.added ? `Добавил ${r.added} ${plural(r.added, "задание", "задания", "заданий")} «Подготовиться» — к каждому занятию` : "Новых заданий нет: у будущих тем нет дат или они уже добавлены", r.added ? "ok" : "info");
-    const fresh = (await api.itmo.list()).find((x) => x.id === prog.id);
+    const fresh = (await api.syllabus.list()).find((x) => x.id === prog.id);
     if (fresh) onChange(fresh);
   };
   return (
-    <div className="itmo-prog">
-      <aside className="card glass itmo-topics">
+    <div className="syl-prog">
+      <aside className="card glass syl-topics">
         <div className="gc-about">
           <b>{prog.subject}</b>
           <span className="muted small">
@@ -149,7 +154,7 @@ function ProgrammeView({ prog, onChange, onRemoved }: { prog: Programme; onChang
             </li>
           ))}
         </ol>
-        <div className="itmo-side-actions">
+        <div className="syl-side-actions">
           <button className="btn sm" disabled={!withDates} title={withDates ? "Задание «подготовиться» к каждому будущему занятию" : "В программе нет дат занятий"} onClick={() => void plan()}>
             <CalendarPlus size={15} /> Подготовку — в задания
           </button>
@@ -158,33 +163,41 @@ function ProgrammeView({ prog, onChange, onRemoved }: { prog: Programme; onChang
             title="Удалить программу"
             onClick={() => {
               if (!confirm(`Удалить программу «${prog.subject}»? Задания останутся.`)) return;
-              void api.itmo.remove(prog.id).then(onRemoved);
+              void api.syllabus.remove(prog.id).then(onRemoved);
             }}
           >
             <Trash2 size={15} />
           </button>
         </div>
       </aside>
-      <div className="itmo-main">
+      <div className="syl-main">
         {topic ? <TopicView key={`${prog.id}:${topic.n}`} prog={prog} topic={topic} /> : null}
-        {books.length > 0 && (
-          <section className="card glass itmo-books">
-            <h3 className="section-title">
-              <BookMarked size={16} /> Книги ИТМО по предмету (PDF бесплатно)
-            </h3>
+        <section className="card glass syl-books">
+          <h3 className="section-title">
+            <BookMarked size={16} /> Книги по предмету из твоей библиотеки
+          </h3>
+          {subjBooks.length ? (
             <ul>
-              {books.map((b) => (
+              {subjBooks.map((b) => (
                 <li key={b.id}>
-                  <a href={bookUrl(b.id)} target="_blank" rel="noreferrer">
-                    {b.title} <ExternalLink size={12} />
-                  </a>
+                  <button className="link-btn" onClick={() => grow.set({ tab: "library", libSection: b.section })}>
+                    {b.title}
+                  </button>
+                  {b.file ? <span className="muted small"> · скачана</span> : null}
                 </li>
               ))}
             </ul>
-          </section>
-        )}
+          ) : (
+            <p className="muted small">
+              Пока нет. В «Библиотеке» добавь книги в раздел «{prog.subject}» — они появятся здесь.{" "}
+              <button className="link-btn" onClick={() => grow.set({ tab: "library", libSection: prog.subject })}>
+                Открыть библиотеку
+              </button>
+            </p>
+          )}
+        </section>
         {prog.literature.length > 0 && (
-          <section className="card glass itmo-books">
+          <section className="card glass syl-books">
             <h3 className="section-title">
               <ListChecks size={16} /> Литература из программы
             </h3>
@@ -201,13 +214,14 @@ function ProgrammeView({ prog, onChange, onRemoved }: { prog: Programme; onChang
 }
 
 function TopicView({ prog, topic }: { prog: Programme; topic: ProgrammeTopic }) {
+  const sources = useStore(books, (x) => x.sources);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [showAns, setShowAns] = useState(false);
   const practice = async () => {
     setBusy(true);
     try {
-      const r = await api.itmo.practice(prog.subject, topic.title, topic.reading);
+      const r = await api.syllabus.practice(prog.subject, topic.title, topic.reading);
       if ("error" in r) toast(r.error, "warn");
       else {
         setText(r.text);
@@ -220,7 +234,7 @@ function TopicView({ prog, topic }: { prog: Programme; topic: ProgrammeTopic }) 
   };
   const [body, answers] = text.split(/\n\s*(?:#{1,4}\s*)?\**\s*Ответы\s*:?\s*\**\s*:?\s*\n/i);
   return (
-    <section className="card glass itmo-topic">
+    <section className="card glass syl-topic">
       <span className="eyebrow">
         Тема {topic.n}
         {topic.date ? ` · ${new Date(`${topic.date}T12:00:00`).toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}` : ""}
@@ -228,15 +242,17 @@ function TopicView({ prog, topic }: { prog: Programme; topic: ProgrammeTopic }) 
       <h2>{topic.title}</h2>
       {topic.reading && <p className="muted">Читать по программе: {topic.reading}</p>}
       <div className="row-actions">
-        <a className="btn" href={wikiUrl(topic.title)} target="_blank" rel="noreferrer">
-          <BookMarked size={16} /> Конспект в Викиконспектах ИТМО
-        </a>
+        {sources.map((src) => (
+          <a key={src.id} className="btn" href={sourceUrl(src, topic.title)} target="_blank" rel="noreferrer" title={`Найти тему в «${src.name}»`}>
+            <BookMarked size={16} /> {src.name}
+          </a>
+        ))}
         <button className="btn primary" disabled={busy} onClick={() => void practice()}>
           <Sparkles size={16} /> {busy ? "Готовлю…" : text ? "Ещё задачи" : "Подготовка и задачи"}
         </button>
       </div>
       {text && (
-        <div className="itmo-practice">
+        <div className="syl-practice">
           <RichText text={body ?? text} />
           {answers && (
             <details open={showAns} onToggle={(e) => setShowAns((e.target as HTMLDetailsElement).open)}>

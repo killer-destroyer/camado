@@ -29,6 +29,33 @@ async function isLocal(u: URL): Promise<boolean> {
   return ips.length === 0 || ips.some(isPrivateIp);
 }
 
+/** Скачать по ссылке только с публичного сайта: каждое перенаправление тоже проверяется. */
+export async function safeFetch(raw: string, fetchImpl: typeof fetch = fetch, init: { accept?: string; timeoutMs?: number } = {}): Promise<{ res: Response; url: string }> {
+  let cur: URL;
+  try {
+    cur = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+  } catch {
+    throw new Error("Это не похоже на ссылку");
+  }
+  for (let hop = 0; hop < 6; hop++) {
+    if (!/^https?:$/.test(cur.protocol)) throw new Error("Такие ссылки не открываю");
+    if (await isLocal(cur)) throw new Error("Это адрес домашней сети или компьютера — такие не открываю");
+    const res = await fetchImpl(cur.href, {
+      redirect: "manual",
+      headers: { "User-Agent": "Mozilla/5.0 (Camado study assistant)", Accept: init.accept ?? "*/*" },
+      signal: AbortSignal.timeout(init.timeoutMs ?? 20_000),
+    });
+    const loc = res.headers.get("location");
+    if (res.status >= 300 && res.status < 400 && loc) {
+      cur = new URL(loc, cur);
+      continue;
+    }
+    if (!res.ok) throw new Error(`Сайт ответил ошибкой ${res.status}`);
+    return { res, url: cur.href };
+  }
+  throw new Error("Слишком много перенаправлений");
+}
+
 /** HTML → читаемый текст: без скриптов, стилей и разметки, ссылки — «текст (адрес)». */
 export function htmlToText(html: string): string {
   return html

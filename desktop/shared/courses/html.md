@@ -76,8 +76,8 @@ hint: В body: `<h1>Имя</h1>` и два `<p>…</p>`.
   <title>Обо мне</title>
 </head>
 <body>
-  <h1>Арсен</h1>
-  <p>Учусь на прикладной математике и информатике в ИТМО.</p>
+  <h1>Миша</h1>
+  <p>Учусь на первом курсе, люблю алгоритмы.</p>
   <p>Люблю музыку и пишу своего ассистента Камадо.</p>
 </body>
 </html>
@@ -165,7 +165,7 @@ card: Что будет с несколькими пробелами и пере
 **Ссылка** — тег `a` с адресом в атрибуте `href`:
 
 ```html
-<a href="https://itmo.ru">Сайт ИТМО</a>
+<a href="https://ru.wikipedia.org">Википедия</a>
 <a href="https://github.com" target="_blank" rel="noopener">в новой вкладке</a>
 <a href="#contacts">к разделу на этой же странице</a>
 <a href="mailto:me@mail.ru">написать письмо</a>
@@ -548,8 +548,8 @@ CSS задаёт внешний вид. Подключают в `<head>` чер�
 </head>
 <body>
   <div class="card">
-    <h1>Арсен</h1>
-    <p>Студент ПМИ, ИТМО</p>
+    <h1>Миша</h1>
+    <p>Студент, 1 курс</p>
     <a href="#">GitHub</a>
   </div>
 </body>
@@ -577,8 +577,8 @@ hint: `.card a { text-decoration: none; } .card a:hover { color: tomato; }`
 </head>
 <body>
   <div class="card">
-    <h1>Арсен</h1>
-    <p>Студент ПМИ, ИТМО</p>
+    <h1>Миша</h1>
+    <p>Студент, 1 курс</p>
     <a href="#">GitHub</a>
   </div>
 </body>

@@ -5,7 +5,7 @@ import type { Card, GrowProgress } from "../../../shared/types";
 import { api } from "../lib/api";
 import { createStore } from "../lib/store";
 
-export type GrowTab = CourseId | "itmo" | "review";
+export type GrowTab = CourseId | "library" | "syllabus" | "review" | "problems";
 
 interface GrowState {
   progress: GrowProgress;
@@ -16,6 +16,10 @@ interface GrowState {
   /** Карточки «Прокачки», которые пора повторить. */
   due: Card[];
   tools?: Record<"python" | "java" | "cpp", { ok: boolean; hint: string }>;
+  /** Какой раздел библиотеки открыть. */
+  libSection?: string;
+  /** Панель ИИ-помощника: открыта ли и что спросить сразу. */
+  assistant?: { open: boolean; ask?: string; n?: number };
 }
 
 export const CARD_SUBJECT = (c: Course) => `Прокачка · ${c.name}`;
@@ -104,4 +108,9 @@ export async function completeLesson(c: Course, l: Lesson, extra: { quiz?: numbe
   if (!was?.done && l.cards.length) await api.grow.cards(CARD_SUBJECT(c), l.cards);
   await saveProgress({ lessons: { [l.id]: { ...was, ...extra, done: was?.done ?? today() } } });
   if (!was?.done) await markActive();
+}
+
+/** Открыть ИИ-помощника и сразу задать вопрос (из читалки, выделенного текста, задачи). */
+export function askAssistant(ask?: string): void {
+  grow.set((s) => ({ assistant: { open: true, ask, n: (s.assistant?.n ?? 0) + 1 } }));
 }

@@ -44,6 +44,7 @@ import { Library } from "./library.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
 import { growHandlers } from "./grow.js";
+import { bookFilePath, booksHandlers } from "./books.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -210,6 +211,7 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
 
 const handlers: Record<string, Handler> = {
   ...growHandlers({ store, core, timeZone: config.CAMADO_TIMEZONE, withAi, dialog, win: () => win }),
+  ...booksHandlers({ store, dataDir, dialog, win: () => win, notify: () => send("books-changed") }),
   info: (): AppInfo => ({
     platform: process.platform,
     version: app.getVersion(),
@@ -1084,7 +1086,9 @@ void app.whenReady().then(async () => {
             ? join(dataDir, "sounds", name)
             : url.hostname === "picture" && /^picture\.[a-z0-9]{2,5}$/.test(name)
               ? join(dataDir, "screensaver", name)
-              : undefined;
+              : url.hostname === "book"
+                ? bookFilePath(dataDir, name)
+                : undefined;
     if (!path) return new Response("not found", { status: 404 });
     return serveFile(path, req.headers.get("range"));
   });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { plainCard } from "../src/bot.js";
-import { booksFor } from "../desktop/shared/itmoBooks.js";
+import { cleanBook, cleanSource, findPdfLink, mergeBooks } from "../desktop/main/books.js";
 import { checkHtml, parseCourse } from "../desktop/shared/courses/format.js";
 
 /** Простой «документ» для проверки HTML-требований без браузера. */
@@ -19,10 +19,18 @@ describe("1.0.9", () => {
     expect(plainCard("Что делает `x % 2`? **важно**\n```python\nprint(1)\n```")).toBe("Что делает x % 2? важно\nprint(1)");
   });
 
-  it("книги ИТМО находятся по названию предмета", () => {
-    expect(booksFor("Математический анализ").map((b) => b.id)).toContain(2657);
-    expect(booksFor("Алгоритмы и структуры данных").length).toBeGreaterThan(0);
-    expect(booksFor("Физкультура")).toHaveLength(0);
+  it("библиотека: чистка, слияние без дублей, поиск PDF на странице", () => {
+    expect(cleanBook({ title: "  " })).toBeUndefined();
+    const a = cleanBook({ title: "Матан", section: "Анализ", url: "https://x.org/a" })!;
+    expect(a.status).toBe("want");
+    expect(cleanBook({ title: "x", url: "javascript:alert(1)" })!.url).toBeUndefined();
+    expect(cleanBook({ title: "x", file: "../../etc/passwd" })!.file).toBeUndefined();
+    const r = mergeBooks([a], [cleanBook({ title: "Другое", url: "https://x.org/a" })!, cleanBook({ title: "Новая", section: "Анализ" })!]);
+    expect(r.added).toBe(1);
+    expect(findPdfLink('<a href="/file/pdf/12.pdf">PDF</a>', "https://lib.example/book/1")).toBe("https://lib.example/file/pdf/12.pdf");
+    expect(findPdfLink("<a href='/x'>нет</a>", "https://lib.example/")).toBeUndefined();
+    expect(cleanSource({ name: "Вики", url: "https://ru.wikipedia.org/w/index.php?search={q}" })).toBeDefined();
+    expect(cleanSource({ name: "Без запроса", url: "https://example.org" })).toBeUndefined();
   });
 
   it("проверка HTML: элементы и стили", () => {

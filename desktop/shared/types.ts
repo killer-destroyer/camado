@@ -147,6 +147,32 @@ export type TaskInput = {
 
 export type TaskPatch = Partial<Pick<Task, "subject" | "title" | "details" | "kind" | "dueAt" | "status">>;
 
+/** Книга в «Библиотеке» (список — только у владельца, не в коде). */
+export interface Book {
+  id: string;
+  title: string;
+  author?: string;
+  /** Раздел: «Матанализ», «Алгоритмы»… */
+  section: string;
+  /** Страница книги или прямая ссылка на PDF. */
+  url?: string;
+  /** Скачанный PDF в папке библиотеки. */
+  file?: string;
+  status: "want" | "reading" | "done";
+  /** Где остановился. */
+  page?: number;
+  pages?: number;
+  note?: string;
+  addedAt: string;
+}
+
+/** Где искать тему: адрес с {q} вместо запроса. */
+export interface BookSource {
+  id: string;
+  name: string;
+  url: string;
+}
+
 /** Прогресс «Прокачки». */
 export interface GrowProgress {
   /** Урок → когда пройден (ГГГГ-ММ-ДД), сколько верных в тесте, решена ли задача. */
@@ -284,7 +310,20 @@ export interface CamadoApi {
     review(lang: string, code: string, note?: string): Promise<{ text: string } | { error: string }>;
     cards(subject: string, cards: { question: string; answer: string }[]): Promise<number>;
   };
-  itmo: {
+  books: {
+    list(): Promise<{ books: Book[]; sources: BookSource[] }>;
+    save(book: Partial<Book>): Promise<Book | undefined>;
+    remove(id: string): Promise<void>;
+    dropFile(id: string): Promise<void>;
+    /** Выбрать PDF на компьютере — копируются в библиотеку Камадо. */
+    pickFiles(section?: string): Promise<{ added: number }>;
+    addPaths(paths: string[], section?: string): Promise<{ added: number }>;
+    download(id: string): Promise<{ ok: true; size: number } | { error: string }>;
+    import(): Promise<{ books: number; sources: number } | { cancelled: true } | { error: string }>;
+    export(): Promise<boolean>;
+    setSources(list: Partial<BookSource>[]): Promise<BookSource[]>;
+  };
+  syllabus: {
     list(): Promise<Programme[]>;
     import(input: { text?: string; pickFile?: boolean; subject?: string }): Promise<{ programme: Programme } | { cancelled: true } | { error: string }>;
     topic(id: string, n: number, patch: Partial<Pick<ProgrammeTopic, "done" | "date" | "title">>): Promise<Programme | undefined>;
@@ -396,6 +435,8 @@ export interface CamadoApi {
   on(event: "overlay-changed", cb: (payload: boolean) => void): () => void;
   on(event: "np-state", cb: (payload: NowPlayingState | null) => void): () => void;
   on(event: "go", cb: (payload: string) => void): () => void;
+  /** Изменился список книг. */
+  on(event: "books-changed", cb: (payload?: unknown) => void): () => void;
   /** ИИ поменял настройки по просьбе. */
   on(event: "settings-changed", cb: (payload: AppSettings) => void): () => void;
   /** Видеокарта упала — выйти из заставки. */

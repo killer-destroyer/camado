@@ -1,17 +1,17 @@
-// «Прокачка» и «Программа ИТМО» в фоновой части: прогресс, запуск кода, проверка ИИ, разбор программы курса.
+// «Прокачка» и «Программа курса» в фоновой части: прогресс, запуск кода, проверка ИИ, разбор программы курса.
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { BrowserWindow, Dialog } from "electron";
 import type { CamadoCore } from "../../src/core.js";
 import { checkSolution, moreExercise, reviewCode, type CheckInput } from "../../src/camado/grow.js";
-import { parseProgramme, topicPractice, type Programme, type ProgrammeTopic } from "../../src/camado/itmo.js";
+import { parseProgramme, topicPractice, type Programme, type ProgrammeTopic } from "../../src/camado/syllabus.js";
 import type { Store } from "../../src/store.js";
 import { localToUtc } from "../../src/time.js";
 import type { GrowProgress } from "../shared/types.js";
 import { detectTools, hasRunner, installHint, runCode, type RunLang } from "./runner.js";
 
 const PROGRESS_KV = "grow.progress";
-const PROGRAMMES_KV = "itmo.programmes";
+const PROGRAMMES_KV = "syllabus.programmes";
 
 export const emptyProgress = (): GrowProgress => ({ lessons: {}, days: [], wrong: {}, code: {}, goal: 1 });
 
@@ -72,9 +72,9 @@ export function growHandlers(deps: {
     "grow.cards": (subject: string, cards: { question: string; answer: string }[]) =>
       store.addCards(cards.slice(0, 20).map((c) => ({ question: c.question, answer: c.answer, subject }))),
 
-    // ---------- Программа курса ИТМО ----------
-    "itmo.list": () => programmes(),
-    "itmo.import": (input: { text?: string; pickFile?: boolean; subject?: string }) =>
+    // ---------- Программа курса ----------
+    "syllabus.list": () => programmes(),
+    "syllabus.import": (input: { text?: string; pickFile?: boolean; subject?: string }) =>
       withAi(async () => {
         let text = input.text ?? "";
         let attachments: { mime: string; data: string }[] | undefined;
@@ -107,7 +107,7 @@ export function growHandlers(deps: {
         savePrograms([...list, prog]);
         return { programme: prog };
       }),
-    "itmo.topic": (id: string, n: number, patch: Partial<Pick<ProgrammeTopic, "done" | "date" | "title">>) => {
+    "syllabus.topic": (id: string, n: number, patch: Partial<Pick<ProgrammeTopic, "done" | "date" | "title">>) => {
       const list = programmes();
       const p = list.find((x) => x.id === id);
       const t = p?.topics.find((x) => x.n === n);
@@ -117,11 +117,11 @@ export function growHandlers(deps: {
       savePrograms(list);
       return p;
     },
-    "itmo.remove": (id: string) => {
+    "syllabus.remove": (id: string) => {
       savePrograms(programmes().filter((p) => p.id !== id));
     },
     /** Задания «подготовиться к теме» к каждому будущему занятию с датой (накануне вечером напомнит сам Камадо). */
-    "itmo.plan": (id: string) => {
+    "syllabus.plan": (id: string) => {
       const list = programmes();
       const p = list.find((x) => x.id === id);
       if (!p) return { added: 0 };
@@ -137,7 +137,7 @@ export function growHandlers(deps: {
           subject: p.subject,
           kind: "homework",
           dueAt: due.toISOString(),
-          details: [t.reading ? `Читать: ${t.reading}` : "", "Материалы и задачи — в «Прокачка» → «Программа ИТМО»."].filter(Boolean).join("\n"),
+          details: [t.reading ? `Читать: ${t.reading}` : "", "Материалы и задачи — в «Прокачка» → «Программа курса»."].filter(Boolean).join("\n"),
         });
         t.taskId = task.id;
         added++;
@@ -145,6 +145,6 @@ export function growHandlers(deps: {
       savePrograms(list);
       return { added };
     },
-    "itmo.practice": (subject: string, topic: string, reading?: string) => withAi(async () => ({ text: await topicPractice(core.llm, subject, topic, reading) })),
+    "syllabus.practice": (subject: string, topic: string, reading?: string) => withAi(async () => ({ text: await topicPractice(core.llm, subject, topic, reading) })),
   };
 }

@@ -1,5 +1,5 @@
 // «Прокачка»: курсы Python, Java, C++, HTML/CSS — гайд, тест, задача с проверкой, повторение каждый день.
-// И «Программа ИТМО»: загрузил программу предмета — темы по занятиям, материалы, задачи, подготовка в задания.
+// И «Программа курса»: загрузил программу предмета — темы по занятиям, материалы, задачи, подготовка в задания.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, Brain, Check, ChevronRight, Code2, Flame, Lightbulb, Play, RefreshCw, Sparkles, Target, Wand2, X } from "lucide-react";
 import { COURSES, courseById } from "../../../shared/courses";
@@ -27,7 +27,8 @@ import { CodeEditor } from "../components/CodeEditor";
 import { RichText } from "../components/RichText";
 import { Review } from "../components/Cards";
 import { Segmented } from "../components/ui";
-import { ItmoView } from "./GrowItmo";
+import { SyllabusView } from "./GrowSyllabus";
+import { LibraryView } from "./GrowLibrary";
 
 export function Grow() {
   const s = useStore(grow, (x) => x);
@@ -54,7 +55,8 @@ export function Grow() {
           onChange={(tab) => grow.set({ tab })}
           options={[
             ...COURSES.map((c) => ({ value: c.id as GrowTab, label: c.name })),
-            { value: "itmo", label: "Программа ИТМО" },
+            { value: "library", label: "Библиотека" },
+            { value: "syllabus", label: "Программа курса" },
             { value: "review", label: "Проверь мой код" },
           ]}
         />
@@ -93,7 +95,7 @@ export function Grow() {
         </div>
       </div>
 
-      {course ? <CourseView key={course.id} course={course} /> : s.tab === "itmo" ? <ItmoView /> : <ReviewView />}
+      {course ? <CourseView key={course.id} course={course} /> : s.tab === "library" ? <LibraryView /> : s.tab === "syllabus" ? <SyllabusView /> : <ReviewView />}
 
       {warm && <WarmupModal onClose={() => setWarm(false)} />}
       {review && (
