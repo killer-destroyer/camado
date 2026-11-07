@@ -1,9 +1,9 @@
 // Фото и голос для ИИ: картинку уменьшаем (быстрее и дешевле), голос пишем и превращаем в WAV 16 кГц моно.
 
-/** Картинка → JPEG не больше 1600 px по длинной стороне, base64 без префикса. */
-export async function imageToBase64(blob: Blob): Promise<{ mime: string; data: string }> {
+/** Картинка → JPEG не больше 1600 px (или maxSide) по длинной стороне, base64 без префикса. */
+export async function imageToBase64(blob: Blob, maxSide = 1600): Promise<{ mime: string; data: string }> {
   const bmp = await createImageBitmap(blob);
-  const k = Math.min(1, 1600 / Math.max(bmp.width, bmp.height));
+  const k = Math.min(1, maxSide / Math.max(bmp.width, bmp.height));
   const c = document.createElement("canvas");
   c.width = Math.round(bmp.width * k);
   c.height = Math.round(bmp.height * k);

@@ -23,6 +23,7 @@ import {
   Timer,
   Volume2,
   VolumeX,
+  Wallet,
 } from "lucide-react";
 import { fps, useFrame } from "../lib/frame";
 import { PALETTES } from "../lib/palettes";
@@ -42,6 +43,7 @@ export const NAV: { id: ScreenId; label: string; icon: typeof Sun }[] = [
   { id: "notes", label: "Заметки", icon: NotebookPen },
   { id: "links", label: "Ссылки", icon: Link2 },
   { id: "grow", label: "Прокачка", icon: Rocket },
+  { id: "money", label: "Деньги", icon: Wallet },
   { id: "music", label: "Музыка", icon: Disc3 },
   { id: "focus", label: "Фокус", icon: Timer },
   { id: "chat", label: "Камадо", icon: MessageCircle },
@@ -221,6 +223,7 @@ export function CommandPalette() {
       { id: "burst", label: "Текст: режим «Взрыв»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "burst" }) },
       { id: "flow", label: "Текст: режим «Лента»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "flow" }) },
       { id: "line", label: "Текст: режим «Строка»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "line" }) },
+      { id: "karaoke", label: "Текст: режим «Караоке»", icon: Sparkles, run: () => updateSettings({ lyricsMode: "karaoke" }) },
       ...PALETTES.map((p) => ({
         id: `pal-${p.id}`,
         label: `Палитра: ${p.name}`,

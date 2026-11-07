@@ -1,5 +1,6 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { kick as kickWords, words } from "../state/wordsync";
+import type { BackupState } from "../../../shared/types";
 import { WORDSYNC_MODEL } from "../../../shared/wordsync";
 import { EntryList, VersionHistory } from "../components/WhatsNew";
 import { useEffect, useState } from "react";
@@ -103,6 +104,77 @@ function WordSyncRow() {
         />
       </div>
     </Row>
+  );
+}
+
+function BackupSection() {
+  const [b, setB] = useState<(BackupState & { clouds?: string[] }) | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    void api.backup.get().then(setB);
+    return api.on("life-changed", (w) => w === "backup" && void api.backup.get().then(setB));
+  }, []);
+  if (!b) return null;
+  const run = async (fn: () => Promise<BackupState>) => {
+    setBusy(true);
+    const r = await fn();
+    setBusy(false);
+    setB((x) => ({ ...x, ...r }));
+    if (r.error) toast(`Копия не сделалась: ${r.error}`, "warn");
+    else if (r.last) toast("Копия сделана", "ok");
+  };
+  const short = (p: string) => p.replace(/^\/Users\/[^/]+|^C:\\Users\\[^\\]+/, "~");
+  return (
+    <section className="set-section glass">
+      <h3>Резервная копия</h3>
+      <Row
+        title={b.folder ? "Каждую ночь — копия всех данных" : "Копия в облако — выключена"}
+        hint={
+          b.folder
+            ? `Папка: ${short(b.folder)}. ${b.last ? `Последняя копия: ${new Date(b.last).toLocaleString("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })}.` : ""}${b.error ? ` Ошибка: ${b.error}` : ""} Храню 14 последних.`
+            : "Задания, заметки, карточки, расписание, деньги и настройки — каждую ночь копией в папку. Выбери папку Google Диска или Яндекс Диска на компьютере — и копия сама уедет в облако. Если компьютер сломается, всё вернёшь."
+        }
+      >
+        <div className="row-actions">
+          {b.folder && (
+            <button className="btn sm" disabled={busy} onClick={() => void run(() => api.backup.now())}>
+              Сделать сейчас
+            </button>
+          )}
+          <button className="btn sm" disabled={busy} onClick={() => void run(() => api.backup.setFolder())}>
+            {b.folder ? "Другая папка" : "Выбрать папку"}
+          </button>
+        </div>
+      </Row>
+      {!b.folder && !!b.clouds?.length && (
+        <div className="set-hint">
+          Нашёл облака на компьютере:{" "}
+          {b.clouds.map((c) => (
+            <button key={c} className="link-btn" disabled={busy} onClick={() => void run(() => api.backup.setFolder(c))}>
+              {short(c)}
+            </button>
+          ))}
+        </div>
+      )}
+      {b.folder && (
+        <div className="row-actions">
+          <button
+            className="btn sm"
+            onClick={() =>
+              void api.backup.restore().then((r) => {
+                if ("error" in r) toast(r.error, "warn");
+                else if ("ok" in r) toast("Возвращаю копию — Камадо перезапустится…", "ok");
+              })
+            }
+          >
+            Вернуть копию…
+          </button>
+          <button className="link-btn" onClick={() => void api.backup.setFolder(null).then(setB)}>
+            выключить
+          </button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -650,6 +722,7 @@ export function Settings() {
         <h1 className="display">Настройки</h1>
       </header>
 
+      <BackupSection />
       <UpdatesSection />
 
       <section className="set-section glass">
@@ -716,7 +789,7 @@ export function Settings() {
             ]}
           />
         </Row>
-        <Row title="Текст песни" hint="«Взрыв» — слова выпрыгивают по всему окну.">
+        <Row title="Текст песни" hint="«Взрыв» — слова выпрыгивают по всему окну. «Караоке» — крупно, слова заливаются, когда их поют, и отсчёт перед вступлением.">
           <Segmented
             size="sm"
             value={s.lyricsMode}
@@ -725,6 +798,7 @@ export function Settings() {
               { value: "flow", label: "Лента" },
               { value: "burst", label: "Взрыв" },
               { value: "line", label: "Строка" },
+              { value: "karaoke", label: "Караоке" },
               { value: "off", label: "Выкл" },
             ]}
           />

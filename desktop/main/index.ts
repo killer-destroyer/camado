@@ -47,6 +47,7 @@ import { growHandlers } from "./grow.js";
 import { COURSES } from "../shared/courses/index.js";
 import { bookFilePath, booksHandlers } from "./books.js";
 import { ensureModelFile, modelFile, wordsyncHandlers } from "./wordsync.js";
+import { applyPendingRestore, lifeHandlers } from "./life.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -79,6 +80,12 @@ function loadEnv(): void {
 
 loadEnv();
 const config = loadConfig();
+// «Вернуть резервную копию» — подменяем базу до того, как её открыть
+try {
+  if (applyPendingRestore(config.CAMADO_DB_PATH)) console.log("Вернул резервную копию базы");
+} catch (err) {
+  console.error("Не вернул копию:", err);
+}
 const core: CamadoCore = createCore(config);
 const { store } = core;
 // Каждый запуск — новый разговор: старая переписка не показывается и не путает ИИ.
@@ -211,7 +218,29 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
   }
 }
 
+const life = lifeHandlers({
+  core,
+  withAi,
+  dataDir,
+  dbPath: () => config.CAMADO_DB_PATH,
+  dialog,
+  win: () => win,
+  notify: (t, b) => notify(t, b),
+  send: (c, p) => send(c, p),
+});
+
 const handlers: Record<string, Handler> = {
+  ...life.handlers,
+  "backup.restore": async () => {
+    const r = (await life.handlers["backup.restore"]!()) as { ok?: true };
+    if (r.ok) {
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 600);
+    }
+    return r;
+  },
   ...growHandlers({ store, core, timeZone: config.CAMADO_TIMEZONE, withAi, dialog, win: () => win }),
   ...booksHandlers({ store, dataDir, dialog, win: () => win, notify: () => send("books-changed") }),
   ...wordsyncHandlers(dataDir, (id) => send("wordsync-changed", id)),
@@ -1109,6 +1138,7 @@ void app.whenReady().then(async () => {
 
   await library.load();
   library.watchFolders();
+  life.start();
   setAppMenu();
   if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(iconPath("icon.png"));
   void discord.configure(settings.discord.enabled, settings.discord.clientId);

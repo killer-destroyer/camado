@@ -1,7 +1,8 @@
 // «Прокачка»: курсы Python, Java, C++, HTML/CSS по модулям — гайд, тест, несколько задач от простой к сложной с запуском,
 // итоговый тест модуля, задачник, библиотека, программа курса, ИИ-помощник сбоку. Каждый день — разминка и повторение.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Check, ChevronRight, Code2, Flame, GraduationCap, Lightbulb, MessageCircleQuestion, Play, RefreshCw, Sparkles, Target, Wand2, X } from "lucide-react";
+import { imageToBase64 } from "../lib/media";
+import { Brain, Camera, Check, ChevronRight, Code2, Flame, GraduationCap, Lightbulb, MessageCircleQuestion, Play, Plus, RefreshCw, Sparkles, Target, Wand2, X } from "lucide-react";
 import { COURSES, courseById, PROBLEMS } from "../../../shared/courses";
 import { checkHtml, problemStarter, sameOutput, type CodeTask, type Course, type CourseId, type Lesson, type Problem, type Quiz } from "../../../shared/courses/format";
 import type { RunResult } from "../../../shared/types";
@@ -713,9 +714,16 @@ function ProblemsView() {
   const [topic, setTopic] = useState("");
   const [level, setLevel] = useState(0);
   const [hideSolved, setHideSolved] = useState(false);
+  const [mine, setMine] = useState<Problem[]>([]);
+  const [adding, setAdding] = useState(false);
+  useEffect(() => {
+    void api.growCustom.list().then((l) => setMine(l.map((x) => ({ ...x, topic: x.topic, hints: [] }))));
+  }, [adding]);
+  const ALL = useMemo(() => [...mine, ...PROBLEMS], [mine]);
+  const mineIds = useMemo(() => new Set(mine.map((x) => x.id)), [mine]);
   const topics = useMemo(() => [...new Set(PROBLEMS.map((x) => x.topic))], []);
-  const list = PROBLEMS.filter((x) => (!topic || x.topic === topic) && (!level || x.level === level) && (!hideSolved || !solvedMap[x.id]?.length));
-  const cur = PROBLEMS.find((x) => x.id === openId) ?? list[0];
+  const list = ALL.filter((x) => (!topic || (topic === MY ? mineIds.has(x.id) : x.topic === topic)) && (!level || x.level === level) && (!hideSolved || !solvedMap[x.id]?.length));
+  const cur = ALL.find((x) => x.id === openId) ?? list[0];
   const LN: Record<RunLang, string> = { python: "Python", java: "Java", cpp: "C++" };
   return (
     <div className="problems">
@@ -723,6 +731,11 @@ function ProblemsView() {
         <Segmented<RunLang> size="sm" value={lang} onChange={setLang} options={[{ value: "python", label: "Python" }, { value: "java", label: "Java" }, { value: "cpp", label: "C++" }]} />
         <select className="input sm" value={topic} onChange={(e) => setTopic(e.target.value)}>
           <option value="">все темы</option>
+          {mine.length > 0 && (
+            <option value={MY}>
+              {MY} · {mine.length}
+            </option>
+          )}
           {topics.map((t) => (
             <option key={t} value={t}>
               {t} · {PROBLEMS.filter((x) => x.topic === t).length}
@@ -739,8 +752,11 @@ function ProblemsView() {
           <input type="checkbox" checked={hideSolved} onChange={(e) => setHideSolved(e.target.checked)} /> скрыть решённые
         </label>
         <span className="muted small">
-          решено {Object.values(solvedMap).filter((v) => v.length).length} из {PROBLEMS.length}
+          решено {Object.values(solvedMap).filter((v) => v.length).length} из {ALL.length}
         </span>
+        <button className="btn sm" onClick={() => setAdding(true)} title="Кинь условие лабы или задачи с контеста — Камадо сделает к ней тесты">
+          <Plus size={14} /> Своя задача
+        </button>
       </div>
       <div className="grow-course">
         <aside className="gc-list card glass">
@@ -748,7 +764,7 @@ function ProblemsView() {
             {list.map((x) => (
               <li key={x.id}>
                 <button className={`gc-item ${cur?.id === x.id ? "on" : ""} ${solvedMap[x.id]?.length ? "done" : ""}`} onClick={() => grow.set({ problem: x.id })}>
-                  <span className="gc-num">{solvedMap[x.id]?.length ? <Check size={13} /> : PROBLEMS.indexOf(x) + 1}</span>
+                  <span className="gc-num">{solvedMap[x.id]?.length ? <Check size={13} /> : mineIds.has(x.id) ? "★" : PROBLEMS.indexOf(x) + 1}</span>
                   <span className="gc-title">
                     {x.title}
                     <span className="gc-date">
@@ -768,6 +784,11 @@ function ProblemsView() {
                 {solvedMap[cur.id]?.length ? ` · решена на ${solvedMap[cur.id]!.map((l) => LN[l as RunLang] ?? l).join(", ")}` : ""}
               </span>
               <h2>{cur.title}</h2>
+              {mineIds.has(cur.id) && (
+                <button className="link-btn danger" onClick={() => void api.growCustom.remove(cur.id).then((l) => setMine(l.map((x) => ({ ...x, hints: [] }))))}>
+                  удалить свою задачу
+                </button>
+              )}
             </div>
             <TaskBlock
               key={`${cur.id}:${lang}`}
@@ -789,6 +810,64 @@ function ProblemsView() {
         ) : (
           <p className="muted">Ничего не нашлось — смени фильтр.</p>
         )}
+      </div>
+      {adding && (
+        <CustomProblemModal
+          onClose={(id) => {
+            setAdding(false);
+            if (id) grow.set({ problem: id });
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+const MY = "Мои задачи";
+
+/** «Своя задача»: условие лабы/контеста (текст или фото) → задача с тестами; ответы тестов Камадо проверяет запуском эталона. */
+function CustomProblemModal({ onClose }: { onClose: (id?: string) => void }) {
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const file = useRef<HTMLInputElement>(null);
+  useEscape(() => onClose());
+  const make = async (files?: File[]) => {
+    setBusy(true);
+    try {
+      const images = files ? await Promise.all(files.slice(0, 4).map((f) => imageToBase64(f, 2200))) : undefined;
+      const r = await api.growCustom.create({ text: text.trim() || undefined, images });
+      if ("error" in r) return toast(r.error, "warn");
+      toast(r.problem.verified ? `Готово: «${r.problem.title}» — ${r.problem.tests.length} тестов, ответы проверены запуском` : `Готово: «${r.problem.title}» — ${r.problem.tests.length} тестов`, "ok");
+      onClose(r.problem.id);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="modal-back" onClick={() => onClose()}>
+      <div className="modal glass custom-problem" onClick={(e) => e.stopPropagation()}>
+        <h2>Своя задача</h2>
+        <p className="muted small">Вставь условие (лаба, контест, домашка) или скинь фото — Камадо сделает задачу с тестами, и её можно решать на Python, Java или C++ с проверкой запуском.</p>
+        <textarea className="input" rows={9} autoFocus placeholder="Условие задачи: что на входе, что вывести, ограничения, пример…" value={text} onChange={(e) => setText(e.target.value)} />
+        <div className="row-end">
+          <button className="btn" disabled={busy} onClick={() => file.current?.click()}>
+            <Camera size={16} /> Фото условия
+          </button>
+          <input
+            ref={file}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void make([...(e.target.files ?? [])]);
+              e.target.value = "";
+            }}
+          />
+          <button className="btn primary" disabled={busy || text.trim().length < 15} onClick={() => void make()}>
+            {busy ? "Делаю задачу…" : "Сделать задачу"}
+          </button>
+        </div>
       </div>
     </div>
   );

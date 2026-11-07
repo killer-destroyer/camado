@@ -5,6 +5,30 @@ import { createStore } from "../lib/store";
 import { app, toast, updateSettings } from "./app";
 import { chimeOnce } from "./alarms";
 import { player, playQueue, togglePlay } from "./player";
+import type { DistractionLog } from "../../../shared/types";
+
+/** Отвлечения: программы не из «рабочих», куда переключался во время фокуса. */
+export function distractionsOf(log: DistractionLog | undefined): DistractionLog["apps"] {
+  const work = new Set(app.get().settings.focus.workApps.map((x) => x.toLowerCase()));
+  return (log?.apps ?? []).filter((a) => !work.has(a.app.toLowerCase()));
+}
+
+let watching = false;
+function watchApps(on: boolean): void {
+  if (on && !watching && app.get().settings.focus.trackApps) {
+    watching = true;
+    void api.distract.start();
+  } else if (!on && watching) {
+    watching = false;
+    void api.distract.stop().then((log) => {
+      if (!log) return;
+      focus.set({ distractions: log });
+      const d = distractionsOf(log);
+      const times = d.reduce((a, x) => a + x.switches, 0);
+      if (times) toast(`Во время фокуса отвлекался ${times} раз: ${d.slice(0, 3).map((x) => x.app).join(", ")}. Подробнее — в «Фокусе».`, "info");
+    });
+  }
+}
 
 export type FocusMode = "work" | "short" | "long";
 
@@ -17,6 +41,8 @@ interface FocusState {
   subject: string;
   rounds: number; // сколько рабочих сессий подряд
   startedAt?: string;
+  /** Куда отвлекался в прошлой рабочей сессии. */
+  distractions?: DistractionLog;
 }
 
 const minutesFor = (m: FocusMode) => app.get().settings.focus[m === "work" ? "work" : m === "short" ? "short" : "long"];
@@ -70,6 +96,7 @@ function ambienceForFocus(on: boolean): void {
 export function start(): void {
   const s = focus.get();
   if (s.mode === "work") ambienceForFocus(true);
+  if (s.mode === "work") watchApps(true);
   focus.set({
     running: true,
     endsAt: Date.now() + s.remaining,
@@ -83,9 +110,11 @@ export function start(): void {
 
 export function pause(): void {
   focus.set({ running: false, remaining: remainingMs() });
+  watchApps(false);
 }
 
 export function reset(): void {
+  watchApps(false);
   playingFor = null;
   ambienceForFocus(false);
   setMode(focus.get().mode);
@@ -95,6 +124,7 @@ export function reset(): void {
 async function complete(): Promise<void> {
   const s = focus.get();
   chimeOnce();
+  watchApps(false);
   if (s.mode === "work") {
     const minutes = s.total / 60e3;
     await api.focus.add({

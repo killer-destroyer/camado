@@ -1,6 +1,7 @@
 // «Заметки»: список слева, редактор справа, автосохранение.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Brain, Eye, FileDown, Layers, NotebookPen, Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
+import { Brain, Camera, Eye, FileDown, Layers, NotebookPen, Pencil, Pin, PinOff, Plus, Search, Trash2 } from "lucide-react";
+import { imageToBase64 } from "../lib/media";
 import type { Card, Note } from "../../../shared/types";
 import { NoteCards, Review } from "../components/Cards";
 import { RichText } from "../components/RichText";
@@ -56,6 +57,30 @@ export function Notes() {
     setDraft(n);
   };
 
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const photoInput = useRef<HTMLInputElement>(null);
+  /** Фото конспекта или доски → аккуратная заметка с формулами и карточки к ней. */
+  const fromPhotos = async (files: File[]) => {
+    const imgs = files.filter((f) => f.type.startsWith("image/")).slice(0, 6);
+    if (!imgs.length || photoBusy) return;
+    setPhotoBusy(true);
+    toast(`Разбираю ${imgs.length > 1 ? `${imgs.length} фото` : "фото"} — это займёт 10–40 секунд…`);
+    try {
+      const images = await Promise.all(imgs.map((f) => imageToBase64(f, 2200)));
+      const r = await api.notes.fromPhotos(images, draft?.subject ?? null);
+      if ("error" in r) toast(r.error, "warn");
+      else {
+        toast(`Готово: «${r.title}»${r.cards ? ` и ${r.cards} карточек для повторения` : ""}`, "ok");
+        setSel(r.noteId);
+        setPreview(true);
+      }
+    } catch {
+      toast("Не получилось прочитать фото", "warn");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
   const remove = async () => {
     if (!draft) return;
     await api.notes.remove(draft.id);
@@ -64,13 +89,43 @@ export function Notes() {
   };
 
   return (
-    <div className="screen notes">
+    <div
+      className="screen notes"
+      onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
+      onDrop={(e) => {
+        const files = [...e.dataTransfer.files].filter((f) => f.type.startsWith("image/"));
+        if (!files.length) return;
+        e.preventDefault();
+        void fromPhotos(files);
+      }}
+      onPaste={(e) => {
+        const files = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
+        if (files.length) {
+          e.preventDefault();
+          void fromPhotos(files);
+        }
+      }}
+    >
       <header className="screen-head">
         <h1 className="display">Заметки</h1>
         <div className="head-tools">
           <button className={`btn ${due.length ? "glow" : ""}`} disabled={!due.length} onClick={() => setReview(due)} title="Карточки, которые пора повторить">
             <Brain size={17} /> Повторить {due.length ? `(${due.length})` : ""}
           </button>
+          <button className="btn" disabled={photoBusy} onClick={() => photoInput.current?.click()} title="Сфоткай конспект, доску или слайд — Камадо перепишет в заметку с формулами и сделает карточки. Можно несколько фото одной темы.">
+            <Camera size={17} /> {photoBusy ? "Разбираю…" : "Из фото"}
+          </button>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              void fromPhotos([...(e.target.files ?? [])]);
+              e.target.value = "";
+            }}
+          />
           <button className="btn primary" onClick={() => void create()}>
             <Plus size={18} /> Новая
           </button>

@@ -1,4 +1,6 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
+import { ClassCard, EnergyCard, MoneyCard, rub } from "../components/LifeCards";
+import { moneySummary, parseMoney } from "../../../shared/life";
 import { useEffect, useState } from "react";
 import { AlarmClock, ArrowRight, Check, Flame, ListChecks, MessageCircle, Music2, NotebookPen, Play, Rocket, SendHorizontal, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
@@ -57,6 +59,15 @@ function QuickAdd() {
         go("chat");
         return;
       }
+      // «кофе 250», «+5000 стипендия» — это трата/приход, а не задание
+      const cash = !viaAi ? parseMoney(t) : undefined;
+      if (cash) {
+        const m = await api.money.add(cash.amount, cash.title);
+        const s = moneySummary(m, new Date());
+        toast(`${cash.amount < 0 ? "Трата" : "Приход"}: ${cash.title} ${cash.amount < 0 ? "−" : "+"}${rub(Math.abs(cash.amount))}${s.perDay !== undefined ? ` · можно ${rub(s.perDay)} в день` : ""}`, "ok");
+        setText("");
+        return;
+      }
       if (viaAi && aiOn) {
         const r = await api.chat.send(t);
         toast(r.answer ?? r.error ?? "Готово", r.error ? "warn" : "ok");
@@ -102,7 +113,7 @@ function QuickAdd() {
             options={(["homework", "test", "exam", "lab"] as const).map((k) => ({ value: k, label: KIND_LABEL[k] }))}
           />
         )}
-        <span className="muted small">{viaAi ? "Enter — отправить Камадо" : "предмет | что | срок · Enter"}</span>
+        <span className="muted small">{viaAi ? "Enter — отправить Камадо" : "предмет | что | срок · или трата: кофе 250 · Enter"}</span>
         <MediaButtons onResult={(t, ok) => toast(t, ok ? "ok" : "warn")} />
       </div>
     </div>
@@ -469,6 +480,7 @@ export function Today() {
 
       <div className="today-grid">
         <FirstSteps />
+        <ClassCard />
         <Plan />
         <div className="card glass hot">
           <div className="card-head">
@@ -536,6 +548,10 @@ export function Today() {
         <Week />
 
         <GrowCard />
+
+        <EnergyCard />
+
+        <MoneyCard />
 
         <Reminders />
 

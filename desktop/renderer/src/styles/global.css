@@ -2141,7 +2141,8 @@ button.card:hover {
 .np-lyrics.mode-burst {
   position: relative;
 }
-.np-lyrics.mode-line {
+.np-lyrics.mode-line,
+.np-lyrics.mode-karaoke {
   display: flex;
   align-items: center;
 }
@@ -6859,4 +6860,382 @@ a.btn {
 }
 .wn-coming .wn-entry h3 {
   margin-top: 6px;
+}
+
+/* ---------- Тексты: Караоке ---------- */
+.lyrics-karaoke {
+  position: relative;
+  width: 100%;
+  text-align: center;
+  padding: 0 40px;
+}
+.lk-current {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: calc(62px * var(--lyrics-scale));
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+  animation: ll-in 0.45s var(--ease) both;
+}
+.lk-current .kw {
+  background: linear-gradient(90deg, var(--accent-3) calc(var(--fill) * 100%), rgb(var(--text-rgb) / 0.3) calc(var(--fill) * 100% + 0.5%));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.lk-next {
+  margin-top: 18px;
+  font-size: calc(24px * var(--lyrics-scale));
+  font-weight: 700;
+  color: var(--muted);
+  animation: rise 0.6s var(--ease) both;
+}
+.lk-wait {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+.lk-dots {
+  display: flex;
+  gap: 16px;
+}
+.lk-dots i {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent-3);
+  transition: opacity 0.25s;
+}
+.lk-badge {
+  position: absolute;
+  left: 50%;
+  bottom: -46px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  opacity: 0.7;
+}
+
+/* ---------- Экзаменатор ---------- */
+.modal.examiner {
+  position: relative;
+  width: min(760px, calc(100vw - 48px));
+  height: min(82vh, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ex-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-right: 40px;
+  color: var(--accent);
+}
+.ex-head > div {
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+}
+.ex-head h2 {
+  margin: 0;
+  font-size: 18px;
+}
+.ex-chat {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 6px;
+}
+.ex-msg {
+  position: relative;
+  max-width: 88%;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgb(var(--text-rgb) / 0.06);
+}
+.ex-msg.user {
+  align-self: flex-end;
+  background: rgb(var(--accent-rgb) / 0.18);
+}
+.ex-msg.typing {
+  color: var(--muted);
+}
+.ex-msg .rich p {
+  margin: 0 0 6px;
+}
+.ex-grade {
+  float: right;
+  margin: 0 0 6px 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--on-accent);
+  background: var(--accent);
+}
+.ex-grade.g2 {
+  background: var(--u-overdue);
+}
+.ex-grade.g3 {
+  background: var(--accent-2);
+}
+.ex-note {
+  margin: 0;
+}
+.ex-input {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+.ex-input textarea {
+  flex: 1;
+  resize: none;
+}
+.icon-btn.rec {
+  color: var(--u-overdue);
+}
+
+/* ---------- Сегодня: сон, пары, деньги ---------- */
+.energy-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+.energy-form label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.energy-form input {
+  width: 64px;
+}
+.energy-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.energy-now b {
+  font-size: 18px;
+}
+.energy-advice {
+  margin: 10px 0 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.energy-advice.warn {
+  color: var(--accent-3);
+}
+.energy-card.warn {
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 0.5);
+}
+.peak-pick .link-btn {
+  margin: 0 3px;
+}
+.peak-pick .link-btn.on {
+  color: var(--accent);
+  font-weight: 700;
+}
+.class-card {
+  text-align: left;
+}
+.class-card.soon,
+.class-card.now {
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 0.6);
+}
+.cc-title {
+  font-family: var(--display);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 2px 0;
+}
+.cc-info {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+.money-card {
+  text-align: left;
+}
+.money-card .big-num {
+  font-size: 40px;
+}
+.input.num {
+  width: 64px;
+}
+
+/* ---------- Деньги ---------- */
+.money-top,
+.money-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.money-big .big-num {
+  margin: 6px 0;
+}
+.money-row {
+  margin: 8px 0 12px;
+  font-size: 15px;
+}
+.money-add,
+.money-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+.money-add .input {
+  flex: 1;
+  min-width: 180px;
+}
+.money-form .input:not(.num) {
+  flex: 1;
+  min-width: 110px;
+}
+.money-sub,
+.money-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgb(var(--text-rgb) / 0.06);
+}
+.money-sub span:first-child,
+.money-entry span {
+  flex: 1;
+}
+.money-entry.in b {
+  color: var(--accent-3);
+}
+.money-day {
+  margin-bottom: 14px;
+}
+.md-head {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 700;
+  text-transform: capitalize;
+  margin-bottom: 4px;
+}
+
+/* ---------- Расписание ---------- */
+.pl-class {
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  z-index: 1;
+  border-radius: 10px;
+  padding: 5px 7px;
+  font-size: 11px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  color: var(--text);
+  background: repeating-linear-gradient(135deg, rgb(var(--text-rgb) / 0.1) 0 6px, rgb(var(--text-rgb) / 0.05) 6px 12px);
+  border: 1px solid rgb(var(--text-rgb) / 0.16);
+  pointer-events: auto;
+}
+.pl-class b {
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pl-class span {
+  color: var(--muted);
+}
+.modal.schedule-modal {
+  position: relative;
+  width: min(860px, calc(100vw - 48px));
+  max-height: min(86vh, 820px);
+  overflow-y: auto;
+}
+.schedule-modal h2 {
+  margin: 0 0 6px;
+}
+.sch-import {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 12px 0;
+}
+.sch-import textarea {
+  flex: 1;
+  resize: vertical;
+}
+.sch-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.sch-list {
+  display: grid;
+  gap: 6px;
+}
+.sch-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.sch-row .grow {
+  flex: 1;
+  min-width: 120px;
+}
+.sch-row .t {
+  width: 92px;
+}
+.sch-row .room {
+  width: 70px;
+}
+
+/* ---------- Своя задача ---------- */
+.modal.custom-problem {
+  width: min(680px, calc(100vw - 48px));
+}
+.custom-problem h2 {
+  margin: 0 0 6px;
+}
+.custom-problem textarea {
+  width: 100%;
+  margin: 10px 0;
+}
+
+/* ---------- Фокус: куда отвлекался ---------- */
+.fd-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.fd-app {
+  display: grid;
+  text-align: left;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: rgb(var(--text-rgb) / 0.06);
+  font-size: 12px;
+}
+.fd-app span {
+  color: var(--muted);
+}
+.fd-app.work {
+  opacity: 0.55;
 }

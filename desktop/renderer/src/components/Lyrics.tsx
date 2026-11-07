@@ -1,4 +1,4 @@
-// Тексты песен: «Лента», «Взрыв», «Строка».
+// Тексты песен: «Лента», «Взрыв», «Строка», «Караоке».
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { LyricsMode } from "../../../shared/settings";
 import type { Lyrics as LyricsData, LyricsWord } from "../../../shared/types";
@@ -201,6 +201,69 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
   );
 }
 
+// ---------- Караоке ----------
+
+/**
+ * Караоке: крупно текущая строка, слова заливаются ровно когда их поют (по пословной разметке),
+ * снизу — следующая. В проигрыше перед строкой — обратный отсчёт точками, чтобы вступить вовремя.
+ */
+function KaraokeLyrics({ lyrics }: { lyrics: LyricsData }) {
+  const karaoke = useRef<HTMLSpanElement>(null);
+  const dots = useRef<HTMLDivElement>(null);
+  const [active, activeRef] = useActiveLine(lyrics);
+  const words = active >= 0 ? timedWords(lyrics.lines, active, duration()) : [];
+  const [gap, setGap] = useState(false);
+  const gapRef = useRef(false);
+  useFrame(() => {
+    const i = activeRef.current;
+    const t = lyricsTime() + LOOKAHEAD;
+    const next = lyrics.lines[i + 1];
+    // строка допета (последнее слово + запас), а до следующей ещё больше 3 с — это проигрыш
+    const lastWord = words.at(-1)?.time ?? lyrics.lines[i]?.time ?? 0;
+    const inGap = !!next && next.time - t > 0.2 && next.time - Math.max(lastWord + 1.5, t) > 0 && next.time - (lastWord + 1.5) > 3 && t > lastWord + 1.5;
+    const beforeFirst = i < 0 && lyrics.lines[0] && lyrics.lines[0].time - t < 4;
+    const g = inGap || !!beforeFirst;
+    if (g !== gapRef.current) {
+      gapRef.current = g;
+      setGap(g);
+    }
+    if (g && dots.current) {
+      const left = (next ?? lyrics.lines[0])!.time - t;
+      const n = Math.max(0, Math.min(3, Math.ceil(left)));
+      for (let k = 0; k < dots.current.children.length; k++) (dots.current.children[k] as HTMLElement).style.opacity = k < n ? "1" : "0.15";
+    }
+    if (i >= 0) fillWords(karaoke.current, words, next?.time ?? duration());
+  }, 21);
+  if (!lyrics.synced) return <FlowLyrics lyrics={lyrics} />;
+  const nextLine = lyrics.lines[active + 1]?.text;
+  return (
+    <div className="lyrics-karaoke">
+      {gap ? (
+        <div className="lk-wait">
+          <div ref={dots} className="lk-dots">
+            <i />
+            <i />
+            <i />
+          </div>
+          {nextLine && <div className="lk-next">{active < 0 ? lyrics.lines[0]?.text : nextLine}</div>}
+        </div>
+      ) : (
+        <>
+          <div key={active} className="lk-current">
+            {active >= 0 ? <WordSpans ref={karaoke} words={words} /> : <span className="ll-wait">♪</span>}
+          </div>
+          {nextLine && (
+            <div key={`n${active}`} className="lk-next">
+              {nextLine}
+            </div>
+          )}
+        </>
+      )}
+      {lyrics.wordTimed && <div className="lk-badge">по словам</div>}
+    </div>
+  );
+}
+
 /** Текст песни. Нет текста или он ещё ищется — ничего не показываем (без надписей). */
 export function Lyrics({ lyrics, mode }: { lyrics?: LyricsData; loading?: boolean; mode: LyricsMode }) {
   const syncing = useStore(player, (s) => !!s.syncLyrics);
@@ -210,5 +273,6 @@ export function Lyrics({ lyrics, mode }: { lyrics?: LyricsData; loading?: boolea
   if (mode === "off") return null;
   if (mode === "burst") return <BurstLyrics lyrics={lyrics} />;
   if (mode === "line") return <LineLyrics lyrics={lyrics} />;
+  if (mode === "karaoke") return <KaraokeLyrics lyrics={lyrics} />;
   return <FlowLyrics lyrics={lyrics} />;
 }

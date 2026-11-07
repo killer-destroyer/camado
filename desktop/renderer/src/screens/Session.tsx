@@ -9,6 +9,7 @@ import { go, toast } from "../state/app";
 import { data } from "../state/data";
 import { focus, setMode, start as startFocus } from "../state/focus";
 import { Empty } from "../components/ui";
+import { Examiner } from "../components/Examiner";
 
 const STATUS = [
   { id: "new" as const, label: "Не знаю" },
@@ -26,6 +27,7 @@ function daysLeft(at: string): string {
 
 function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
   const [paste, setPaste] = useState<string | null>(null);
+  const [asking, setAsking] = useState(false);
   const prog = progressOf(exam.tickets);
   const today = todaysTickets(exam.tickets, new Date(exam.at));
   const cycle = async (id: number, cur: string) => {
@@ -53,6 +55,11 @@ function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
           <b>{daysLeft(exam.at)}</b>
           <span>до экзамена</span>
         </div>
+        {exam.tickets.length > 0 && (
+          <button className="btn sm" onClick={() => setAsking(true)} title="ИИ спрашивает по билетам, как на экзамене, и ставит оценку">
+            <GraduationCap size={15} /> Экзаменатор
+          </button>
+        )}
         <button className="icon-btn danger" title="Удалить экзамен" onClick={() => void api.exams.remove(exam.id).then(reload)}>
           <Trash2 size={15} />
         </button>
@@ -127,6 +134,15 @@ function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
             </button>
           </div>
         </div>
+      )}
+      {asking && (
+        <Examiner
+          exam={exam}
+          onClose={() => {
+            setAsking(false);
+            reload();
+          }}
+        />
       )}
     </section>
   );

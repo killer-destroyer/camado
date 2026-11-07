@@ -1,7 +1,9 @@
 // «План»: неделя по часам. Перетаскивай задания на дни, двигай и растягивай блоки,
 // «Разложить сам» — Камадо расставит задания по свободным вечерам до сроков. Блок → ▶ запускает фокус.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { CalendarDays, ChevronLeft, ChevronRight, Play, Sparkles, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarDays, ChevronLeft, ChevronRight, Play, Sparkles, Trash2 } from "lucide-react";
+import { classesOn, PEAK_HOURS, type ScheduleState } from "../../../shared/life";
+import { ScheduleModal } from "../components/ScheduleModal";
 import { autoPlan, weekStartOf } from "../../../shared/autoplan";
 import type { PlanBlock } from "../../../shared/types";
 import { api } from "../lib/api";
@@ -27,6 +29,13 @@ export function Planner() {
   const weekEnd = useMemo(() => new Date(week.getTime() + 7 * 86400e3), [week]);
   const load = () => void api.plan.list(week.toISOString(), weekEnd.toISOString()).then(setBlocks);
   useEffect(load, [week]);
+  const [sched, setSched] = useState<ScheduleState | null>(null);
+  const [schedOpen, setSchedOpen] = useState(false);
+  useEffect(() => {
+    void api.schedule.get().then(setSched);
+    return api.on("life-changed", (w) => w === "schedule" && void api.schedule.get().then(setSched));
+  }, []);
+  const classesOf = (day: Date) => (sched ? classesOn(day, sched) : []);
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(t);
@@ -63,7 +72,15 @@ export function Planner() {
     load();
   };
   const auto = async () => {
-    const add = autoPlan(open, blocks, week, new Date());
+    // пары — заняты; тяжёлое — на часы, когда голова работает лучше
+    const busy: [number, number][] = [];
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(week);
+      day.setDate(day.getDate() + d);
+      for (const c of classesOf(day)) busy.push([c.startAt.getTime() - 15 * 60e3, c.endAt.getTime() + 15 * 60e3]);
+    }
+    const peak = (await api.energy.get()).peak;
+    const add = autoPlan(open, blocks, week, new Date(), 60, { busy, peak: PEAK_HOURS[peak] });
     for (const b of add) await api.plan.save(b);
     toast(add.length ? `Разложил ${add.length} ${add.length === 1 ? "блок" : add.length < 5 ? "блока" : "блоков"} по свободным окнам` : "Всё уже разложено — или свободных окон до сроков нет", add.length ? "ok" : "info");
     load();
@@ -113,6 +130,9 @@ export function Planner() {
           <span className="pl-week">{weekLabel}</span>
           <button className="icon-btn" title="Следующая неделя" onClick={() => setWeek(new Date(week.getTime() + 7 * 86400e3))}>
             <ChevronRight size={18} />
+          </button>
+          <button className="btn" onClick={() => setSchedOpen(true)} title="Пары по дням — из фото, скриншота или текста">
+            <CalendarClock size={16} /> Расписание пар
           </button>
           <button className="btn primary" onClick={() => void auto()}>
             <Sparkles size={16} /> Разложить сам
@@ -181,6 +201,19 @@ export function Planner() {
                     <i key={i} className="pl-line" style={{ top: i * PX }} />
                   ))}
                   {isToday && now && <div className="pl-now" style={{ top: `${nowY}px` }} />}
+                  {classesOf(day).map((c) => {
+                    const top = Math.max(0, (c.startAt.getHours() + c.startAt.getMinutes() / 60 - H0) * PX);
+                    const h = ((c.endAt.getTime() - c.startAt.getTime()) / 3600e3) * PX - 2;
+                    return (
+                      <div key={`c${c.start}${c.subject}`} className="pl-class" style={{ top, height: h }} title={`${c.subject}${c.room ? ` · ауд. ${c.room}` : ""}${c.teacher ? ` · ${c.teacher}` : ""}`}>
+                        <b>{c.subject}</b>
+                        <span>
+                          {c.start}–{c.end}
+                          {c.room ? ` · ${c.room}` : ""}
+                        </span>
+                      </div>
+                    );
+                  })}
                   {deadlines.map((t) => {
                     const d = new Date(t.dueAt!);
                     const top = Math.max(0, (d.getHours() + d.getMinutes() / 60 - H0) * PX);
@@ -223,6 +256,7 @@ export function Planner() {
           </div>
         </div>
       </div>
+      {schedOpen && <ScheduleModal onClose={() => setSchedOpen(false)} />}
     </div>
   );
 }

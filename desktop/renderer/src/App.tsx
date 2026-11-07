@@ -23,6 +23,7 @@ import { OverlayFeed } from "./components/Overlay";
 import { NowPlayingFeed } from "./components/Mini";
 import { Chat } from "./screens/Chat";
 import { Focus } from "./screens/Focus";
+import { Money } from "./screens/Money";
 import { Grow } from "./screens/Grow";
 import { grow, type GrowTab } from "./state/grow";
 import { Music } from "./screens/Music";
@@ -42,6 +43,7 @@ const SCREENS: Record<ScreenId, () => React.JSX.Element> = {
   notes: Notes,
   links: Links,
   grow: Grow,
+  money: Money,
   music: Music,
   focus: Focus,
   chat: Chat,
@@ -114,6 +116,10 @@ export function App() {
       initPlayer(),
       initFocus(),
       api.on("data-changed", () => void refreshFocusStats()),
+      api.on("before-class", (c) => {
+        const bits = [c.room ? `ауд. ${c.room}` : "", c.info.topic ? `тема: ${c.info.topic.title}` : "", c.info.cards ? `повторить ${c.info.cards} карточек` : ""].filter(Boolean);
+        toast(`Скоро пара: ${c.subject}${bits.length ? ` · ${bits.join(" · ")}` : ""}`, "info");
+      }),
       initAlarms(),
       watchIdle(),
       watchMenubar(() => data.get().tasks),

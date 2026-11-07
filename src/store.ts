@@ -846,6 +846,11 @@ export class Store {
     return row ? (row.value as string) : undefined;
   }
 
+  /** Целая копия базы в файл (резервная копия): согласованная, даже пока Камадо работает. */
+  backupTo(path: string): void {
+    this.db.prepare("VACUUM INTO ?").run(path);
+  }
+
   deleteKv(key: string): void {
     this.db.prepare("DELETE FROM kv WHERE key = ?").run(key);
   }

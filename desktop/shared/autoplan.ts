@@ -27,8 +27,19 @@ export function windowsOf(day: Date): [number, number][] {
 
 const MIN = 60e3;
 
-export function autoPlan(tasks: PlanTask[], existing: PlanSlot[], weekStart: Date, now = new Date(), chunk = 60): PlanSlot[] {
-  const busy = existing.map((b) => [new Date(b.startAt).getTime(), new Date(b.startAt).getTime() + b.minutes * MIN] as const);
+/** Тяжёлые задания — их ставим на часы, когда голова работает лучше. */
+const HEAVY = new Set(["lab", "test", "exam"]);
+
+export function autoPlan(
+  tasks: PlanTask[],
+  existing: PlanSlot[],
+  weekStart: Date,
+  now = new Date(),
+  chunk = 60,
+  opts: { busy?: [number, number][]; peak?: [number, number] } = {},
+): PlanSlot[] {
+  // занято: уже поставленные блоки и пары по расписанию
+  const busy = [...existing.map((b) => [new Date(b.startAt).getTime(), new Date(b.startAt).getTime() + b.minutes * MIN] as const), ...(opts.busy ?? []).map(([a, b]) => [a, b] as const)];
   const planned = new Map<number, number>();
   for (const b of existing) if (b.taskId != null) planned.set(b.taskId, (planned.get(b.taskId) ?? 0) + b.minutes);
   const out: PlanSlot[] = [];
@@ -42,7 +53,8 @@ export function autoPlan(tasks: PlanTask[], existing: PlanSlot[], weekStart: Dat
     for (let d = 0; d < 7 && need > 0; d++) {
       const day = new Date(weekStart);
       day.setDate(day.getDate() + d);
-      for (const [h0, h1] of windowsOf(day)) {
+      const wins = opts.peak && HEAVY.has(t.kind) ? [opts.peak, ...windowsOf(day)] : windowsOf(day);
+      for (const [h0, h1] of wins) {
         const ws = new Date(day);
         ws.setHours(h0, 0, 0, 0);
         const we = new Date(day);

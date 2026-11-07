@@ -8,7 +8,7 @@ import { useStore } from "../lib/store";
 import { app, updateSettings } from "../state/app";
 import { data } from "../state/data";
 import { player } from "../state/player";
-import { focus, focusToday, pause, remainingMs, reset, setMode, start, type FocusMode } from "../state/focus";
+import { focus, focusToday, pause, remainingMs, reset, setMode, start, type FocusMode, distractionsOf } from "../state/focus";
 import { Segmented, Slider, Toggle } from "../components/ui";
 import { FOCUS_PRESETS, presetById } from "../../../shared/focusPresets";
 import { AmbienceMixer } from "../components/Ambience";
@@ -16,6 +16,48 @@ import { BreakCoach } from "../components/BreakCoach";
 
 const R = 150;
 const C = 2 * Math.PI * R;
+
+/** Прошлая сессия: куда переключался. Рабочие программы можно отметить — они перестанут считаться отвлечением. */
+function Distractions() {
+  const log = useStore(focus, (x) => x.distractions);
+  const cfg = useStore(app, (x) => x.settings.focus);
+  if (!log) return null;
+  const work = new Set(cfg.workApps.map((x) => x.toLowerCase()));
+  const away = distractionsOf(log);
+  const mins = (sec: number) => (sec < 60 ? `${sec} с` : `${Math.round(sec / 60)} мин`);
+  const toggle = (name: string) => {
+    const on = work.has(name.toLowerCase());
+    updateSettings({ focus: { ...cfg, workApps: on ? cfg.workApps.filter((x) => x.toLowerCase() !== name.toLowerCase()) : [...cfg.workApps, name] } });
+  };
+  return (
+    <div className="card glass focus-distract">
+      <div className="card-head">
+        <span>Прошлый фокус · {log.minutes} мин</span>
+      </div>
+      {log.apps.length === 0 ? (
+        <div className="muted small">Никуда не переключался — красота.</div>
+      ) : (
+        <>
+          <div className="muted small">
+            {away.length ? `Отвлекался ${away.reduce((a, x) => a + x.switches, 0)} раз, всего ${mins(away.reduce((a, x) => a + x.seconds, 0))}.` : "Только рабочие программы — без отвлечений."} Нажми на программу, если она для
+            работы.
+          </div>
+          <div className="fd-list">
+            {log.apps.slice(0, 8).map((a) => (
+              <button key={a.app} className={`fd-app ${work.has(a.app.toLowerCase()) ? "work" : ""}`} onClick={() => toggle(a.app)} title={a.title}>
+                <b>{a.app}</b>
+                <span>
+                  {a.switches}× · {mins(a.seconds)}
+                  {work.has(a.app.toLowerCase()) ? " · рабочее" : ""}
+                </span>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 
 export function Focus() {
   const s = useStore(focus, (x) => x);
@@ -222,7 +264,12 @@ export function Focus() {
               <Toggle value={cfg.autoMusic} onChange={(v) => updateSettings({ focus: { ...cfg, autoMusic: v } })} />
               включать музыку на старте
             </label>
+            <label className="inline-toggle sm" title="Ничего не блокирую — только считаю, какие программы и сайты открывал во время фокуса. На Mac в первый раз система спросит разрешение.">
+              <Toggle value={cfg.trackApps} onChange={(v) => updateSettings({ focus: { ...cfg, trackApps: v } })} />
+              считать, куда отвлекаюсь
+            </label>
           </div>
+          {s.distractions && <Distractions />}
         </div>
       </div>
     </div>

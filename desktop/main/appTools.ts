@@ -8,7 +8,7 @@ import type { AppSettings } from "../shared/settings.js";
 import type { Playlist } from "../../src/store.js";
 import type { NowPlayingState, Track } from "../shared/types.js";
 
-const SCREENS = ["today", "tasks", "plan", "session", "notes", "links", "grow", "music", "focus", "chat", "settings"] as const;
+const SCREENS = ["today", "tasks", "plan", "session", "notes", "links", "grow", "money", "music", "focus", "chat", "settings"] as const;
 const PALETTE_IDS = ["midnight", "sakura", "tokyo", "sunset", "matcha", "ocean", "cherry", "nord", "dracula", "y2k", "mono", "vanilla"] as const;
 const SCENES = ["random", "rain", "blackhole", "picture", "warp", "aurora", "ocean", "synthwave", "fire", "lava", "dots", "jelly", "turntable"] as const;
 const EQ = ["flat", "bass", "vocal", "calm", "headphones", "night", "bright", "club"] as const;
@@ -188,7 +188,7 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         volume: z.number().min(0).max(100).optional().describe("Громкость, %"),
         palette: z.enum(PALETTE_IDS).optional().describe("midnight — фиолетовая ночь, sakura — розовая, tokyo — неон, sunset — закат, matcha — зелёная, ocean — синяя, cherry — вишня, nord — северная, dracula, y2k, mono — монохром, vanilla — светлая"),
         cover_colors: z.boolean().optional().describe("Брать цвета из обложки песни"),
-        lyrics_mode: z.enum(["flow", "burst", "line", "off"]).optional().describe("Текст песни: flow — лента, burst — взрыв, line — строка, off — без текста"),
+        lyrics_mode: z.enum(["flow", "burst", "line", "karaoke", "off"]).optional().describe("Текст песни: flow — лента, burst — взрыв, line — строка, karaoke — караоке, off — без текста"),
         visualizer: z.enum(["wave", "bars", "ring", "off"]).optional(),
         sound_mode: z.enum(["normal", "slowed", "nightcore"]).optional(),
         eq_preset: z.enum(EQ).optional().describe("Эквалайзер: flat — ровно, bass — басы, vocal — голос, calm, headphones, night, bright, club"),

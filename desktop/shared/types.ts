@@ -4,6 +4,16 @@ import type { FreeAlbum } from "../main/freeMusic.js";
 import type { AiConfig } from "../../src/llm/providers.js";
 import type { AppSettings } from "./settings.js";
 import type { WordSync } from "./wordsync.js";
+import type { ClassSlotLite, EnergyEntry, MoneyState, Peak, ScheduleState, Subscription } from "./life.js";
+import type { BackupState, CustomProblem, DistractionLog } from "../main/life.js";
+export type { BackupState, CustomProblem, DistractionLog };
+
+/** Ближайшая пара и что к ней готово. */
+export interface UpcomingClass extends ClassSlotLite {
+  startAt: string;
+  endAt: string;
+  info: { topic?: { title: string; reading?: string }; tasks: { title: string; dueAt: string }[]; cards: number };
+}
 
 export type { AiConfig };
 export type { Card, Exam, PlanBlock, TaskStep };
@@ -313,6 +323,50 @@ export interface CamadoApi {
     remove(id: number): Promise<boolean>;
     /** Сохранить заметку в PDF (спросит, куда). */
     pdf(title: string, html: string): Promise<boolean>;
+    /** Фото конспекта/доски → заметка с формулами и карточки к ней. */
+    fromPhotos(images: { mime: string; data: string }[], subject?: string | null, hint?: string): Promise<{ noteId: number; title: string; cards: number } | { error: string }>;
+  };
+  money: {
+    get(): Promise<MoneyState>;
+    add(amount: number, title: string, at?: string): Promise<MoneyState>;
+    remove(id: string): Promise<MoneyState>;
+    setIncome(income: MoneyState["income"] | null): Promise<MoneyState>;
+    setBalance(amount: number | null): Promise<MoneyState>;
+    saveSub(sub: Partial<Subscription>): Promise<MoneyState>;
+    removeSub(id: string): Promise<MoneyState>;
+  };
+  energy: {
+    get(): Promise<{ log: EnergyEntry[]; peak: Peak }>;
+    check(e: EnergyEntry): Promise<{ log: EnergyEntry[]; peak: Peak }>;
+    setPeak(p: Peak): Promise<{ log: EnergyEntry[]; peak: Peak }>;
+  };
+  schedule: {
+    get(): Promise<ScheduleState>;
+    save(patch: Partial<ScheduleState>): Promise<ScheduleState>;
+    import(input: { text?: string; images?: { mime: string; data: string }[]; replace?: boolean }): Promise<{ schedule: ScheduleState; added: number } | { error: string }>;
+    next(): Promise<UpcomingClass | null>;
+    day(iso: string): Promise<(ClassSlotLite & { startAt: string; endAt: string })[]>;
+  };
+  exam: {
+    /** Ход экзаменатора: первый — вопрос по билету, дальше — оценка ответа (текстом или голосом). */
+    turn(input: { examId: number; ticketId: number; history: { role: "user" | "assistant"; content: string }[]; answer?: string; audio?: { mime: string; data: string } }): Promise<{ text: string; grade?: number; weak?: string[] } | { error: string }>;
+  };
+  growCustom: {
+    list(): Promise<CustomProblem[]>;
+    remove(id: string): Promise<CustomProblem[]>;
+    create(input: { text?: string; images?: { mime: string; data: string }[] }): Promise<{ problem: CustomProblem } | { error: string }>;
+  };
+  backup: {
+    get(): Promise<BackupState & { clouds: string[] }>;
+    /** undefined — выбрать папку, null — выключить. */
+    setFolder(folder?: string | null): Promise<BackupState>;
+    now(): Promise<BackupState>;
+    restore(): Promise<{ ok: true } | { cancelled: true } | { error: string }>;
+  };
+  distract: {
+    start(): Promise<boolean>;
+    stop(): Promise<DistractionLog | null>;
+    list(): Promise<DistractionLog[]>;
   };
   focus: {
     add(input: { subject?: string | null; minutes: number; startedAt: string }): Promise<FocusSession>;
@@ -471,6 +525,10 @@ export interface CamadoApi {
   on(event: "go", cb: (payload: string) => void): () => void;
   /** Изменился список книг. */
   on(event: "books-changed", cb: (payload?: unknown) => void): () => void;
+  /** Поменялись деньги / сон / расписание / копия. */
+  on(event: "life-changed", cb: (what: string) => void): () => void;
+  /** Скоро пара — что к ней. */
+  on(event: "before-class", cb: (c: UpcomingClass) => void): () => void;
   /** Готова (или удалена) пословная разметка песни. */
   on(event: "wordsync-changed", cb: (trackId: string) => void): () => void;
   /** Качается модель распознавания слов. */

@@ -23,6 +23,7 @@ const LYRIC_MODES: { value: LyricsMode; label: string }[] = [
   { value: "flow", label: "Лента" },
   { value: "burst", label: "Взрыв" },
   { value: "line", label: "Строка" },
+  { value: "karaoke", label: "Караоке" },
   { value: "off", label: "Без текста" },
 ];
 

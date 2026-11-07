@@ -1,7 +1,7 @@
 // Настройки приложения. Хранятся в базе (kv), меняются в окне «Настройки».
 
 export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
-export type LyricsMode = "flow" | "burst" | "line" | "off";
+export type LyricsMode = "flow" | "burst" | "line" | "karaoke" | "off";
 export type ShakeTarget = "scene" | "cover" | "lyrics";
 
 export interface LyricsSync {
@@ -103,6 +103,10 @@ export interface AppSettings {
     /** Плейлисты для работы и для перерыва (id; 0 — не переключать). */
     workPlaylist: number;
     breakPlaylist: number;
+    /** Считать, куда отвлекался во время фокуса (какие программы и сайты открывал). Ничего не блокирует. */
+    trackApps: boolean;
+    /** Программы, которые нужны для работы, — не считаются отвлечением. */
+    workApps: string[];
   };
   /** Звук напоминаний: id встроенного звука или "custom"; ramp — за сколько секунд нарастает громкость (0 — сразу). */
   alarm: { sound: string; ramp: number; volume: number; customName: string; customUrl: string };
@@ -150,7 +154,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   autoLevel: true,
   trackGain: {},
   trackLoudness: {},
-  focus: { work: 25, short: 5, long: 15, autoMusic: true, preset: "pomodoro", longEvery: 4, coach: true, workPlaylist: 0, breakPlaylist: 0 },
+  focus: { work: 25, short: 5, long: 15, autoMusic: true, preset: "pomodoro", longEvery: 4, coach: true, workPlaylist: 0, breakPlaylist: 0, trackApps: true, workApps: [] },
   alarm: { sound: "marimba", ramp: 10, volume: 0.9, customName: "", customUrl: "" },
   alarms: [],
   runBot: true,
