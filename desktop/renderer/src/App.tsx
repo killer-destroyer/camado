@@ -12,9 +12,10 @@ import { watchAchievements } from "./state/achievements";
 import { AlarmModal } from "./components/Alarm";
 import { RecapModal } from "./components/Recap";
 import { WhatsNewModal } from "./components/WhatsNew";
+import { redoWords } from "./state/wordsync";
 import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
-import { initPlayer, loadLibrary, player, playQueue, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
+import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSync, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { Guard } from "./components/Guard";
 import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
@@ -62,7 +63,8 @@ type AiAction =
   | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
   | { type: "focus"; action: "start" | "pause" | "reset" }
   | { type: "screensaver"; on: boolean }
-  | { type: "grow"; tab: string; lesson?: string; modal?: string };
+  | { type: "grow"; tab: string; lesson?: string; modal?: string }
+  | { type: "words-redo"; trackId?: string };
 
 function aiAction(a: AiAction): void {
   if (a.type === "screen") {
@@ -83,6 +85,12 @@ function aiAction(a: AiAction): void {
     if (a.action === "start") startFocus();
     else if (a.action === "pause") pauseFocus();
     else resetFocus();
+  } else if (a.type === "words-redo") {
+    const id = a.trackId ?? currentTrack()?.id;
+    if (id) {
+      resetLyricsSync(id);
+      void redoWords(id);
+    }
   } else if (a.type === "grow") {
     go("grow");
     grow.set((g) => ({ tab: a.tab as GrowTab, open: a.lesson ? { ...g.open, [a.tab]: a.lesson } : g.open, task: a.lesson ? 0 : g.task, modal: a.modal }));

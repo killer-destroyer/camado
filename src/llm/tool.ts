@@ -17,11 +17,17 @@ export function defineTool<S extends z.ZodObject>(def: {
     description: def.description,
     inputSchema,
     async run(input: unknown) {
+      // CAMADO_TOOL_LOG=1 — печатать вызовы инструментов (для отладки)
+      const log = typeof process !== "undefined" && process.env?.CAMADO_TOOL_LOG ? (m: string) => console.error(`[tool ${def.name}] ${m.slice(0, 600)}`) : undefined;
+      log?.(JSON.stringify(input));
       const parsed = def.schema.safeParse(input);
       if (!parsed.success) {
+        log?.(`неверные параметры: ${parsed.error.message}`);
         throw new Error(`Неверные параметры: ${z.prettifyError(parsed.error)}`);
       }
-      return def.run(parsed.data);
+      const out = await def.run(parsed.data);
+      log?.(`→ ${out}`);
+      return out;
     },
   };
 }

@@ -48,6 +48,7 @@ import { COURSES } from "../shared/courses/index.js";
 import { bookFilePath, booksHandlers } from "./books.js";
 import { ensureModelFile, modelFile, wordsyncHandlers } from "./wordsync.js";
 import { applyPendingRestore, lifeHandlers } from "./life.js";
+import { lifeTools } from "./lifeTools.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -1031,8 +1032,9 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
 
 // ---------- Пульт для ИИ ----------
 // Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
-core.camado.setAppTools(
-  buildAppTools({
+core.camado.setAppTools([
+  ...lifeTools({ handlers: life.handlers, core, timeZone: config.CAMADO_TIMEZONE, act: (a) => send("ai-action", a) }),
+  ...buildAppTools({
     lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
     tracks: () => library.view().tracks,
     playlists: () => store.listPlaylists(),
@@ -1056,7 +1058,7 @@ core.camado.setAppTools(
       else win.hide();
     },
   }),
-);
+]);
 
 // ---------- Запуск ----------
 
