@@ -6,6 +6,11 @@ name: Установщики
 on:
   push:
     branches: [main, "claude/**"]
+    # Записи в планах и описаниях не меняют программу — версию из-за них не пересобираем
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "CLAUDE.md"
   workflow_dispatch:
 
 concurrency:
