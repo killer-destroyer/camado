@@ -1,3 +1,4 @@
+import { importDocument } from "./camado/docs.js";
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { MessageOrigin } from "grammy/types";
 import type { Camado } from "./camado/brain.js";
@@ -443,7 +444,45 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
     await handleMedia(ctx, v.file_id, v.mime_type ?? "audio/ogg", "[Голосовое от хозяина] Послушай и выполни просьбу: обычно это «запиши задание…» или вопрос.");
   });
 
-  bot.on("message", (ctx) => ctx.reply("Я понимаю текст, фото и голосовые. Документы научусь читать позже."));
+  // Документы: выгрузка учебного чата (zip/json/html), PDF, Word, текст — разбираем и раскладываем полезное.
+  bot.on("message:document", async (ctx) => {
+    const doc = ctx.message.document;
+    if (!ai.enabled) {
+      await ctx.reply("Чтобы я разбирал файлы, подключи ИИ — /key (бесплатный Gemini подойдёт).");
+      return;
+    }
+    if ((doc.file_size ?? 0) > 20 * 1024 * 1024) {
+      await ctx.reply("Файл больше 20 МБ — Telegram не даёт ботам скачивать такие. Выгрузи чат без фото и видео (только текст) — получится маленький архив.");
+      return;
+    }
+    await ctx.replyWithChatAction("typing").catch(() => undefined);
+    try {
+      const file = await ctx.api.getFile(doc.file_id);
+      if (!file.file_path) throw new Error("нет файла");
+      const res = await fetch(`https://api.telegram.org/file/bot${bot.token}/${file.file_path}`, { signal: AbortSignal.timeout(120_000) });
+      const data = new Uint8Array(await res.arrayBuffer());
+      const caption = ctx.message.caption ? withLinks(ctx.message.caption, ctx.message.caption_entities).trim() : undefined;
+      const report = await importDocument(
+        {
+          handle: (m, o) => camado.handle(m, o),
+          timeZone: config.CAMADO_TIMEZONE,
+          progress: async (t) => {
+            await ctx.reply(t).catch(() => undefined);
+            await ctx.replyWithChatAction("typing").catch(() => undefined);
+          },
+        },
+        { name: doc.file_name ?? "файл", data, caption },
+      );
+      await replyLong(ctx, report);
+    } catch (err) {
+      if (err instanceof BudgetExceededError) return void (await ctx.reply(err.message));
+      if (err instanceof UnsupportedAttachmentError) return void (await ctx.reply(err.message));
+      console.error("Ошибка с документом:", err);
+      await ctx.reply("Не получилось разобрать файл 😵 Пришли ещё раз или скинь текстом.");
+    }
+  });
+
+  bot.on("message", (ctx) => ctx.reply("Я понимаю текст, фото, голосовые и файлы: выгрузку чата (zip), PDF, Word, текст. Стикеры и видео — пока нет."));
 
   bot.catch((err) => console.error("Ошибка бота:", err.error));
   return bot;

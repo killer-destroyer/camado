@@ -28,6 +28,7 @@ const api: CamadoApi = {
     pdf: call("notes.pdf") as CamadoApi["notes"]["pdf"],
     fromPhotos: call("notes.fromPhotos") as CamadoApi["notes"]["fromPhotos"],
   },
+  docs: { import: call("docs.import") as CamadoApi["docs"]["import"] },
   money: {
     get: call("money.get") as CamadoApi["money"]["get"],
     add: call("money.add") as CamadoApi["money"]["add"],

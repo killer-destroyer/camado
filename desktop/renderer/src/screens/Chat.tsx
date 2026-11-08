@@ -1,10 +1,10 @@
 // «Камадо»: разговор с ассистентом (тот же, что отвечает в Telegram).
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, MessageSquarePlus, SendHorizontal, Sparkles } from "lucide-react";
+import { KeyRound, MessageSquarePlus, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
 import type { ChatEntry } from "../../../shared/types";
 import { api } from "../lib/api";
 import { insertAtCursor, pastedWithLinks } from "../lib/paste";
-import { app, go } from "../state/app";
+import { app, go, toast } from "../state/app";
 import { Empty } from "../components/ui";
 
 const SUGGEST = ["Что у меня на этой неделе?", "Составь план на сегодня", "По матану задали №5–12 к пятнице", "Что горит?"];
@@ -61,6 +61,25 @@ export function Chat() {
     setItems((x) => [...x, { role: "assistant", content: r.answer ?? `⚠️ ${r.error}` }]);
   };
 
+  // Файл: выгрузка учебного чата (zip/json/html), PDF, Word, текст — Камадо разберёт и разложит полезное
+  const fileInput = useRef<HTMLInputElement>(null);
+  const sendFile = async (f: File) => {
+    if (busy) return;
+    if (f.size > 60 * 1024 * 1024) return toast("Файл больше 60 МБ — выгрузи чат без фото и видео", "warn");
+    setItems((x) => [...x, { role: "user", content: `📎 ${f.name}${text.trim() ? `\n${text.trim()}` : ""}` }]);
+    const note = text.trim() || undefined;
+    setText("");
+    setBusy(true);
+    const off = api.on("import-progress", (t) => setItems((x) => [...x, { role: "assistant", content: String(t) }]));
+    try {
+      const r = await api.docs.import(f.name, new Uint8Array(await f.arrayBuffer()), note);
+      setItems((x) => [...x, { role: "assistant", content: "error" in r ? `⚠️ ${r.error}` : r.report }]);
+    } finally {
+      off();
+      setBusy(false);
+    }
+  };
+
   if (aiOn === false) {
     return (
       <div className="screen chat">
@@ -77,7 +96,16 @@ export function Chat() {
   }
 
   return (
-    <div className="screen chat">
+    <div
+      className="screen chat"
+      onDragOver={(e) => e.dataTransfer.types.includes("Files") && e.preventDefault()}
+      onDrop={(e) => {
+        const f = e.dataTransfer.files[0];
+        if (!f) return;
+        e.preventDefault();
+        void sendFile(f);
+      }}
+    >
       <header className="screen-head">
         <h1 className="display">Камадо</h1>
         {items.length > 0 && (
@@ -141,6 +169,20 @@ export function Chat() {
             }
           }}
           autoFocus
+        />
+        <button className="icon-btn" disabled={busy} onClick={() => fileInput.current?.click()} title="Файл: выгрузка учебного чата (zip), PDF, Word, текст — разберу и разложу полезное по заданиям, ссылкам, экзаменам">
+          <Paperclip size={18} />
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          hidden
+          accept=".zip,.json,.html,.htm,.pdf,.docx,.txt,.md,.csv"
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = "";
+            if (f) void sendFile(f);
+          }}
         />
         <button className="play-btn sm" onClick={() => void send()} disabled={busy}>
           <SendHorizontal size={18} />

@@ -49,6 +49,7 @@ import { bookFilePath, booksHandlers } from "./books.js";
 import { ensureModelFile, modelFile, wordsyncHandlers } from "./wordsync.js";
 import { applyPendingRestore, lifeHandlers } from "./life.js";
 import { lifeTools } from "./lifeTools.js";
+import { importDocument } from "../../src/camado/docs.js";
 import { serveFile } from "./media.js";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -232,6 +233,17 @@ const life = lifeHandlers({
 
 const handlers: Record<string, Handler> = {
   ...life.handlers,
+  /** Файл в чат: выгрузка учебного чата, PDF, Word, текст — разобрать и разложить полезное. */
+  "docs.import": (name: string, data: Uint8Array, note?: string) =>
+    withAi(async () => {
+      if (!(data instanceof Uint8Array) || data.length > 60 * 1024 * 1024) return { error: "Файл слишком большой (до 60 МБ)" };
+      const report = await importDocument(
+        { handle: (m, o) => core.camado.handle(m, o), timeZone: config.CAMADO_TIMEZONE, progress: (t) => send("import-progress", t) },
+        { name: String(name).slice(0, 200), data, caption: note ? String(note).slice(0, 2000) : undefined },
+      );
+      send("data-changed");
+      return { report };
+    }),
   "backup.restore": async () => {
     const r = (await life.handlers["backup.restore"]!()) as { ok?: true };
     if (r.ok) {

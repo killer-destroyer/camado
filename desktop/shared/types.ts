@@ -326,6 +326,10 @@ export interface CamadoApi {
     /** Фото конспекта/доски → заметка с формулами и карточки к ней. */
     fromPhotos(images: { mime: string; data: string }[], subject?: string | null, hint?: string): Promise<{ noteId: number; title: string; cards: number } | { error: string }>;
   };
+  docs: {
+    /** Файл в чат Камадо: выгрузка учебного чата (zip/json/html), PDF, Word, текст. */
+    import(name: string, data: Uint8Array, note?: string): Promise<{ report: string } | { error: string }>;
+  };
   money: {
     get(): Promise<MoneyState>;
     add(amount: number, title: string, at?: string): Promise<MoneyState>;
@@ -527,6 +531,8 @@ export interface CamadoApi {
   on(event: "books-changed", cb: (payload?: unknown) => void): () => void;
   /** Поменялись деньги / сон / расписание / копия. */
   on(event: "life-changed", cb: (what: string) => void): () => void;
+  /** Как идёт разбор присланного файла. */
+  on(event: "import-progress", cb: (text: string) => void): () => void;
   /** Скоро пара — что к ней. */
   on(event: "before-class", cb: (c: UpcomingClass) => void): () => void;
   /** Готова (или удалена) пословная разметка песни. */
