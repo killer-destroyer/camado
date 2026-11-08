@@ -200,7 +200,7 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         screensaver_scene: z.enum(SCENES).optional(),
         screensaver_fullscreen: z.boolean().optional().describe("Разворачивать окно на весь экран для заставки"),
         ambience_on: z.boolean().optional().describe("Фоновые звуки (дождь и т. п.)"),
-        fps_cap: z.union([z.literal(0), z.literal(30), z.literal(60), z.literal(120), z.literal(144)]).optional().describe("Ограничить кадры в секунду (0 — как монитор). 60 или 30 — легче для слабого компьютера"),
+        fps_cap: z.number().int().min(0).max(240).optional().describe("Ограничить кадры в секунду: 0 (как монитор), 30, 60, 120 или 144. 60 или 30 — легче для слабого компьютера"),
         background: z.enum(["aurora", "calm", "static"]).optional().describe("Фон окна: aurora — живой, calm — спокойный, static — неподвижный (легче всего)"),
         lyrics_size: z.number().min(0.7).max(1.4).optional().describe("Размер текста песни, 1 — обычный"),
         crossfade_sec: z.number().min(0).max(12).optional().describe("Плавный переход между песнями, секунды (0 — выкл)"),
@@ -233,7 +233,12 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         if (i.screensaver_fullscreen !== undefined) (ss.fullscreen = i.screensaver_fullscreen), (ss.fsChosen = true), (ssChanged = true), done.push(`заставка ${i.screensaver_fullscreen ? "на весь экран" : "в окне"}`);
         if (ssChanged) patch.screensaver = ss;
         if (i.ambience_on !== undefined) (patch.ambience = { ...s.ambience, on: i.ambience_on }), done.push(`фон ${i.ambience_on ? "вкл" : "выкл"}`);
-        if (i.fps_cap !== undefined) (patch.fpsCap = i.fps_cap), done.push(i.fps_cap ? `не больше ${i.fps_cap} кадров` : "кадры как у монитора");
+        if (i.fps_cap !== undefined) {
+          const caps = [0, 30, 60, 120, 144] as const;
+          const cap = caps.reduce((a, b) => (Math.abs(b - i.fps_cap!) < Math.abs(a - i.fps_cap!) ? b : a), 0 as (typeof caps)[number]);
+          patch.fpsCap = cap;
+          done.push(cap ? `не больше ${cap} кадров` : "кадры как у монитора");
+        }
         if (i.background) (patch.background = i.background), done.push(`фон: ${i.background}`);
         if (i.lyrics_size !== undefined) (patch.lyricsSize = i.lyrics_size), done.push(`размер текста ${i.lyrics_size}`);
         if (i.crossfade_sec !== undefined) (patch.crossfade = i.crossfade_sec), done.push(i.crossfade_sec ? `переход ${i.crossfade_sec} с` : "без перехода");
