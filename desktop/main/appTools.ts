@@ -7,6 +7,7 @@ import type { ToolDef } from "../../src/llm/types.js";
 import type { AppSettings } from "../shared/settings.js";
 import type { Playlist } from "../../src/store.js";
 import type { NowPlayingState, Track } from "../shared/types.js";
+import { CARD_LABEL, CARDS, DEFAULT_CUSTOM, moveCard, SECTION_LABEL, SECTIONS, setCard, setSidebar } from "../shared/custom.js";
 
 const SCREENS = ["today", "tasks", "plan", "session", "notes", "links", "grow", "money", "music", "focus", "chat", "settings"] as const;
 const PALETTE_IDS = ["midnight", "sakura", "tokyo", "sunset", "matcha", "ocean", "cherry", "nord", "dracula", "y2k", "mono", "vanilla"] as const;
@@ -199,6 +200,17 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         screensaver_scene: z.enum(SCENES).optional(),
         screensaver_fullscreen: z.boolean().optional().describe("Разворачивать окно на весь экран для заставки"),
         ambience_on: z.boolean().optional().describe("Фоновые звуки (дождь и т. п.)"),
+        fps_cap: z.union([z.literal(0), z.literal(30), z.literal(60), z.literal(120), z.literal(144)]).optional().describe("Ограничить кадры в секунду (0 — как монитор). 60 или 30 — легче для слабого компьютера"),
+        background: z.enum(["aurora", "calm", "static"]).optional().describe("Фон окна: aurora — живой, calm — спокойный, static — неподвижный (легче всего)"),
+        lyrics_size: z.number().min(0.7).max(1.4).optional().describe("Размер текста песни, 1 — обычный"),
+        crossfade_sec: z.number().min(0).max(12).optional().describe("Плавный переход между песнями, секунды (0 — выкл)"),
+        shake: z.boolean().optional().describe("Тряска в такт музыке"),
+        vinyl: z.boolean().optional().describe("Показывать пластинку"),
+        word_sync: z.boolean().optional().describe("Расставлять время каждому слову текста песни (распознавание на компьютере)"),
+        focus_work_min: z.number().int().min(5).max(180).optional(),
+        focus_break_min: z.number().int().min(1).max(60).optional(),
+        focus_long_break_min: z.number().int().min(5).max(90).optional(),
+        focus_track_apps: z.boolean().optional().describe("Считать, куда отвлекаюсь во время фокуса"),
       }),
       run: (i) => {
         const s = d.settings();
@@ -221,9 +233,74 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         if (i.screensaver_fullscreen !== undefined) (ss.fullscreen = i.screensaver_fullscreen), (ss.fsChosen = true), (ssChanged = true), done.push(`заставка ${i.screensaver_fullscreen ? "на весь экран" : "в окне"}`);
         if (ssChanged) patch.screensaver = ss;
         if (i.ambience_on !== undefined) (patch.ambience = { ...s.ambience, on: i.ambience_on }), done.push(`фон ${i.ambience_on ? "вкл" : "выкл"}`);
+        if (i.fps_cap !== undefined) (patch.fpsCap = i.fps_cap), done.push(i.fps_cap ? `не больше ${i.fps_cap} кадров` : "кадры как у монитора");
+        if (i.background) (patch.background = i.background), done.push(`фон: ${i.background}`);
+        if (i.lyrics_size !== undefined) (patch.lyricsSize = i.lyrics_size), done.push(`размер текста ${i.lyrics_size}`);
+        if (i.crossfade_sec !== undefined) (patch.crossfade = i.crossfade_sec), done.push(i.crossfade_sec ? `переход ${i.crossfade_sec} с` : "без перехода");
+        if (i.shake !== undefined) (patch.shake = { ...s.shake, enabled: i.shake }), done.push(`тряска ${i.shake ? "вкл" : "выкл"}`);
+        if (i.vinyl !== undefined) (patch.vinyl = i.vinyl), done.push(`пластинка ${i.vinyl ? "вкл" : "выкл"}`);
+        if (i.word_sync !== undefined) (patch.wordSync = i.word_sync), done.push(`текст по словам ${i.word_sync ? "вкл" : "выкл"}`);
+        if (i.focus_work_min || i.focus_break_min || i.focus_long_break_min || i.focus_track_apps !== undefined) {
+          patch.focus = {
+            ...s.focus,
+            ...(i.focus_work_min ? { work: i.focus_work_min, preset: "custom" } : {}),
+            ...(i.focus_break_min ? { short: i.focus_break_min, preset: "custom" } : {}),
+            ...(i.focus_long_break_min ? { long: i.focus_long_break_min, preset: "custom" } : {}),
+            ...(i.focus_track_apps !== undefined ? { trackApps: i.focus_track_apps } : {}),
+          };
+          done.push("фокус");
+        }
         if (!done.length) return "Нечего менять — скажи, что именно поменять.";
         d.saveSettings(patch);
         return `Поменял: ${done.join(", ")}.`;
+      },
+    }),
+
+    defineTool({
+      name: "app_custom",
+      description:
+        "«Кастом»: что стоит на боковой панели (и порядок) и как устроен главный экран «Сегодня» — порядок карточек, размер, скрыть/показать. " +
+        "Разделы: today, tasks, plan, session, notes, links, grow, money, music, focus, chat. Карточки: " +
+        "sections (иконки разделов), setup, class (пары), plan, hot (горит), quick (быстрая запись), focus, music, week, energy, money, grow, notes, alarms. " +
+        "Размер: s — маленькая, m — половина, w — широкая, l — во всю ширину.",
+      schema: z.object({
+        sidebar_add: z.array(z.enum(SECTIONS)).optional(),
+        sidebar_remove: z.array(z.enum(SECTIONS)).optional(),
+        sidebar_order: z.array(z.enum(SECTIONS)).optional().describe("Полный новый порядок боковой панели"),
+        cards: z
+          .array(
+            z.object({
+              card: z.enum(CARDS),
+              size: z.enum(["s", "m", "w", "l"]).optional(),
+              hide: z.boolean().optional().describe("true — спрятать, false — вернуть"),
+              position: z.union([z.enum(["first", "last"]), z.number().int().min(1)]).optional().describe("Куда поставить: first, last или номер (1 — первая)"),
+            }),
+          )
+          .optional(),
+        reset: z.enum(["home", "sidebar", "all"]).optional(),
+        show: z.boolean().optional().describe("Просто показать, как сейчас устроено"),
+      }),
+      run: (i) => {
+        let c = d.settings().custom;
+        const done: string[] = [];
+        if (i.reset) {
+          c = { sidebar: i.reset === "home" ? c.sidebar : [...DEFAULT_CUSTOM.sidebar], home: i.reset === "sidebar" ? c.home : DEFAULT_CUSTOM.home.map((x) => ({ ...x })) };
+          done.push(`сбросил ${i.reset === "home" ? "главный экран" : i.reset === "sidebar" ? "боковую панель" : "всё"}`);
+        }
+        if (i.sidebar_order?.length) (c = setSidebar(c, i.sidebar_order)), done.push("порядок панели");
+        if (i.sidebar_add?.length) (c = setSidebar(c, [...c.sidebar, ...i.sidebar_add.filter((x) => !c.sidebar.includes(x))])), done.push(`на панель: ${i.sidebar_add.map((x) => SECTION_LABEL[x]).join(", ")}`);
+        if (i.sidebar_remove?.length) (c = setSidebar(c, c.sidebar.filter((x) => !i.sidebar_remove!.includes(x)))), done.push(`с панели убрал: ${i.sidebar_remove.map((x) => SECTION_LABEL[x]).join(", ")} (они иконками на главном)`);
+        for (const k of i.cards ?? []) {
+          if (k.size) c = setCard(c, k.card, { size: k.size });
+          if (k.hide !== undefined) c = setCard(c, k.card, { hidden: k.hide });
+          if (k.position !== undefined) c = moveCard(c, k.card, k.position === "first" ? 0 : k.position === "last" ? c.home.length : k.position - 1);
+          done.push(`${CARD_LABEL[k.card]}${k.size ? ` — ${k.size}` : ""}${k.hide === true ? " — спрятал" : k.hide === false ? " — вернул" : ""}${k.position !== undefined ? ` — на место ${k.position}` : ""}`);
+        }
+        const now = `Панель: ${c.sidebar.map((x) => SECTION_LABEL[x]).join(", ")}. Главный экран: ${c.home.filter((x) => !x.hidden).map((x) => `${CARD_LABEL[x.id]} (${x.size})`).join(", ")}${c.home.some((x) => x.hidden) ? `; скрыто: ${c.home.filter((x) => x.hidden).map((x) => CARD_LABEL[x.id]).join(", ")}` : ""}.`;
+        if (!done.length) return now;
+        d.saveSettings({ custom: c });
+        d.act({ type: "screen", screen: "today" });
+        return `Сделал: ${done.join("; ")}. ${now}`;
       },
     }),
 

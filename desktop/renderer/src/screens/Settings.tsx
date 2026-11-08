@@ -1,6 +1,7 @@
 // «Настройки»: внешний вид, плавность, музыка и тряска, ИИ, Telegram-бот.
 import { kick as kickWords, words } from "../state/wordsync";
 import type { BackupState } from "../../../shared/types";
+import { SECTION_LABEL, SECTIONS, setSidebar, type SectionId } from "../../../shared/custom";
 import { WORDSYNC_MODEL } from "../../../shared/wordsync";
 import { EntryList, VersionHistory } from "../components/WhatsNew";
 import { useEffect, useState } from "react";
@@ -104,6 +105,54 @@ function WordSyncRow() {
         />
       </div>
     </Row>
+  );
+}
+
+/** «Кастом»: какие разделы на боковой панели и в каком порядке. Остальные — иконками на главном экране. */
+function SidebarSection() {
+  const custom = useStore(app, (x) => x.settings.custom);
+  const on = custom.sidebar;
+  const off = SECTIONS.filter((id) => !on.includes(id));
+  const set = (sidebar: SectionId[]) => updateSettings({ custom: setSidebar(custom, sidebar) });
+  const move = (id: SectionId, d: -1 | 1) => {
+    const i = on.indexOf(id);
+    const j = i + d;
+    if (j < 0 || j >= on.length) return;
+    const next = [...on];
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    set(next);
+  };
+  return (
+    <section className="set-section glass">
+      <h3>Боковая панель</h3>
+      <div className="set-hint">Что стоит на боковой панели и в каком порядке. Остальное — маленькими иконками на главном экране. Порядок и размер карточек главного экрана — кнопка «Настроить» на «Сегодня».</div>
+      <div className="sb-list">
+        {on.map((id, i) => (
+          <div key={id} className="sb-row">
+            <b>{SECTION_LABEL[id]}</b>
+            <button className="icon-btn" disabled={i === 0} onClick={() => move(id, -1)} title="Выше">
+              ↑
+            </button>
+            <button className="icon-btn" disabled={i === on.length - 1} onClick={() => move(id, 1)} title="Ниже">
+              ↓
+            </button>
+            <button className="btn sm" disabled={on.length <= 1} onClick={() => set(on.filter((x) => x !== id))} title="Убрать с панели — будет иконкой на главном экране">
+              Убрать
+            </button>
+          </div>
+        ))}
+      </div>
+      {off.length > 0 && (
+        <div className="set-hint">
+          На главном экране:{" "}
+          {off.map((id) => (
+            <button key={id} className="chip-btn" onClick={() => set([...on, id])} title="Поставить на боковую панель">
+              + {SECTION_LABEL[id]}
+            </button>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -722,6 +771,7 @@ export function Settings() {
         <h1 className="display">Настройки</h1>
       </header>
 
+      <SidebarSection />
       <BackupSection />
       <UpdatesSection />
 

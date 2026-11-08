@@ -1,4 +1,5 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
+import { HomeGrid, SectionsCard } from "../components/HomeGrid";
 import { ClassCard, EnergyCard, MoneyCard, rub } from "../components/LifeCards";
 import { isRefund, moneySummary, parseMoney } from "../../../shared/life";
 import { useEffect, useState } from "react";
@@ -478,11 +479,14 @@ export function Today() {
 
       <QuickAsk />
 
-      <div className="today-grid">
-        <FirstSteps />
-        <ClassCard />
-        <Plan />
-        <div className="card glass hot">
+      <HomeGrid
+        cards={{
+          sections: () => <SectionsCard />,
+          setup: () => <FirstSteps />,
+          class: () => <ClassCard />,
+          plan: () => <Plan />,
+          hot: () => (
+<div className="card glass hot">
           <div className="card-head">
             <Flame size={18} />
             <span>Горит</span>
@@ -513,10 +517,10 @@ export function Today() {
             </ul>
           )}
         </div>
-
-        <QuickAdd />
-
-        <button className="card glass focus-card" onClick={() => go("focus")}>
+          ),
+          quick: () => <QuickAdd />,
+          focus: () => (
+<button className="card glass focus-card" onClick={() => go("focus")}>
           <div className="card-head">
             <Timer size={18} />
             <span>Фокус сегодня</span>
@@ -527,8 +531,9 @@ export function Today() {
           </div>
           <div className="muted small">Нажми, чтобы начать сессию →</div>
         </button>
-
-        <button className="card glass music-card" onClick={() => (meta ? app.set({ nowPlaying: true }) : go("music"))}>
+          ),
+          music: () => (
+<button className="card glass music-card" onClick={() => (meta ? app.set({ nowPlaying: true }) : go("music"))}>
           <div className="music-card-bg" style={meta?.cover ? { backgroundImage: `url("${meta.cover}")` } : undefined} />
           <div className="card-head">
             <Music2 size={18} />
@@ -544,18 +549,13 @@ export function Today() {
             <div className="muted">Включи что-нибудь для настроения →</div>
           )}
         </button>
-
-        <Week />
-
-        <GrowCard />
-
-        <EnergyCard />
-
-        <MoneyCard />
-
-        <Reminders />
-
-        <div className="card glass notes-card">
+          ),
+          week: () => <Week />,
+          energy: () => <EnergyCard />,
+          money: () => <MoneyCard />,
+          grow: () => <GrowCard />,
+          notes: () => (
+<div className="card glass notes-card">
           <div className="card-head">
             <NotebookPen size={18} />
             <span>Заметки</span>
@@ -574,7 +574,10 @@ export function Today() {
             ))
           )}
         </div>
-      </div>
+          ),
+          alarms: () => <Reminders />,
+        }}
+      />
     </div>
   );
 }

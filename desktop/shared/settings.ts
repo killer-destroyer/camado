@@ -1,3 +1,4 @@
+import { DEFAULT_CUSTOM, normalizeCustom, type CustomLayout } from "./custom.js";
 // Настройки приложения. Хранятся в базе (kv), меняются в окне «Настройки».
 
 export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
@@ -41,6 +42,8 @@ export interface AppSettings {
   lyricsSync: Record<string, LyricsSync>;
   /** Подгонять текст по звуку сам (ИИ слушает песню), когда текст в базе от версии другой длины. */
   lyricsByEar: boolean;
+  /** «Кастом»: боковая панель и главный экран. */
+  custom: CustomLayout;
   /** Расставлять время каждому слову текста сам (распознавание на компьютере, заранее, для всех песен). */
   wordSync: boolean;
   shake: {
@@ -140,6 +143,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsSync: {},
   lyricsByEar: true,
   wordSync: true,
+  custom: DEFAULT_CUSTOM,
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
   vinylVariant: {},
@@ -185,5 +189,6 @@ export function mergeSettings(saved: unknown): AppSettings {
     achievements: { ...(s.achievements ?? {}) },
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
+    custom: normalizeCustom(s.custom),
   };
 }

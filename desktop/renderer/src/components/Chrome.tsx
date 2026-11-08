@@ -52,14 +52,14 @@ export const NAV: { id: ScreenId; label: string; icon: typeof Sun }[] = [
 ];
 
 /** Телефон: внизу 5 главных разделов и «Ещё» — остальные. */
-const MOBILE_MAIN: ScreenId[] = ["today", "tasks", "plan", "music", "chat"];
-
 function MobileNav() {
   const screen = useStore(app, (s) => s.screen);
   const update = useStore(app, (s) => s.update.state);
+  const sidebar = useStore(app, (s) => s.settings.custom.sidebar);
   const [more, setMore] = useState(false);
   const items = [...NAV, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
-  const main = items.filter((n) => MOBILE_MAIN.includes(n.id));
+  const MOBILE_MAIN: ScreenId[] = sidebar.slice(0, 5);
+  const main = MOBILE_MAIN.map((id) => items.find((n) => n.id === id)!).filter(Boolean);
   const rest = items.filter((n) => !MOBILE_MAIN.includes(n.id));
   const inRest = rest.some((n) => n.id === screen);
   return (
@@ -107,13 +107,18 @@ export function Sidebar() {
 function DesktopSidebar() {
   const screen = useStore(app, (s) => s.screen);
   const update = useStore(app, (s) => s.update.state);
-  const items = [...NAV, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
+  const sidebar = useStore(app, (s) => s.settings.custom.sidebar);
+  // «Кастом»: только выбранные разделы и в своём порядке; остальные — иконками на главном экране
+  const chosen = sidebar.map((id) => NAV.find((n) => n.id === id)!).filter(Boolean);
+  const items = [...chosen, { id: "settings" as const, label: "Настройки", icon: SettingsIcon }];
   const refs = useRef(new Map<string, HTMLButtonElement>());
   const [pillTop, setPillTop] = useState(0);
+  const [pillOn, setPillOn] = useState(true);
   useLayoutEffect(() => {
-    const el = refs.current.get(screen);
+    const el = items.some((n) => n.id === screen) ? refs.current.get(screen) : undefined;
+    setPillOn(!!el);
     if (el) setPillTop(el.offsetTop);
-  }, [screen]);
+  }, [screen, sidebar.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <nav className="sidebar glass">
       <div className="logo" title="Камадо">
@@ -121,7 +126,7 @@ function DesktopSidebar() {
         <span className="logo-k">C</span>
       </div>
       <div className="nav-items">
-        <span className="nav-pill" style={{ transform: `translateY(${pillTop}px)` }} />
+        <span className="nav-pill" style={{ transform: `translateY(${pillTop}px)`, opacity: pillOn ? 1 : 0 }} />
         {items.map((n, i) => {
           const Icon = n.icon;
           const dot = n.id === "settings" && update === "available";
@@ -131,7 +136,7 @@ function DesktopSidebar() {
               ref={(el) => {
                 if (el) refs.current.set(n.id, el);
               }}
-              className={`nav-item ${screen === n.id ? "active" : ""} ${i === NAV.length ? "bottom" : ""}`}
+              className={`nav-item ${screen === n.id ? "active" : ""} ${i === items.length - 1 ? "bottom" : ""}`}
               onClick={() => go(n.id)}
               data-tip={n.label}
             >
