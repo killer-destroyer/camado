@@ -1,6 +1,8 @@
 // Распознавание слов песни прямо на компьютере (Whisper). Работает в отдельном потоке, чтобы окно не тормозило.
 // Модель Камадо скачивает один раз (через свой протокол camado-media://model/ — файлы ложатся в папку программы).
 import { env, pipeline, type AutomaticSpeechRecognitionPipeline } from "@huggingface/transformers";
+import { alignLyrics, linesFromHeard, mergeWindows } from "../../../shared/wordsync";
+import type { LyricsLine } from "../../../shared/types";
 import ortMjs from "../../../../node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.mjs?url";
 import ortWasm from "../../../../node_modules/@huggingface/transformers/dist/ort-wasm-simd-threaded.jsep.wasm?url";
 
@@ -18,13 +20,30 @@ if (onnx.wasm) {
 }
 
 export type AsrIn =
-  | { type: "run"; id: number; pcm: Float32Array; starts: number[]; window: number; language?: string; sr: number }
+  | {
+      type: "run";
+      id: number;
+      pcm: Float32Array;
+      starts: number[];
+      window: number;
+      language?: string;
+      sr: number;
+      /** Текст песни — сверить с услышанным здесь же, чтобы не нагружать окно. */
+      lines?: { text: string }[];
+      duration?: number;
+    }
   | { type: "warm" };
 export type AsrOut =
   | { type: "progress"; file: string; loaded: number; total: number }
   | { type: "ready"; device: string }
   | { type: "window"; id: number; done: number; total: number }
-  | { type: "result"; id: number; windows: { start: number; words: { t0: number; t1: number; text: string }[] }[] }
+  | {
+      type: "result";
+      id: number;
+      windows: { start: number; words: { t0: number; t1: number; text: string }[] }[];
+      aligned?: { lines: LyricsLine[]; quality: number };
+      heardLines?: LyricsLine[];
+    }
   | { type: "error"; id?: number; message: string };
 
 const post = (m: AsrOut) => (self as unknown as Worker).postMessage(m);
@@ -44,7 +63,10 @@ async function hasWebGpu(): Promise<boolean> {
 
 function load(): Promise<AutomaticSpeechRecognitionPipeline> {
   asr ??= (async () => {
-    device = (await hasWebGpu()) ? "webgpu" : "wasm";
+    // Только процессор: видеокарта нужна окну (пластинка, волны, фон) — на ней распознавание
+    // отнимало кадры у анимации, и всё подтормаживало, пока играла музыка.
+    device = "wasm";
+    void hasWebGpu;
     const make = (dev: string) =>
       makePipeline("automatic-speech-recognition", ASR_MODEL, {
         device: dev as "webgpu" | "wasm",
@@ -95,7 +117,11 @@ self.onmessage = async (e: MessageEvent<AsrIn>) => {
       });
       post({ type: "window", id: m.id, done: i + 1, total: m.starts.length });
     }
-    post({ type: "result", id: m.id, windows: out });
+    // сверка с текстом — тоже здесь (это сотни тысяч сравнений: в окне дало бы рывок)
+    const heard = mergeWindows(out);
+    const aligned = m.lines && m.lines.filter((l) => l.text.trim()).length >= 2 ? alignLyrics(m.lines, heard, m.duration ?? 0) : undefined;
+    const heardLines = aligned ? undefined : linesFromHeard(heard);
+    post({ type: "result", id: m.id, windows: out, aligned, heardLines });
   } catch (err) {
     post({ type: "error", id: m.id, message: err instanceof Error ? err.message : String(err) });
   }

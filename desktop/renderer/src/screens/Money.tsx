@@ -1,7 +1,7 @@
 // «Деньги»: траты и приходы, сколько можно в день до стипендии, подписки. Пишется и быстрой записью: «кофе 250».
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Repeat, Trash2, Wallet } from "lucide-react";
-import { moneySummary, nextMonthDay, parseMoney, type MoneyState } from "../../../shared/life";
+import { isRefund, moneySummary, nextMonthDay, parseMoney, type MoneyState } from "../../../shared/life";
 import { api } from "../lib/api";
 import { toast } from "../state/app";
 import { rub } from "../components/LifeCards";
@@ -58,8 +58,15 @@ export function Money() {
           <div className="money-row">
             <b>{rub(s.spentToday)}</b> сегодня · <b>{rub(s.spentMonth)}</b> за месяц
           </div>
+          {(s.refundMonth > 0 || s.incomeMonth > 0) && (
+            <div className="muted small">
+              {s.refundMonth > 0 ? `с учётом возвратов ${rub(s.refundMonth)}` : ""}
+              {s.refundMonth > 0 && s.incomeMonth > 0 ? " · " : ""}
+              {s.incomeMonth > 0 ? `пришло ${rub(s.incomeMonth)}` : ""}
+            </div>
+          )}
           <div className="money-add">
-            <input className="input" placeholder="кофе 250 · такси 340 · +5000 стипендия" value={line} onChange={(e) => setLine(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void add()} />
+            <input className="input" placeholder="кофе 250 · +5000 стипендия · вернули за продукты 300" value={line} onChange={(e) => setLine(e.target.value)} onKeyDown={(e) => e.key === "Enter" && void add()} />
             <button className="btn primary" onClick={() => void add()}>
               <Plus size={16} />
             </button>
@@ -147,11 +154,16 @@ export function Money() {
             <div key={day} className="money-day">
               <div className="md-head">
                 <span>{day}</span>
-                <span className="muted small">{rub(-list.filter((e) => e.amount < 0).reduce((a, e) => a + e.amount, 0))}</span>
+                <span className="muted small">
+                  потрачено {rub(Math.max(0, -list.filter((e) => e.amount < 0).reduce((a, e) => a + e.amount, 0) - list.filter(isRefund).reduce((a, e) => a + e.amount, 0)))}
+                </span>
               </div>
               {list.map((e) => (
                 <div key={e.id} className={`money-entry ${e.amount > 0 ? "in" : ""}`}>
-                  <span>{e.title}</span>
+                  <span>
+                    {e.title}
+                    {isRefund(e) && <span className="muted small"> · возврат</span>}
+                  </span>
                   <b>
                     {e.amount > 0 ? "+" : "−"}
                     {rub(Math.abs(e.amount))}

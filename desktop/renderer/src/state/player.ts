@@ -288,14 +288,26 @@ export function startWordSync(): () => void {
     },
     pcm: songPcm,
     sr: SR,
+    playing: () => player.get().playing,
     resetSync: (id) => {
       const st = app.get().settings;
       if (st.lyricsSync[id] || st.lyricsOffsets[id]) resetLyricsSync(id);
     },
   });
-  return api.on("wordsync-changed", (id) => {
+  // поставили на паузу — можно слушать остальные песни
+  let was = player.get().playing;
+  const offPlay = player.subscribe(() => {
+    const now = player.get().playing;
+    if (now !== was && !now) kickWords();
+    was = now;
+  });
+  const offWs = api.on("wordsync-changed", (id) => {
     if (currentTrack()?.id === id) void loadLyrics();
   });
+  return () => {
+    offPlay();
+    offWs();
+  };
 }
 
 export function watchLibrary(): () => void {

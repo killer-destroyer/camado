@@ -154,3 +154,35 @@ describe("модель распознавания и хранение разме
     expect(w!.lines[0]!.words![0]!.time).toBe(0);
   });
 });
+
+describe("текст песни: два слова разом", () => {
+  it("слова с одним временем раскладываются до следующего слова", async () => {
+    const { spreadWords, respaceLines, MIN_WORD_STEP } = await import("../desktop/shared/wordsync.js");
+    const T = spreadWords(
+      [
+        { t: 10, w: 3 },
+        { t: 11.5, w: 3 },
+        { t: 11.5, w: 5 },
+        { t: 11.52, w: 2 },
+        { t: 13, w: 4 },
+      ],
+      60,
+    );
+    for (let i = 1; i < T.length; i++) expect(T[i]! - T[i - 1]!).toBeGreaterThanOrEqual(MIN_WORD_STEP - 1e-9);
+    expect(T[1]).toBe(11.5);
+    expect(T[4]).toBe(13);
+    const lines = respaceLines([{ time: 5, text: "my love", words: [{ time: 5, text: "my" }, { time: 5, text: "love" }] }, { time: 6, text: "x", words: [{ time: 6, text: "x" }] }], 30);
+    expect(lines[0]!.words![1]!.time).toBeGreaterThan(5.1);
+    expect(lines[1]!.time).toBe(6);
+  });
+
+  it("на настоящей сверке нет слов с одинаковым временем", () => {
+    const r = alignLyrics(
+      [{ text: "Дело не в тебе, my love" }, { text: "Всё уже предрешено" }],
+      [hw(7, 9, "Дело"), hw(9, 9.34, "не"), hw(9.34, 9.48, "в"), hw(9.48, 9.86, "тебе,"), hw(10.28, 12.04, "молос"), hw(12.04, 13.16, "Все"), hw(13.16, 13.62, "уже"), hw(13.62, 14.9, "притришено")],
+      30,
+    );
+    const all = r.lines.flatMap((l) => l.words!.map((w) => w.time));
+    for (let i = 1; i < all.length; i++) expect(all[i]! - all[i - 1]!).toBeGreaterThan(0.05);
+  });
+});

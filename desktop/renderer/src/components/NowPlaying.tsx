@@ -357,7 +357,44 @@ function SleepButton() {
 }
 
 /** Размытая обложка на фоне: новая плавно проявляется поверх старой. */
-function Backdrop({ cover }: { cover?: string }) {
+/**
+ * Размытая обложка для фона — один раз в маленькую картинку (размытие уже внутри).
+ * Раньше это был CSS-фильтр blur(90px) на картинке больше экрана: видеокарта пересчитывала его постоянно.
+ */
+const blurCache = new Map<string, string>();
+function softCover(url: string, light: boolean): Promise<string> {
+  const key = `${light ? "l" : "d"}|${url}`;
+  const hit = blurCache.get(key);
+  if (hit) return Promise.resolve(hit);
+  return new Promise((res) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = c.height = 96;
+      const g = c.getContext("2d")!;
+      g.filter = light ? "blur(7px) saturate(1.3) brightness(1.05)" : "blur(7px) saturate(1.6) brightness(0.6)";
+      g.drawImage(img, -12, -12, 120, 120);
+      const out = c.toDataURL("image/jpeg", 0.9);
+      blurCache.set(key, out);
+      if (blurCache.size > 30) blurCache.delete(blurCache.keys().next().value!);
+      res(out);
+    };
+    img.onerror = () => res(url);
+    img.src = url;
+  });
+}
+
+function Backdrop({ cover: raw }: { cover?: string }) {
+  const [cover, setCover] = useState<string | undefined>(raw ? blurCache.get(`${document.documentElement.dataset.light === "1" ? "l" : "d"}|${raw}`) : undefined);
+  useEffect(() => {
+    if (!raw) return setCover(undefined);
+    let alive = true;
+    void softCover(raw, document.documentElement.dataset.light === "1").then((u) => alive && setCover(u));
+    return () => {
+      alive = false;
+    };
+  }, [raw]);
   const [layers, setLayers] = useState<{ cover?: string; n: number }[]>(() => [{ cover, n: 0 }]);
   useEffect(() => {
     setLayers((ls) => (ls[ls.length - 1]?.cover === cover ? ls : [...ls.slice(-1), { cover, n: (ls[ls.length - 1]?.n ?? 0) + 1 }]));

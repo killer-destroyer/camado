@@ -203,7 +203,7 @@ export function App() {
 
   const Screen = SCREENS[screen];
   return (
-    <div className={`app ${hasTrack ? "has-player" : ""}`}>
+    <div className={`app ${hasTrack ? "has-player" : ""} ${nowPlaying ? "np-open" : ""}`}>
       <Background palette={palette} mode={settings.background} />
       <div className="titlebar" />
       <Sidebar />

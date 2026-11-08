@@ -43,7 +43,8 @@ export function Visualizer({
   useEffect(() => {
     const c = ref.current!;
     const ro = new ResizeObserver(() => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      // Волны и столбики мягкие — двойное разрешение им не нужно (а холст во всю ширину перерисовывается каждый кадр).
+      const dpr = Math.min(window.devicePixelRatio || 1, kind === "ring" || kind === "ring-only" ? 1.5 : 1);
       const r = c.getBoundingClientRect();
       size.current = { w: r.width, h: r.height, dpr };
       c.width = Math.max(1, Math.round(r.width * dpr));
@@ -54,9 +55,15 @@ export function Visualizer({
     return () => ro.disconnect();
   }, []);
 
-  useFrame((dt) => {
+  const since = useRef(0);
+  useFrame((frameDt) => {
     const c = ref.current;
     if (!c || kind === "off") return;
+    // не чаще 60 раз в секунду: на 120-герцовых экранах это вдвое меньше работы, а глазу не видно
+    since.current += frameDt;
+    if (since.current < 1 / 60 - 0.002) return;
+    const dt = Math.min(since.current, 0.1);
+    since.current = 0;
     const g = c.getContext("2d")!;
     const { w, h, dpr } = size.current;
     if (w === 0) return;

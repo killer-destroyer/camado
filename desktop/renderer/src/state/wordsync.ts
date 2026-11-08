@@ -1,7 +1,7 @@
 // Пословный текст песен: Камадо сам, в фоне, по одной песне слушает библиотеку и ставит время каждому слову.
 // Считается один раз на песню и хранится у пользователя. Первой — песня, которая играет.
 import type { Lyrics, Track } from "../../../shared/types";
-import { alignLyrics, asrWindows, ASR_WINDOW, languageOf, linesFromHeard, mergeWindows, textKey, WORDSYNC_MODEL, type WordSync } from "../../../shared/wordsync";
+import { asrWindows, ASR_WINDOW, languageOf, respaceLines, textKey, WORDSYNC_MODEL, type WordSync } from "../../../shared/wordsync";
 import { api } from "../lib/api";
 import { createStore } from "../lib/store";
 import { app, toast } from "./app";
@@ -27,7 +27,8 @@ export const words = createStore<WordsState>({ done: {}, loaded: false });
 // ---------- поток распознавания ----------
 
 let worker: Worker | undefined;
-const waits = new Map<number, { ok: (w: { start: number; words: { t0: number; t1: number; text: string }[] }[]) => void; fail: (e: Error) => void }>();
+type AsrResult = Extract<AsrOut, { type: "result" }>;
+const waits = new Map<number, { ok: (r: AsrResult) => void; fail: (e: Error) => void }>();
 const fileProgress = new Map<string, { loaded: number; total: number }>();
 
 function asrWorker(): Worker {
@@ -40,7 +41,7 @@ function asrWorker(): Worker {
       if (b) words.set({ busy: { ...b, done: m.done, total: m.total } });
     } else if (m.type === "ready") words.set({ device: m.device, model: undefined });
     else if (m.type === "result") {
-      waits.get(m.id)?.ok(m.windows);
+      waits.get(m.id)?.ok(m);
       waits.delete(m.id);
     } else if (m.type === "error") {
       if (m.id !== undefined) {
@@ -60,13 +61,13 @@ function asrWorker(): Worker {
 }
 
 let reqId = 0;
-function recognize(pcm: Float32Array, starts: number[], language: string | undefined, sr: number) {
+function recognize(pcm: Float32Array, starts: number[], language: string | undefined, sr: number, lines: { text: string }[], duration: number) {
   const id = ++reqId;
-  return new Promise<{ start: number; words: { t0: number; t1: number; text: string }[] }[]>((ok, fail) => {
+  return new Promise<AsrResult>((ok, fail) => {
     waits.set(id, { ok, fail });
     // копия: буфер декодера звука нельзя передать в другой поток
     const copy = pcm.slice();
-    const msg: AsrIn = { type: "run", id, pcm: copy, starts, window: ASR_WINDOW, language, sr };
+    const msg: AsrIn = { type: "run", id, pcm: copy, starts, window: ASR_WINDOW, language, sr, lines: lines.map((l) => ({ text: l.text })), duration };
     asrWorker().postMessage(msg, [copy.buffer]);
   });
 }
@@ -104,7 +105,11 @@ export function initWordSync(deps: {
   resetSync: (id: string) => void;
   pcm: (url: string) => Promise<Float32Array>;
   sr: number;
+  playing?: () => boolean;
 }): void {
+  if (deps.playing) isPlaying = deps.playing;
+  // свернули окно / поставили на паузу — можно доделать остальные песни
+  document.addEventListener("visibilitychange", () => kick());
   tracksOf = deps.tracks;
   currentOf = deps.current;
   onReady = deps.ready;
@@ -136,11 +141,15 @@ export function kick(): void {
   });
 }
 
+let isPlaying: () => boolean = () => false;
+
 function next(): Track | undefined {
   const done = words.get().done;
   const need = (t: Track) => done[t.id] !== WORDSYNC_MODEL && !failed.has(t.id);
   const cur = currentOf();
   if (cur && need(cur)) return cur;
+  // Пока играет музыка и окно на экране — не грузим процессор чужими песнями: остальные — на паузе или в фоне.
+  if (isPlaying() && !document.hidden) return undefined;
   return tracksOf().find(need);
 }
 
@@ -185,14 +194,13 @@ async function processTrack(t: Track): Promise<WordSync> {
   const language = languageOf(lines.map((l) => l.text).join(" "));
   const base = { v: 1 as const, model: WORDSYNC_MODEL, duration, createdAt: new Date().toISOString() };
   if (!starts.length) return { ...base, textKey: textKey(lyrics.lines), source: "heard", quality: 0, lines: [] };
-  const windows = await recognize(pcm, starts, language, SR);
-  const heard = mergeWindows(windows.map((w) => ({ start: w.start, words: w.words })));
-  if (lines.length >= 2) {
-    const r = alignLyrics(lyrics.lines, heard, duration);
+  const res = await recognize(pcm, starts, language, SR, lyrics.lines, duration);
+  if (lines.length >= 2 && res.aligned) {
+    const r = res.aligned;
     return { ...base, textKey: textKey(lyrics.lines), source: "aligned", quality: r.quality, lines: r.quality >= MIN_QUALITY ? r.lines : [] };
   }
   // текста нигде нет — покажем услышанное (если там правда пели)
-  const own = linesFromHeard(heard);
+  const own = res.heardLines ?? [];
   const enough = own.reduce((a, l) => a + (l.words?.length ?? 0), 0) >= 12;
   return { ...base, textKey: "", source: "heard", quality: enough ? 1 : 0, lines: enough ? own : [] };
 }
@@ -201,8 +209,8 @@ async function processTrack(t: Track): Promise<WordSync> {
 export function withWords(lyrics: Lyrics, ws: WordSync | null): Lyrics | undefined {
   if (!ws || ws.model !== WORDSYNC_MODEL || !ws.lines.length) return undefined;
   if (ws.source === "aligned" && ws.quality >= MIN_QUALITY && lyrics.lines.length && ws.textKey === textKey(lyrics.lines))
-    return { ...lyrics, synced: true, approx: false, scaled: undefined, versionDuration: undefined, lines: ws.lines, wordTimed: true };
-  if (ws.source === "heard" && !lyrics.lines.length) return { synced: true, source: "heard", lines: ws.lines, wordTimed: true };
+    return { ...lyrics, synced: true, approx: false, scaled: undefined, versionDuration: undefined, lines: respaceLines(ws.lines, ws.duration), wordTimed: true };
+  if (ws.source === "heard" && !lyrics.lines.length) return { synced: true, source: "heard", lines: respaceLines(ws.lines, ws.duration), wordTimed: true };
   return undefined;
 }
 

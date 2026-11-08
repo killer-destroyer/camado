@@ -7,7 +7,7 @@ import type { ToolDef } from "../../src/llm/types.js";
 import { cardsFromNote } from "../../src/camado/study.js";
 import type { CamadoCore } from "../../src/core.js";
 import { sameSubject } from "../../src/subjects.js";
-import { classesOn, isoDate, sameSubjectLoose, moneySummary, nextMonthDay, weekParity, type EnergyEntry, type MoneyState, type Peak, type ScheduleState } from "../shared/life.js";
+import { classesOn, isoDate, sameSubjectLoose, spendingByTitle, moneySummary, nextMonthDay, weekParity, type EnergyEntry, type MoneyState, type Peak, type ScheduleState } from "../shared/life.js";
 import type { BackupState, CustomProblem, DistractionLog } from "./life.js";
 
 type Handlers = Record<string, (...args: never[]) => unknown>;
@@ -34,7 +34,8 @@ export function lifeTools(deps: {
     const s = moneySummary(m, new Date());
     return [
       s.balance !== undefined ? `на карте ≈ ${rub(s.balance)}` : "остаток на карте не задан",
-      `сегодня потрачено ${rub(s.spentToday)}, за месяц ${rub(s.spentMonth)}`,
+      `сегодня потрачено ${rub(s.spentToday)}${s.refundToday ? ` (с учётом возвратов ${rub(s.refundToday)})` : ""}, за месяц ${rub(s.spentMonth)}`,
+      s.incomeMonth ? `пришло за месяц ${rub(s.incomeMonth)}` : "",
       s.perDay !== undefined ? `можно ${rub(s.perDay)} в день, до «${m.income?.name}» ${s.daysLeft} дн.` : m.income ? "" : "стипендия/зарплата не задана",
       s.subsBefore ? `подписки до неё: ${rub(s.subsBefore)}` : "",
     ]
@@ -48,7 +49,8 @@ export function lifeTools(deps: {
       name: "money_add",
       description:
         "Записать траты и приходы денег (раздел «Деньги»). Можно сразу несколько: «кофе 250, такси 340, обед 420». " +
-        "Траты — income=false (по умолчанию), стипендия/зарплата/перевод мне — income=true. Сумма всегда положительная.",
+        "Траты — income=false (по умолчанию), стипендия/зарплата/перевод мне — income=true. Сумма всегда положительная. " +
+        "Возврат за покупку («вернули за продукты 300», кэшбэк) — income=true и title «возврат за продукты»: он вычтется из трат по этой статье.",
       schema: z.object({
         items: z
           .array(
@@ -75,9 +77,7 @@ export function lifeTools(deps: {
       run: async (i) => {
         const m = await call<MoneyState>("money.get");
         const since = Date.now() - (i.days ?? 30) * 86400e3;
-        const by = new Map<string, number>();
-        for (const e of m.entries) if (e.amount < 0 && Date.parse(e.at) >= since) by.set(e.title.toLowerCase(), (by.get(e.title.toLowerCase()) ?? 0) - e.amount);
-        const top = [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12);
+        const top = spendingByTitle(m.entries, since).slice(0, 12);
         const recent = m.entries.slice(-15).reverse();
         return [
           summary(m),

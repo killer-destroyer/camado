@@ -14,6 +14,8 @@ import {
   nextClass,
   nextMonthDay,
   parseMoney,
+  isRefund,
+  spendingByTitle,
   sameSubjectLoose,
   weekParity,
   type ScheduleState,
@@ -159,5 +161,28 @@ describe("резервная копия", () => {
     expect(existsSync(`${db}.before-restore`)).toBe(true);
     expect(existsSync(`${db}.restore`)).toBe(false);
     expect(applyPendingRestore(db)).toBe(false);
+  });
+});
+
+describe("деньги: возвраты", () => {
+  it("возврат вычитается из «потрачено», а стипендия — отдельно как «пришло»", () => {
+    const now = new Date(2026, 10, 10, 15);
+    const at = (h: number) => new Date(2026, 10, 10, h).toISOString();
+    const st = {
+      entries: [
+        { id: "1", at: at(9), amount: -1000, title: "продукты" },
+        { id: "2", at: at(10), amount: 300, title: "возврат за продукты" },
+        { id: "3", at: at(11), amount: 5000, title: "стипендия" },
+      ],
+      subs: [],
+    };
+    const s = moneySummary(st, now);
+    expect(s.spentToday).toBe(700);
+    expect(s.refundToday).toBe(300);
+    expect(s.incomeToday).toBe(5000);
+    expect(spendingByTitle(st.entries, 0)).toEqual([["продукты", 700]]);
+    expect(parseMoney("вернули за продукты 300")).toEqual({ amount: 300, title: "вернули за продукты" });
+    expect(isRefund({ amount: 300, title: "кэшбэк" })).toBe(true);
+    expect(isRefund({ amount: 5000, title: "стипендия" })).toBe(false);
   });
 });

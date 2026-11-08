@@ -57,9 +57,34 @@ export function parseMoney(raw: string): { amount: number; title: string } | und
   if (!/\p{L}/u.test(title) || title.split(" ").length > 4) return undefined;
   const amount = Number(num.replace(",", "."));
   if (!(amount > 0)) return undefined;
-  // «стипендия 5000», «зарплата 20000» — это приход и без плюса
-  if (/стипенд|зарплат|аванс|перевод от|подарил|вернул/i.test(title)) sign = 1;
+  // «стипендия 5000», «зарплата 20000», «вернули за продукты 300» — это приход и без плюса
+  if (/стипенд|зарплат|аванс|перевод от|подарил|вернул|возврат|кэшб|кешб|cashback|refund|компенсац/i.test(title)) sign = 1;
   return { amount: sign * amount, title: title.slice(0, 60) };
+}
+
+const REFUND = /вернул|возврат|кэшб|кешб|cashback|refund|компенсац|отдали за|вернули/i;
+
+/** Возврат за покупку (уменьшает траты), а не новый доход. */
+export const isRefund = (e: { amount: number; title: string }) => e.amount > 0 && REFUND.test(e.title);
+
+/** К какой статье относится возврат: «вернули за продукты» → «продукты». */
+export function refundCategory(title: string): string | undefined {
+  const m = /(?:^|\s)за\s+(.+)$/i.exec(title.trim());
+  return m ? m[1]!.trim().toLowerCase() : undefined;
+}
+
+/** Траты по статьям за период: минус возвраты по той же статье. */
+export function spendingByTitle(entries: MoneyEntry[], sinceMs: number): [string, number][] {
+  const by = new Map<string, number>();
+  for (const e of entries) {
+    if (Date.parse(e.at) < sinceMs) continue;
+    if (e.amount < 0) by.set(e.title.toLowerCase(), (by.get(e.title.toLowerCase()) ?? 0) - e.amount);
+    else if (isRefund(e)) {
+      const cat = refundCategory(e.title) ?? "возвраты";
+      by.set(cat, (by.get(cat) ?? 0) - e.amount);
+    }
+  }
+  return [...by.entries()].filter(([, v]) => Math.abs(v) > 0.001).sort((a, b) => b[1] - a[1]);
 }
 
 const dayMs = 86_400_000;
@@ -80,8 +105,15 @@ export function nextMonthDay(day: number, from: Date): Date {
 export interface MoneySummary {
   /** Сколько на карте сейчас (если задан стартовый остаток). */
   balance?: number;
+  /** Потрачено за вычетом возвратов. */
   spentMonth: number;
   spentToday: number;
+  /** Сколько из этого вернули (возвраты, кэшбэк). */
+  refundMonth: number;
+  refundToday: number;
+  /** Пришло денег (стипендия, переводы), без возвратов. */
+  incomeMonth: number;
+  incomeToday: number;
   /** До прихода денег: дней (сегодня включительно) и подписки, которые спишутся раньше. */
   daysLeft?: number;
   subsBefore: number;
@@ -95,11 +127,27 @@ export function moneySummary(s: MoneyState, now: Date): MoneySummary {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   let spentMonth = 0;
   let spentToday = 0;
+  let refundMonth = 0;
+  let refundToday = 0;
+  let incomeMonth = 0;
+  let incomeToday = 0;
   for (const e of s.entries) {
     const t = Date.parse(e.at);
-    if (e.amount < 0 && t >= monthStart) spentMonth -= e.amount;
-    if (e.amount < 0 && t >= todayStart) spentToday -= e.amount;
+    const refund = isRefund(e);
+    if (t >= monthStart) {
+      if (e.amount < 0) spentMonth -= e.amount;
+      else if (refund) refundMonth += e.amount;
+      else incomeMonth += e.amount;
+    }
+    if (t >= todayStart) {
+      if (e.amount < 0) spentToday -= e.amount;
+      else if (refund) refundToday += e.amount;
+      else incomeToday += e.amount;
+    }
   }
+  // возврат уменьшает траты (но не ниже нуля)
+  spentMonth = Math.max(0, spentMonth - refundMonth);
+  spentToday = Math.max(0, spentToday - refundToday);
   let balance: number | undefined;
   if (s.balance) {
     const from = Date.parse(s.balance.at);
@@ -116,7 +164,7 @@ export function moneySummary(s: MoneyState, now: Date): MoneySummary {
     }
   }
   const perDay = balance !== undefined && daysLeft ? Math.max(0, Math.floor((balance - subsBefore) / daysLeft)) : undefined;
-  return { balance, spentMonth, spentToday, daysLeft, subsBefore, perDay, nextIncome };
+  return { balance, spentMonth, spentToday, refundMonth, refundToday, incomeMonth, incomeToday, daysLeft, subsBefore, perDay, nextIncome };
 }
 
 // ---------- Сон и энергия ----------

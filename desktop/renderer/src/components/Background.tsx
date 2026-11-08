@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { engine } from "../lib/audio";
 import { damp } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
+import { app } from "../state/app";
 import { hexToRgb, type Palette } from "../lib/palettes";
 
 const VERT = `attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }`;
@@ -108,9 +109,12 @@ export function Background({ palette, mode }: { palette: Palette; mode: "aurora"
   useFrame((frameDt) => {
     const g = gl.current;
     if (!g) return;
-    // Фон медленный: 60 кадров в секунду ему хватает даже на 144-герцовом мониторе.
+    // Под плеером на весь экран и заставкой фон не виден — не рисуем его зря.
+    const a = app.get();
+    if (a.nowPlaying || a.screensaver) return;
+    // Фон медленный и мягкий: 30 кадров в секунду глазу не отличить, а видеокарте вдвое легче.
     since.current += frameDt;
-    if (since.current < 1 / 60 - 0.002) return;
+    if (since.current < 1 / 30 - 0.002) return;
     const dt = Math.min(since.current, 0.1);
     since.current = 0;
     const p = target.current;

@@ -1912,12 +1912,11 @@ button.card:hover {
 }
 .np-backdrop {
   position: absolute;
-  inset: -15%;
+  inset: -5%;
   background-size: cover;
   background-position: center;
-  filter: blur(90px) saturate(1.6) brightness(0.6);
+  /* размытие уже внутри картинки (маленькая, растянута) — без фильтра на весь экран */
   opacity: 0.9;
-  transform: scale(1.05);
 }
 .np-backdrop.fade-in {
   animation: np-backdrop-in 0.8s ease both;
@@ -1928,7 +1927,6 @@ button.card:hover {
   }
 }
 [data-light="1"] .np-backdrop {
-  filter: blur(90px) saturate(1.3) brightness(1.05);
   opacity: 0.55;
 }
 .np-tint {
@@ -2202,7 +2200,7 @@ button.card:hover {
   opacity: 0.85;
 }
 .karaoke {
-  filter: drop-shadow(0 0 22px rgb(var(--accent-rgb) / 0.35));
+  /* без filter: слова перекрашиваются каждый кадр, и свечение-фильтр пересчитывалось бы вместе с ними */
 }
 .kw {
   --fill: 0;
@@ -7593,4 +7591,13 @@ a.btn {
   .nav-item::after {
     display: none;
   }
+}
+
+/* Плеер на весь экран закрывает всё — то, что под ним, не рисуем (карусель, экраны, панель) */
+.app.np-open > .main,
+.app.np-open > .miniplayer,
+.app.np-open > .sidebar,
+.app.np-open > .mobile-nav,
+.app.np-open > .bg-canvas {
+  visibility: hidden;
 }

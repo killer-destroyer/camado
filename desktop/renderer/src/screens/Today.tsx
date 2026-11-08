@@ -1,6 +1,6 @@
 // «Сегодня»: часы, что горит, быстрая запись, фокус, музыка, неделя.
 import { ClassCard, EnergyCard, MoneyCard, rub } from "../components/LifeCards";
-import { moneySummary, parseMoney } from "../../../shared/life";
+import { isRefund, moneySummary, parseMoney } from "../../../shared/life";
 import { useEffect, useState } from "react";
 import { AlarmClock, ArrowRight, Check, Flame, ListChecks, MessageCircle, Music2, NotebookPen, Play, Rocket, SendHorizontal, Sparkles, Timer, X, Zap } from "lucide-react";
 import { addAlarm, removeAlarm } from "../state/alarms";
@@ -64,7 +64,7 @@ function QuickAdd() {
       if (cash) {
         const m = await api.money.add(cash.amount, cash.title);
         const s = moneySummary(m, new Date());
-        toast(`${cash.amount < 0 ? "Трата" : "Приход"}: ${cash.title} ${cash.amount < 0 ? "−" : "+"}${rub(Math.abs(cash.amount))}${s.perDay !== undefined ? ` · можно ${rub(s.perDay)} в день` : ""}`, "ok");
+        toast(`${cash.amount < 0 ? "Трата" : isRefund(cash) ? "Возврат (вычел из трат)" : "Приход"}: ${cash.title} ${cash.amount < 0 ? "−" : "+"}${rub(Math.abs(cash.amount))}${s.perDay !== undefined ? ` · можно ${rub(s.perDay)} в день` : ""}`, "ok");
         setText("");
         return;
       }

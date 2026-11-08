@@ -249,12 +249,11 @@ export function alignLyrics(lines: { text: string }[], heardRaw: HeardWord[], du
   const wordTime = new Array<number>(lw.length).fill(0);
   for (let i = n - 1; i >= 0; i--) if (times[i] !== undefined) wordTime[L[i]!.w] = times[i]!;
   const outLines: LyricsLine[] = lines.map((l) => ({ time: 0, text: l.text.trim(), words: [] as LyricsWord[] }));
-  let prev = 0;
-  lw.forEach((w, i) => {
-    const t = Math.max(prev, Math.min(duration, wordTime[i] ?? prev));
-    prev = t;
-    outLines[w.line]!.words!.push({ time: Math.round(t * 100) / 100, text: w.text });
-  });
+  const spaced = spreadWords(
+    lw.map((w, i) => ({ t: wordTime[i] ?? 0, w: weight(w.key.replace(/ /g, "")) })),
+    duration,
+  );
+  lw.forEach((w, i) => outLines[w.line]!.words!.push({ time: Math.round(spaced[i]! * 100) / 100, text: w.text }));
   // строка без слов (например «♪») — встаёт сразу перед следующей
   let nextT = duration;
   for (let i = outLines.length - 1; i >= 0; i--) {
@@ -268,6 +267,52 @@ export function alignLyrics(lines: { text: string }[], heardRaw: HeardWord[], du
     }
   }
   return { lines: outLines.filter((l) => l.text), quality: n ? matched / n : 0 };
+}
+
+/** Меньше этого между словами — глаз видит, что слова загорелись разом. */
+export const MIN_WORD_STEP = 0.12;
+
+/**
+ * У каждого слова — своё время: время идёт только вперёд, а слова, которые получили одно и то же
+ * (или почти одно) время, раскладываются по длине до следующего слова. Так не бывает «двух слов разом».
+ */
+export function spreadWords(words: { t: number; w: number }[], duration: number): number[] {
+  const n = words.length;
+  const T = words.map((x) => Math.max(0, Math.min(duration, x.t)));
+  for (let i = 1; i < n; i++) if (T[i]! < T[i - 1]!) T[i] = T[i - 1]!;
+  let i = 0;
+  while (i < n) {
+    let j = i;
+    while (j + 1 < n && T[j + 1]! - T[j]! < MIN_WORD_STEP) j++;
+    if (j > i) {
+      const k = j - i + 1;
+      const lo = T[i]!;
+      // до следующего слова; если его нет — по обычной скорости пения
+      const hi = j + 1 < n ? T[j + 1]! : Math.min(duration, lo + k * 0.35);
+      const room = hi - lo;
+      const tot = words.slice(i, j + 1).reduce((a, x) => a + x.w, 0) || k;
+      let acc = 0;
+      for (let q = i; q <= j; q++) {
+        T[q] = room > 0 ? lo + (room * acc) / tot : lo;
+        acc += words[q]!.w;
+      }
+    }
+    i = j + 1;
+  }
+  return T;
+}
+
+/** Раздвинуть слова в уже готовой разметке (сохранённой раньше — до этого исправления). */
+export function respaceLines(lines: LyricsLine[], duration: number): LyricsLine[] {
+  const flat = lines.flatMap((l, li) => (l.words ?? []).map((w) => ({ li, w })));
+  if (!flat.length) return lines;
+  const T = spreadWords(
+    flat.map((x) => ({ t: x.w.time, w: 1 + x.w.text.length })),
+    duration || (flat.at(-1)!.w.time + 5),
+  );
+  const out = lines.map((l) => ({ ...l, ...(l.words ? { words: [] as LyricsWord[] } : {}) }));
+  flat.forEach((x, k) => out[x.li]!.words!.push({ ...x.w, time: Math.round(T[k]! * 100) / 100 }));
+  return out.map((l) => (l.words?.length ? { ...l, time: l.words[0]!.time } : l));
 }
 
 /** Текста нигде нет — строки из услышанного: новая строка после паузы или каждые ~8 слов. */
