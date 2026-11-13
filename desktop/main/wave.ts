@@ -5,6 +5,7 @@
 import { createHash } from "node:crypto";
 import type { Store } from "../../src/store.js";
 import type { Track, WaveMood } from "../shared/types.js";
+import { fitsMood, type TrackEnergy } from "../shared/energy.js";
 
 const KV = "wave.taste";
 const UA = { "User-Agent": "Camado (study assistant)" };
@@ -14,9 +15,9 @@ export const STREAM_HOSTS = /^(?:[\w-]+\.)*(archive\.org|ccmixter\.org)$/i;
 
 export const MOODS: Record<WaveMood, { label: string; tags: string[]; libShare: number }> = {
   mine: { label: "Под меня", tags: [], libShare: 0.7 },
-  energy: { label: "Бодро", tags: ["electronic", "dance", "rock", "funk", "upbeat", "breakbeat"], libShare: 0.25 },
-  calm: { label: "Спокойно", tags: ["chill", "acoustic", "ambient", "downtempo", "piano", "jazz"], libShare: 0.25 },
-  study: { label: "Учёба", tags: ["instrumental", "lofi", "ambient", "piano", "classical", "chillout"], libShare: 0.15 },
+  energy: { label: "Бодро", tags: ["electronic", "dance", "rock", "funk", "upbeat", "breakbeat"], libShare: 0.4 },
+  calm: { label: "Спокойно", tags: ["chill", "acoustic", "ambient", "downtempo", "piano", "jazz"], libShare: 0.4 },
+  study: { label: "Учёба", tags: ["instrumental", "lofi", "ambient", "piano", "classical", "chillout"], libShare: 0.3 },
   new: { label: "Что-то новое", tags: ["experimental", "trip_hop", "folk", "hip_hop", "jazz", "electronic", "world", "indie"], libShare: 0.05 },
 };
 
@@ -212,13 +213,23 @@ export class Wave {
   }
 
   /** Следующие треки волны. exclude — что уже было (не повторяемся). */
-  async next(input: { mood: WaveMood; count?: number; exclude?: string[]; library: Track[]; favorites: string[]; recent?: string[] }): Promise<Track[]> {
+  async next(input: {
+    mood: WaveMood;
+    count?: number;
+    exclude?: string[];
+    library: Track[];
+    favorites: string[];
+    recent?: string[];
+    /** Темп и энергия своих треков (меряет окно): по ним «бодро/спокойно/учёба» берёт и твои песни. */
+    energy?: Record<string, TrackEnergy>;
+  }): Promise<Track[]> {
     const mood = MOODS[input.mood] ? input.mood : "mine";
     const count = Math.max(1, Math.min(20, input.count ?? 6));
     const taste = this.taste();
     const fav = new Set(input.favorites);
     const skip = new Set([...(input.exclude ?? []), ...(input.recent ?? [])]);
-    const lib = input.library.filter((t) => !skip.has(t.id));
+    // свои треки — только подходящие по энергии (для «под меня» и «нового» — все)
+    const lib = input.library.filter((t) => !skip.has(t.id) && fitsMood(mood, input.energy?.[t.id]));
     const libCount = lib.length ? Math.round(count * MOODS[mood].libShare) : 0;
     const pickWeighted = (pool: Track[], n: number) => {
       const scored = pool.map((t) => ({ t, s: this.score(t, taste, fav) })).filter((x) => Number.isFinite(x.s));
@@ -252,6 +263,11 @@ export class Wave {
     let out = [...fromLib, ...webOk.slice(0, count - fromLib.length)];
     // интернета нет или база молчит — играем своё
     if (out.length < count) out = [...out, ...pickWeighted(lib.filter((t) => !out.includes(t)), count - out.length)];
+    // и подходящих по энергии не нашлось — любые свои, лишь бы играло
+    if (out.length < count) {
+      const any = input.library.filter((t) => !skip.has(t.id) && !out.includes(t));
+      out = [...out, ...pickWeighted(any, count - out.length)];
+    }
     // свои и новые вперемешку
     return out.sort(() => Math.random() - 0.5);
   }

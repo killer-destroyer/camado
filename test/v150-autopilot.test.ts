@@ -54,6 +54,10 @@ describe("автопилот в программе", () => {
     autopilotToPlan(s, id, { hour: 19, tz: TZ, now });
     expect(s.listPlan(now, new Date("2026-11-10T00:00:00Z"))).toHaveLength(4);
     expect(autopilotToPlan(s, 999, { tz: TZ, now })).toEqual({ error: "Экзамен не найден" });
+    // поздно вечером сегодняшнее занятие на ночь не ставим
+    const late = new Date("2026-11-05T20:30:00Z"); // 23:30 МСК
+    expect(autopilotToPlan(s, id, { hour: 18, tz: TZ, now: late })).toEqual({ blocks: 3 });
+    expect(s.listPlan(late, new Date("2026-11-10T00:00:00Z")).every((b) => b.startAt >= "2026-11-06")).toBe(true);
   });
 
   it("вечерний экзаменатор: раз в день, в свой час, только если есть что делать", () => {

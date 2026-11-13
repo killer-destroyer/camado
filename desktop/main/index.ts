@@ -373,7 +373,7 @@ const handlers: Record<string, Handler> = {
   "wave.next": async (mood: WaveMood, exclude: string[] = []) => {
     const since = new Date(Date.now() - 3 * 3600e3);
     const recent = store.playStats(since, 60).map((p) => p.trackId);
-    const tracks = await wave.next({ mood, exclude: (Array.isArray(exclude) ? exclude : []).slice(-300), library: library.view().tracks, favorites: store.listFavorites(), recent });
+    const tracks = await wave.next({ mood, exclude: (Array.isArray(exclude) ? exclude : []).slice(-300), library: library.view().tracks, favorites: store.listFavorites(), recent, energy: settings.trackEnergy });
     return tracks.map(viaStream);
   },
   "wave.feedback": (t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done") => {

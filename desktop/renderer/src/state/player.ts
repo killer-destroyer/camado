@@ -1,5 +1,6 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
 import type { WaveMood } from "../../../shared/types";
+import type { TrackEnergy } from "../../../shared/energy";
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
 import { addAnchor, approximateTimes, cleanEarWindow, EAR_WINDOW, earWindows, lyricsSlope, mapLyricsTime, syncFromHeard } from "../../../shared/lrc";
@@ -247,11 +248,23 @@ export function trackTrim(id: string): number {
 
 /** Измерить трек, если ещё не мерили, и плавно поправить громкость, пока он играет. */
 async function levelTrack(id: string, url: string): Promise<void> {
-  if (!app.get().settings.autoLevel || app.get().settings.trackLoudness[id] !== undefined) return;
-  const loud = await measure(url);
-  if (loud === undefined) return;
-  updateSettings({ trackLoudness: { ...app.get().settings.trackLoudness, [id]: loud } });
-  if (currentTrack()?.id === id) engine.setTrim(trackTrim(id));
+  const st = app.get().settings;
+  const needLoud = st.autoLevel && st.trackLoudness[id] === undefined;
+  if (!needLoud && st.trackEnergy[id]) return;
+  const m = await measure(url);
+  if (!m) return;
+  const cur = app.get().settings;
+  updateSettings({
+    ...(needLoud ? { trackLoudness: { ...cur.trackLoudness, [id]: m.loud } } : {}),
+    ...(m.energy ? { trackEnergy: { ...cur.trackEnergy, [id]: m.energy } } : {}),
+  });
+  if (needLoud && currentTrack()?.id === id) engine.setTrim(trackTrim(id));
+}
+
+/** Энергию посчитали по пути (при разборе слов песни) — запомнить для «Моей волны». */
+export function rememberEnergy(id: string, en: TrackEnergy | undefined): void {
+  if (!en || app.get().settings.trackEnergy[id]) return;
+  updateSettings({ trackEnergy: { ...app.get().settings.trackEnergy, [id]: en } });
 }
 
 /** Своя громкость песни, дБ. */
@@ -301,6 +314,7 @@ export function startWordSync(): () => void {
     },
     pcm: songPcm,
     sr: SR,
+    energy: rememberEnergy,
     playing: () => player.get().playing,
     resetSync: (id) => {
       const st = app.get().settings;

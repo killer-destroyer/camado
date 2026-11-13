@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { createStore } from "../lib/store";
 import { app, toast } from "./app";
 import type { AsrIn, AsrOut } from "../workers/asr";
+import { tempoEnergy, type TrackEnergy } from "../../../shared/energy";
 
 /** Меньше этой доли расслышанных слов — разметке не верим (не тот текст, крик, сплошное «ля-ля»). */
 export const MIN_QUALITY = 0.3;
@@ -97,6 +98,7 @@ let currentOf: () => Track | undefined = () => undefined;
 let onReady: (id: string) => void = () => undefined;
 let resetSync: (id: string) => void = () => undefined;
 let pcmOf: (url: string) => Promise<Float32Array> = async () => new Float32Array();
+let onEnergy: (id: string, en: TrackEnergy | undefined) => void = () => undefined;
 let SR = 16000;
 const failed = new Set<string>();
 
@@ -122,6 +124,7 @@ export function initWordSync(deps: {
   resetSync: (id: string) => void;
   pcm: (url: string) => Promise<Float32Array>;
   sr: number;
+  energy?: (id: string, en: TrackEnergy | undefined) => void;
   playing?: () => boolean;
 }): void {
   if (deps.playing) isPlaying = deps.playing;
@@ -132,6 +135,7 @@ export function initWordSync(deps: {
   onReady = deps.ready;
   resetSync = deps.resetSync;
   pcmOf = deps.pcm;
+  if (deps.energy) onEnergy = deps.energy;
   SR = deps.sr;
   api.on("model-progress", (p) => {
     fileProgress.set(p.file, { loaded: p.loaded, total: p.total });
@@ -207,6 +211,8 @@ async function processTrack(t: Track): Promise<WordSync> {
   const lyrics: Lyrics = await api.lyrics.get({ title: t.title, artist: t.artist, album: t.album, duration: t.duration || undefined, trackId: t.id });
   const lines = lyrics.lines.filter((l) => l.text.trim());
   const pcm = await pcmOf(`camado-media://track/${t.id}`);
+  // заодно — темп и энергия для «Моей волны» (звук уже раскодирован)
+  onEnergy(t.id, tempoEnergy(pcm, SR));
   const duration = pcm.length / SR;
   const starts = asrWindows(duration).filter((s) => loud(pcm, s, SR));
   const language = languageOf(lines.map((l) => l.text).join(" "));

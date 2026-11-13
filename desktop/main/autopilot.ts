@@ -49,8 +49,12 @@ export function autopilotToPlan(store: Store, examId: number, opts: { hour?: num
   let n = 0;
   for (const day of plan) {
     const start = localToUtc(y, m, d + day.offset, hour, 0, opts.tz);
-    // сегодня этот час уже прошёл — ставим через час от «сейчас»
-    const at = start.getTime() < now.getTime() ? new Date(Math.ceil(now.getTime() / 900_000) * 900_000 + 3600_000) : start;
+    // сегодня этот час уже прошёл — ставим через час от «сейчас», а поздно вечером (после 22:00) сегодня не ставим
+    let at = start;
+    if (start.getTime() < now.getTime()) {
+      at = new Date(Math.ceil(now.getTime() / 900_000) * 900_000 + 3600_000);
+      if (localParts(at, opts.tz).hour >= 22 || localParts(at, opts.tz).ymd !== ymd) continue;
+    }
     const title = day.kind === "final" ? `${prefix}: повторить всё (${rangeText(day.nums)})` : `${prefix}: билеты ${rangeText(day.nums)}`;
     store.savePlanBlock({ title, startAt: at.toISOString(), minutes: day.kind === "final" ? Math.max(minutes, 90) : minutes });
     n++;
