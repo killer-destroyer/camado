@@ -142,6 +142,13 @@ const api: CamadoApi = {
     setCover: call("library.setCover") as CamadoApi["library"]["setCover"],
     resetEdit: call("library.resetEdit") as CamadoApi["library"]["resetEdit"],
   },
+  sheets: {
+    list: call("sheets.list") as CamadoApi["sheets"]["list"],
+    add: call("sheets.add") as CamadoApi["sheets"]["add"],
+    update: call("sheets.update") as CamadoApi["sheets"]["update"],
+    remove: call("sheets.remove") as CamadoApi["sheets"]["remove"],
+    check: call("sheets.check") as CamadoApi["sheets"]["check"],
+  },
   voice: { ask: call("voice.ask") as CamadoApi["voice"]["ask"] },
   lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"], aiSync: call("lyrics.aiSync") as CamadoApi["lyrics"]["aiSync"], translate: call("lyrics.translate") as CamadoApi["lyrics"]["translate"] },
   quick: { close: call("quick.close") as CamadoApi["quick"]["close"], key: call("quick.key") as CamadoApi["quick"]["key"] },

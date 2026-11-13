@@ -7998,3 +7998,56 @@ kbd,
 .vb-err {
   color: var(--u-overdue);
 }
+
+/* Слежка за таблицами */
+.sheets-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.sheets-card .card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sh-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgb(var(--text-rgb) / 0.04);
+}
+.sh-row.bad {
+  background: rgb(var(--accent-rgb) / 0.06);
+}
+.sh-main {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  cursor: pointer;
+}
+.sh-err {
+  color: var(--u-overdue);
+}
+.sh-recent {
+  flex-basis: 100%;
+  display: grid;
+  gap: 8px;
+  padding: 6px 2px 2px;
+}
+.sh-add {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 1.2fr auto;
+  gap: 8px;
+}
+@media (max-width: 760px) {
+  .sh-add {
+    grid-template-columns: 1fr;
+  }
+}

@@ -24,6 +24,20 @@ type ImportResult =
   | { kind: "choose"; links: { url: string; name: string }[] }
   | { kind: "error"; error: string };
 
+/** Таблица, за которой следит Камадо. */
+export interface SheetView {
+  id: string;
+  name: string;
+  url: string;
+  match?: string;
+  everyMin: number;
+  addedAt: string;
+  lastCheck?: string;
+  lastChange?: string;
+  recent?: { at: string; lines: string[] }[];
+  error?: string;
+}
+
 export interface Track {
   id: string;
   path: string;
@@ -473,6 +487,13 @@ export interface CamadoApi {
     /** Перевод строк на русский (той же длины). native — текст и так русский. */
     translate(lines: string[], about?: { title?: string; artist?: string }): Promise<{ lines: string[]; native?: boolean } | { error: string }>;
   };
+  sheets: {
+    list(): Promise<SheetView[]>;
+    add(input: { name?: string; url: string; match?: string; everyMin?: number }): Promise<SheetView | { error: string }>;
+    update(id: string, patch: { name?: string; match?: string; everyMin?: number }): Promise<SheetView | undefined>;
+    remove(id: string): Promise<boolean>;
+    check(id: string): Promise<{ changes: string[] } | { error: string } | undefined>;
+  };
   voice: {
     /** Голос (WAV 16 кГц base64) или уже распознанный текст → ответ Камадо. */
     ask(input: { wav?: string; text?: string }): Promise<{ answer: string; heard?: string } | { error: string }>;
@@ -536,7 +557,7 @@ export interface CamadoApi {
   notify(title: string, body: string): Promise<void>;
   /** Путь к файлу, перетащенному в окно. */
   pathForFile(file: File): string;
-  on(event: "data-changed" | "library-changed" | "media-key", cb: (payload?: unknown) => void): () => void;
+  on(event: "data-changed" | "library-changed" | "media-key" | "sheets-changed", cb: (payload?: unknown) => void): () => void;
   on(event: "download-progress", cb: (payload: { name: string; received: number; total: number }) => void): () => void;
   on(event: "reminder", cb: (payload: { text: string }) => void): () => void;
   on(event: "update-status", cb: (payload: UpdateStatus) => void): () => void;

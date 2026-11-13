@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { extractLinks, serviceOf, type FoundLink } from "../../../shared/links";
 import type { LessonLink } from "../../../shared/types";
+import { SheetsCard } from "../components/SheetsCard";
 import { api } from "../lib/api";
 import { useStore } from "../lib/store";
 import { toast } from "../state/app";
@@ -302,6 +303,7 @@ export function Links() {
       </header>
 
       <PasteBox subjects={subjects} />
+      <SheetsCard />
 
       {links.length === 0 ? (
         <Empty icon={<Link2 size={40} />} title="Здесь будут все ссылки на пары" text="Zoom, Meet, Moodle, чаты, диски преподов — вставь их выше, и они разложатся по предметам." />

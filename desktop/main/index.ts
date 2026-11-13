@@ -44,6 +44,7 @@ import { DiscordPresence } from "./discord.js";
 import { importFromHtml, importFromUrl } from "./download.js";
 import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
+import { SheetsService, sheetTools } from "./sheets.js";
 import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
@@ -225,6 +226,18 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
   }
 }
 
+// Слежка за таблицами: изменения — уведомлением, в окно и в Telegram.
+const sheets = new SheetsService(
+  store,
+  (msg) => {
+    notify("Камадо · таблица", msg);
+    send("reminder", { text: msg });
+    const owner = botOwner();
+    if (bot && owner) void bot.api.sendMessage(owner, msg).catch(() => undefined);
+  },
+  () => send("sheets-changed"),
+);
+
 const life = lifeHandlers({
   core,
   withAi,
@@ -331,6 +344,12 @@ const handlers: Record<string, Handler> = {
 
   "focus.add": (input: Parameters<typeof store.addFocusSession>[0]) => store.addFocusSession(input),
   "focus.list": (sinceIso: string) => store.listFocusSessions(new Date(sinceIso)),
+
+  "sheets.list": () => sheets.list(),
+  "sheets.add": (input: { name?: string; url: string; match?: string; everyMin?: number }) => sheets.add(input ?? { url: "" }),
+  "sheets.update": (id: string, patch: { name?: string; match?: string; everyMin?: number }) => sheets.update(id, patch ?? {}),
+  "sheets.remove": (id: string) => sheets.remove(id),
+  "sheets.check": (id: string) => sheets.check(id),
 
   "chat.history": () => store.recentChat(60),
   "chat.clear": () => store.clearChat(),
@@ -1138,6 +1157,7 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
 // ---------- Пульт для ИИ ----------
 // Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
 core.camado.setAppTools([
+  ...sheetTools(sheets),
   ...lifeTools({ handlers: life.handlers, core, timeZone: config.CAMADO_TIMEZONE, act: (a) => send("ai-action", a) }),
   ...buildAppTools({
     lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
@@ -1283,6 +1303,7 @@ void app.whenReady().then(async () => {
 
   startBot();
   updates.start();
+  sheets.start();
   startReminderLoop(
     store,
     async (text) => {
