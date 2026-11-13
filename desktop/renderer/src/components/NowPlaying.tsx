@@ -1,7 +1,7 @@
 // «Сейчас играет»: слева огромная пластинка, справа название и текст песни,
 // внизу светящиеся волны и управление. Всё в цветах обложки, трясётся в такт.
 import { useEffect, useRef, useState } from "react";
-import { AudioWaveform, ChevronDown, Crosshair, Disc3, Heart, Moon, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Vibrate, Volume1, Volume2, VolumeX } from "lucide-react";
+import { AudioWaveform, ChevronDown, Languages, Crosshair, Disc3, Heart, Moon, Pause, PictureInPicture2, Play, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, SlidersHorizontal, SlidersVertical, Sparkles, Vibrate, Volume1, Volume2, VolumeX } from "lucide-react";
 import type { LyricsMode, VisualizerStyle } from "../../../shared/settings";
 import { fmtTime } from "../lib/format";
 import { useFrame } from "../lib/frame";
@@ -10,7 +10,7 @@ import { useStore } from "../lib/store";
 import { engine } from "../lib/audio";
 import { app, toggleOverlay, updateSettings } from "../state/app";
 import { redoWords, words } from "../state/wordsync";
-import { currentTrack, cycleRepeat, duration, lyricsSyncOf, next, nowMeta, player, position, prev, resetLyricsSync, seek, setAutoLevel, setLyricsOffset, setSleep, setTrackGain, syncLyricsByEar, toggleFavorite, togglePlay } from "../state/player";
+import { currentTrack, cycleRepeat, duration, lyricsSyncOf, next, nowMeta, player, position, prev, resetLyricsSync, seek, setAutoLevel, setLyricsOffset, setSleep, setTrackGain, syncLyricsByEar, toggleFavorite, togglePlay, toggleTranslation } from "../state/player";
 import { Lyrics } from "./Lyrics";
 import { Segmented, Slider, Toggle } from "./ui";
 import { autoTrim } from "../lib/loudness";
@@ -317,6 +317,17 @@ function TrackLevel({ trackId }: { trackId: string }) {
   );
 }
 
+/** «Перевод»: строки перевода под текстом песни. */
+function TranslateButton() {
+  const on = useStore(app, (s) => s.settings.lyricsTranslate);
+  const busy = useStore(player, (s) => !!s.translation?.busy);
+  return (
+    <button className={`icon-btn ${on ? "active" : ""} ${busy ? "pulse" : ""}`} title={busy ? "Перевожу…" : on ? "Перевод: вкл (T)" : "Перевод текста на русский (T)"} onClick={toggleTranslation}>
+      <Languages size={18} />
+    </button>
+  );
+}
+
 export function SleepButton() {
   const sleep = useStore(player, (s) => s.sleep);
   const [open, setOpen] = useState(false);
@@ -500,6 +511,7 @@ export function NowPlaying() {
         <div className="np-switches">
           {hasLyrics && lyrics?.synced && track && <LyricsShift trackId={track.id} />}
           <Segmented size="sm" value={mode} options={LYRIC_MODES} onChange={(v) => updateSettings({ lyricsMode: v })} />
+          {hasLyrics && <TranslateButton />}
           <Segmented size="sm" value={vis} options={VIS_MODES} onChange={(v) => updateSettings({ visualizer: v })} />
           {track && (
             <button

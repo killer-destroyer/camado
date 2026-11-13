@@ -8,6 +8,15 @@ import { damp, layoutBurst, type BurstWord } from "../lib/dsp";
 import { useFrame } from "../lib/frame";
 import { useStore } from "../lib/store";
 import { catchLyricsLine, duration, lyricsTime, player, seek } from "../state/player";
+import { app } from "../state/app";
+
+/** Перевод строк этого текста (если включён и готов). */
+function useTranslation(lyrics: LyricsData): string[] | undefined {
+  const on = useStore(app, (s) => s.settings.lyricsTranslate);
+  const tr = useStore(player, (s) => s.translation);
+  if (!on || !tr?.lines) return undefined;
+  return tr.key === lyrics.lines.map((l) => l.text).join("\n") ? tr.lines : undefined;
+}
 
 // Совсем чуть-чуть раньше звука: глаз успевает прочитать к моменту, когда слово прозвучит.
 // Задержку самого звука (Bluetooth и т. п.) уже вычитает lyricsTime().
@@ -64,6 +73,7 @@ function FlowLyrics({ lyrics }: { lyrics: LyricsData }) {
   const y = useRef(0);
   const [active, activeRef] = useActiveLine(lyrics);
   const words = active >= 0 && lyrics.synced ? timedWords(lyrics.lines, active, duration()) : [];
+  const tr = useTranslation(lyrics);
 
   useFrame((dt) => {
     const el = box.current;
@@ -98,6 +108,7 @@ function FlowLyrics({ lyrics }: { lyrics: LyricsData }) {
               }}
             >
               {i === active && lyrics.synced ? <WordSpans ref={karaoke} words={words} /> : l.text}
+              {tr?.[i] && <div className="ly-tr">{tr[i]}</div>}
             </div>
           );
         })}
@@ -182,6 +193,7 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
   const karaoke = useRef<HTMLSpanElement>(null);
   const [active, activeRef] = useActiveLine(lyrics);
   const words = active >= 0 ? timedWords(lyrics.lines, active, duration()) : [];
+  const tr = useTranslation(lyrics);
   useFrame(() => {
     if (activeRef.current >= 0) fillWords(karaoke.current, words, lyrics.lines[activeRef.current + 1]?.time ?? duration());
   }, 21);
@@ -192,6 +204,11 @@ function LineLyrics({ lyrics }: { lyrics: LyricsData }) {
       <div key={active} className="ll-current">
         {active >= 0 ? <WordSpans ref={karaoke} words={words} /> : <span className="ll-wait">♪</span>}
       </div>
+      {tr?.[active] && (
+        <div key={`t${active}`} className="ly-tr big">
+          {tr[active]}
+        </div>
+      )}
       {nextLine && (
         <div key={`n${active}`} className="ll-next">
           {nextLine}
@@ -211,6 +228,7 @@ function KaraokeLyrics({ lyrics }: { lyrics: LyricsData }) {
   const karaoke = useRef<HTMLSpanElement>(null);
   const dots = useRef<HTMLDivElement>(null);
   const [active, activeRef] = useActiveLine(lyrics);
+  const tr = useTranslation(lyrics);
   const words = active >= 0 ? timedWords(lyrics.lines, active, duration()) : [];
   const [gap, setGap] = useState(false);
   const gapRef = useRef(false);
@@ -252,6 +270,11 @@ function KaraokeLyrics({ lyrics }: { lyrics: LyricsData }) {
           <div key={active} className="lk-current">
             {active >= 0 ? <WordSpans ref={karaoke} words={words} /> : <span className="ll-wait">♪</span>}
           </div>
+          {tr?.[active] && (
+            <div key={`t${active}`} className="ly-tr big">
+              {tr[active]}
+            </div>
+          )}
           {nextLine && (
             <div key={`n${active}`} className="lk-next">
               {nextLine}

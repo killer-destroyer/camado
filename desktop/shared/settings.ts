@@ -43,6 +43,8 @@ export interface AppSettings {
   lyricsSync: Record<string, LyricsSync>;
   /** Подгонять текст по звуку сам (ИИ слушает песню), когда текст в базе от версии другой длины. */
   lyricsByEar: boolean;
+  /** Показывать перевод текста песни под строками (ИИ переводит один раз, перевод хранится). */
+  lyricsTranslate: boolean;
   /** «Кастом»: боковая панель и главный экран. */
   custom: CustomLayout;
   /** Свои горячие клавиши: id действия → сочетание ("" — выключено). Нет в списке — стандартное. */
@@ -145,6 +147,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsOffsets: {},
   lyricsSync: {},
   lyricsByEar: true,
+  lyricsTranslate: false,
   wordSync: true,
   custom: DEFAULT_CUSTOM,
   hotkeys: {},

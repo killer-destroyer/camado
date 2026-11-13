@@ -32,6 +32,8 @@ interface PlayerState {
   earSyncing?: boolean;
   playlists: Playlist[];
   favorites: string[];
+  /** Перевод текста песни: key — для какого текста, lines — по строкам (той же длины). */
+  translation?: { key: string; lines?: string[]; native?: boolean; busy?: boolean; error?: string };
 }
 
 export const player = createStore<PlayerState>({
@@ -512,6 +514,35 @@ export function cycleRepeat(): void {
 // ---------- Тексты и палитра ----------
 
 let lyricsReq = 0;
+/** Перевод текста: включён в настройках — переводим текст играющей песни (один раз, дальше из сохранённого). */
+export async function ensureTranslation(): Promise<void> {
+  const ly = player.get().lyrics;
+  if (!app.get().settings.lyricsTranslate || !ly?.lines.length) return;
+  const lines = ly.lines.map((l) => l.text);
+  const key = lines.join("\n");
+  const cur = player.get().translation;
+  if (cur?.key === key && (cur.lines || cur.busy || cur.native)) return;
+  player.set({ translation: { key, busy: true } });
+  const meta = nowMeta();
+  const r = await api.lyrics.translate(lines, { title: meta?.title, artist: meta?.artist });
+  if (player.get().translation?.key !== key) return;
+  if ("error" in r) {
+    player.set({ translation: { key, error: r.error } });
+    toast(`Перевод: ${r.error}`, "warn");
+  } else player.set({ translation: { key, lines: r.lines, native: r.native } });
+}
+
+export function toggleTranslation(): void {
+  const on = !app.get().settings.lyricsTranslate;
+  updateSettings({ lyricsTranslate: on });
+  if (on) {
+    toast(player.get().lyrics?.lines.length ? "Перевожу текст песни…" : "Перевод включён — появится, когда будет текст песни", "info");
+    void ensureTranslation().then(() => {
+      if (player.get().translation?.native) toast("Песня и так на русском", "info");
+    });
+  }
+}
+
 export async function loadLyrics(): Promise<void> {
   const meta = nowMeta();
   const id = ++lyricsReq;
@@ -535,6 +566,7 @@ export async function loadLyrics(): Promise<void> {
     if (id === lyricsReq) {
       player.set({ lyrics: ready, lyricsLoading: false });
       void maybeAutoEar(ready, dur);
+      void ensureTranslation();
     }
   } catch {
     if (id === lyricsReq) player.set({ lyricsLoading: false });

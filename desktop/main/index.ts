@@ -17,6 +17,7 @@ import {
   net,
 } from "electron";
 import { Bot } from "grammy";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { randomInt } from "node:crypto";
 import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -43,6 +44,7 @@ import { DiscordPresence } from "./discord.js";
 import { importFromHtml, importFromUrl } from "./download.js";
 import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
+import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
 import { growHandlers } from "./grow.js";
@@ -218,7 +220,8 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
     if (err instanceof BudgetExceededError) return { error: err.message };
     if (err instanceof UnsupportedAttachmentError) return { error: err.message };
     console.error("Ошибка ИИ:", err);
-    return { error: err instanceof Error && /лимит|ключ|Gemini|модел/i.test(err.message) ? err.message : "Не получилось — проверь интернет и ключ." };
+    // наши сообщения (по-русски: нет денег на счёте, VPN, ключ, лимит) показываем как есть; чужие внутренние — общими словами
+    return { error: err instanceof Error && /[а-яё]/i.test(err.message) ? err.message : "Не получилось — проверь интернет и ключ (Настройки → ИИ → «Проверить связь»)." };
   }
 }
 
@@ -578,6 +581,23 @@ const handlers: Record<string, Handler> = {
   "library.resetEdit": (id: string) => library.resetEdit(id),
 
   "lyrics.get": (q: Parameters<LyricsService["get"]>[0]) => lyrics.get(q),
+  /** Перевод текста песни: один раз на текст, дальше — из сохранённого. */
+  "lyrics.translate": async (lines: string[], about?: { title?: string; artist?: string }) => {
+    const safe = (Array.isArray(lines) ? lines : []).slice(0, 400).map((l) => String(l ?? "").slice(0, 300));
+    if (!safe.length) return { error: "Нет текста" };
+    if (isMostlyCyrillic(safe)) return { lines: safe.map(() => ""), native: true };
+    const dir = join(dataDir, "lyrics-translate");
+    const file = join(dir, createHash("sha1").update(safe.join("\n")).digest("hex") + ".json");
+    const cached = await readFile(file, "utf8").then((t) => JSON.parse(t) as string[]).catch(() => null);
+    if (Array.isArray(cached) && cached.length === safe.length) return { lines: cached };
+    return withAi(async () => {
+      const tr = await translateLyrics(core.llm, safe, { title: about?.title?.slice(0, 200), artist: about?.artist?.slice(0, 200) });
+      if (!tr.some(Boolean)) return { error: "ИИ не прислал перевод — попробуй ещё раз" };
+      await mkdir(dir, { recursive: true });
+      await writeFile(file, JSON.stringify(tr));
+      return { lines: tr };
+    });
+  },
 
   "alarm.pickSound": async () => {
     const res = await dialog.showOpenDialog(win!, {

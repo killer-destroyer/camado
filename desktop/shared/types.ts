@@ -470,6 +470,8 @@ export interface CamadoApi {
     get(query: LyricsQuery): Promise<Lyrics>;
     /** ИИ слушает песню (WAV в base64) и называет, на какой секунде начинают петь строки с этими номерами. */
     aiSync(wav: string, lines: { n: number; text: string }[]): Promise<{ points: { n: number; t: number }[] } | { error: string }>;
+    /** Перевод строк на русский (той же длины). native — текст и так русский. */
+    translate(lines: string[], about?: { title?: string; artist?: string }): Promise<{ lines: string[]; native?: boolean } | { error: string }>;
   };
   quick: {
     /** Закрыть окно быстрой записи. */
