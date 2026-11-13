@@ -1,4 +1,5 @@
 import { importDocument } from "./camado/docs.js";
+import { DEFAULT_MINIAPP_URL, miniAppUrl, miniSnapshot, parseMiniAction, type MiniExtras } from "./miniapp.js";
 import { Bot, InlineKeyboard, type Context } from "grammy";
 import type { MessageOrigin } from "grammy/types";
 import type { Camado } from "./camado/brain.js";
@@ -92,10 +93,13 @@ export interface BotDeps {
   owner?: () => number | undefined;
   /** Привязка по коду из приложения: хозяин присылает боту код — и бот запоминает его. */
   pairing?: { code: () => string | undefined; done: (userId: number) => void };
+  /** Мини-приложение: адрес страницы, пары и деньги (есть только в программе на компьютере), запись траты. */
+  miniapp?: { url?: () => string; extras?: () => MiniExtras; spend?: (text: string) => string };
 }
 
 /** Меню команд (кнопка «/» в Telegram) — ставит сам бот при запуске, без BotFather. */
 export const BOT_COMMANDS = [
+  { command: "app", description: "Камадо мини-приложением" },
   { command: "dz", description: "что задано" },
   { command: "links", description: "ссылки по предметам" },
   { command: "new", description: "новый разговор (стереть переписку)" },
@@ -110,7 +114,7 @@ export const BOT_COMMANDS = [
   { command: "spend", description: "траты на ИИ" },
 ];
 
-export function createBot({ config, store, camado, llm, ai, checkKey, token, owner, pairing }: BotDeps): Bot {
+export function createBot({ config, store, camado, llm, ai, checkKey, token, owner, pairing, miniapp }: BotDeps): Bot {
   const botToken = token ?? config.TELEGRAM_BOT_TOKEN;
   if (!botToken) throw new Error("Не задан токен бота от @BotFather");
   const bot = new Bot(botToken);
@@ -362,6 +366,44 @@ export function createBot({ config, store, camado, llm, ai, checkKey, token, own
       `В этом месяце потрачено ~$${llm.spentThisMonth().toFixed(2)} из лимита $${config.CAMADO_MONTHLY_BUDGET_USD}.`,
     ),
   );
+
+  // ---------- Мини-приложение ----------
+
+  const appUrl = () => miniapp?.url?.() || process.env.CAMADO_MINIAPP_URL || DEFAULT_MINIAPP_URL;
+  const openApp = (ctx: Context, text = "Открывай 👇 Данные свежие на эту минуту; обновить — снова /app.") =>
+    ctx.reply(text, {
+      reply_markup: {
+        keyboard: [[{ text: "📱 Камадо", web_app: { url: miniAppUrl(appUrl(), miniSnapshot(store, tz, miniapp?.extras?.() ?? {})) } }]],
+        resize_keyboard: true,
+        is_persistent: true,
+      },
+    });
+  bot.command("app", (ctx) => openApp(ctx));
+
+  // Страница прислала действие (галочка, запись, трата) — это данные, проверяем и выполняем только известное.
+  bot.on("message:web_app_data", async (ctx) => {
+    const act = parseMiniAction(ctx.message.web_app_data.data);
+    if (!act) return void (await ctx.reply("Не понял, что прислала страница."));
+    let reply: string;
+    if (act.a === "done") {
+      const task = store.updateTask(act.id, { status: "done" });
+      reply = task ? `Отлично, отметил: ${formatTask(task, tz)}` : `Задания #${act.id} уже нет.`;
+    } else if (act.a === "spend") {
+      reply = miniapp?.spend ? miniapp.spend(act.text) : "Деньги ведутся в программе на компьютере.";
+    } else if (ai.enabled) {
+      await ctx.replyWithChatAction("typing").catch(() => undefined);
+      try {
+        reply = await camado.handle({ text: `[Из мини-приложения: записать] ${act.text}` });
+      } catch (err) {
+        reply = err instanceof Error ? err.message : "Не получилось записать.";
+      }
+    } else {
+      const parsed = parseTaskArgs(act.text, new Date(), tz);
+      reply = "error" in parsed ? `Не записал: ${parsed.error}. Формат: предмет | что сделать | срок` : `Записал: ${formatTask(store.addTask({ ...parsed, kind: "homework" }), tz)}`;
+    }
+    // ответ и сразу кнопка со свежими данными
+    await openApp(ctx, reply);
+  });
 
   // ---------- Обычный текст ----------
 

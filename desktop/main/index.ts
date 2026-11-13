@@ -45,6 +45,7 @@ import { importFromHtml, importFromUrl } from "./download.js";
 import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
 import { SheetsService, sheetTools } from "./sheets.js";
+import { moneySummary, parseMoney, type MoneyState } from "../shared/life.js";
 import { autopilotTick, autopilotToPlan, autopilotTools } from "./autopilot.js";
 import { MOODS, STREAM_HOSTS, Wave } from "./wave.js";
 import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
@@ -169,6 +170,24 @@ function startBot(): void {
     bot = createCoreBot(core, {
       token,
       owner: botOwner,
+      miniapp: {
+        // пары сегодня и деньги — их знает только программа
+        extras: () => {
+          const now = new Date();
+          const classes = (life.handlers["schedule.day"]!(now.toISOString() as never) as { startAt: string; endAt: string; subject: string; room?: string }[])
+            .filter((c) => new Date(c.endAt).getTime() > now.getTime())
+            .map((c) => ({ start: c.startAt, end: c.endAt, subject: c.subject, room: c.room }));
+          const m = moneySummary(life.handlers["money.get"]!() as MoneyState, now);
+          return { classes, money: { balance: m.balance, perDay: m.perDay, spentToday: m.spentToday, daysLeft: m.daysLeft } };
+        },
+        spend: (text) => {
+          const p = parseMoney(text);
+          if (!p) return "Не понял трату. Напиши так: «кофе 250» или «+5000 стипендия».";
+          life.handlers["money.add"]!(p.amount as never, p.title as never);
+          send("life-changed", "money");
+          return p.amount < 0 ? `Записал трату: ${p.title} — ${Math.abs(p.amount)} ₽` : `Записал: ${p.title} +${p.amount} ₽`;
+        },
+      },
       pairing: {
         code: () => (pairing && Date.now() < pairing.until ? pairing.code : undefined),
         done: (userId) => {

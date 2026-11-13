@@ -84,7 +84,7 @@ export function setAiConfig(core: CamadoCore, cfg: AiConfig, key?: string): void
   applyAi(core);
 }
 
-export function createCoreBot(core: CamadoCore, extra: Pick<BotDeps, "token" | "owner" | "pairing"> = {}): Bot {
+export function createCoreBot(core: CamadoCore, extra: Pick<BotDeps, "token" | "owner" | "pairing" | "miniapp"> = {}): Bot {
   return createBot({ ...core, checkKey: checkAnthropicKey, ...extra });
 }
 
