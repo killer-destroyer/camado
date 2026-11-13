@@ -5,7 +5,7 @@ import { deflateRawSync } from "node:zlib";
 import type { Store } from "./store.js";
 
 /** Где лежит страница. Можно поменять в .env (CAMADO_MINIAPP_URL). */
-export const DEFAULT_MINIAPP_URL = "https://killer-destroyer.github.io/camado-/miniapp/";
+export const DEFAULT_MINIAPP_URL = "https://killer-destroyer.github.io/camado/miniapp/";
 
 export interface MiniExtras {
   /** Пары сегодня: «09:30», «Матан», «ауд. 204». */
