@@ -17,6 +17,9 @@ import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
 import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSync, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
+import { handleKey, handleKeyUp } from "./state/hotkeys";
+import { Cheatsheet } from "./components/Cheatsheet";
+import { TrackEditModal } from "./components/TrackEdit";
 import { Guard } from "./components/Guard";
 import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
 import { NowPlaying } from "./components/NowPlaying";
@@ -50,6 +53,12 @@ const SCREENS: Record<ScreenId, () => React.JSX.Element> = {
   chat: Chat,
   settings: Settings,
 };
+
+function TrackEditHost() {
+  const id = useStore(app, (s) => s.trackEdit);
+  const track = useStore(player, (s) => (id ? s.library.tracks.find((t) => t.id === id) : undefined));
+  return track ? <TrackEditModal track={track} onClose={() => app.set({ trackEdit: undefined })} /> : null;
+}
 
 const isTyping = (e: KeyboardEvent) => {
   const el = e.target as HTMLElement | null;
@@ -139,25 +148,14 @@ export function App() {
     ];
 
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        app.set((s) => ({ palette: !s.palette }));
+      if (e.key === "Escape" && !isTyping(e)) {
+        app.set({ nowPlaying: false, palette: false, recap: false, cheatsheet: false });
         return;
       }
-      if (isTyping(e)) return;
-      if (e.key === "Escape") app.set({ nowPlaying: false, palette: false, recap: false });
-      else if (e.code === "Space") {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === "ArrowRight" && e.shiftKey) next();
-      else if (e.key === "ArrowLeft" && e.shiftKey) prev();
-      else if (e.key === "ArrowRight" && app.get().nowPlaying) seek(position() + 5);
-      else if (e.key === "ArrowLeft" && app.get().nowPlaying) seek(position() - 5);
-      else if (/^[1-9]$/.test(e.key) && e.altKey) {
-        const ids: ScreenId[] = ["today", "tasks", "plan", "session", "notes", "links", "grow", "music", "focus", "chat"];
-        go(ids[Number(e.key) - 1]!);
-      }
+      handleKey(e);
     };
+    const onKeyUp = () => handleKeyUp();
+    window.addEventListener("keyup", onKeyUp);
     window.addEventListener("keydown", onKey);
 
     // Для проверки дизайна (снимки экранов).
@@ -198,6 +196,7 @@ export function App() {
     return () => {
       offs.forEach((f) => f());
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("keyup", onKeyUp);
     };
   }, []);
 
@@ -221,6 +220,8 @@ export function App() {
         </Guard>
       )}
       <CommandPalette />
+      <Cheatsheet />
+      <TrackEditHost />
       <RecapModal />
       <WhatsNewModal />
       <Screensaver />

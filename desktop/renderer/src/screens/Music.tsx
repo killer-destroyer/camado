@@ -10,7 +10,6 @@ import { loadPlaylists, player, playQueue, shuffleAll, toggleFavorite } from "..
 import { CoverFlow } from "../components/CoverFlow";
 import { AmbienceMixer } from "../components/Ambience";
 import { Empty } from "../components/ui";
-import { TrackEditModal } from "../components/TrackEdit";
 
 const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
 /** Вставили код страницы, а не ссылку. */
@@ -180,7 +179,6 @@ export function Music() {
   const [tab, setTab] = useState<Tab>({ kind: "all" });
   const [top, setTop] = useState<string[]>([]);
   const [menuFor, setMenuFor] = useState<string | null>(null);
-  const [editId, setEditId] = useState<string | null>(null);
   const [freeOpen, setFreeOpen] = useState(false);
   const [ambOpen, setAmbOpen] = useState(false);
   const ambOn = useStore(app, (s) => s.settings.ambience.on && Object.values(s.settings.ambience.levels).some((v) => v > 0));
@@ -462,7 +460,7 @@ export function Music() {
                       <Plus size={15} />
                     </button>
                   )}
-                  <button className="icon-btn" title="Поправить название, исполнителя, обложку" onClick={() => setEditId(t.id)}>
+                  <button className="icon-btn" title="Поправить название, исполнителя, обложку" onClick={() => app.set({ trackEdit: t.id })}>
                     <Pencil size={14} />
                   </button>
                   {menuFor === t.id && <AddToPlaylist trackId={t.id} onDone={() => setMenuFor(null)} />}
@@ -537,7 +535,6 @@ export function Music() {
         </div>
       )}
       {drag && <div className="drop-hint">Отпусти — добавлю в библиотеку</div>}
-      {editId && byId.get(editId) && <TrackEditModal track={byId.get(editId)!} onClose={() => setEditId(null)} />}
     </div>
   );
 }

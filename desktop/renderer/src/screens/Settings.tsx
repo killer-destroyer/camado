@@ -20,6 +20,8 @@ import { Row, Segmented, Slider, Toggle } from "../components/ui";
 import { EqPanel } from "../components/Equalizer";
 import { ALARM_SOUNDS, alarmPlaying, startAlarm, stopAlarm } from "../lib/alarmSounds";
 import { ring } from "../state/alarms";
+import { bindings, comboOf, HOTKEYS, prettyCombo, rebind } from "../../../shared/hotkeys";
+import { capture, isMac } from "../state/hotkeys";
 
 function PaletteGrid({ s }: { s: AppSettings }) {
   return (
@@ -151,6 +153,71 @@ function SidebarSection() {
             </button>
           ))}
         </div>
+      )}
+    </section>
+  );
+}
+
+/** Свои горячие клавиши: нажми на сочетание — потом нужные клавиши. */
+function HotkeysSection() {
+  const custom = useStore(app, (x) => x.settings.hotkeys);
+  const [wait, setWait] = useState<string | null>(null);
+  const mac = isMac();
+  const b = bindings(custom);
+
+  useEffect(() => {
+    if (!wait) return;
+    capture.on = true;
+    const k = (e: KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") return setWait(null);
+      if (e.key === "Backspace" || e.key === "Delete") {
+        updateSettings({ hotkeys: rebind(custom, wait, "") });
+        return setWait(null);
+      }
+      const c = comboOf(e, mac);
+      if (!c) return;
+      const taken = HOTKEYS.find((a) => a.id !== wait && b.get(a.id) === c);
+      updateSettings({ hotkeys: rebind(custom, wait, c) });
+      if (taken) toast(`${prettyCombo(c, mac)} было у «${taken.label}» — там теперь пусто`, "warn");
+      setWait(null);
+    };
+    window.addEventListener("keydown", k, true);
+    return () => {
+      capture.on = false;
+      window.removeEventListener("keydown", k, true);
+    };
+  }, [wait, custom, mac]);
+
+  return (
+    <section className="set-section glass hotkeys-section">
+      <h3>Горячие клавиши</h3>
+      <div className="set-hint">
+        Нажми на сочетание и затем нужные клавиши. Backspace — убрать, Esc — отмена. Вся шпаргалка — {prettyCombo(b.get("cheatsheet") ?? "Mod+/", mac)}.
+      </div>
+      <div className="hk-list">
+        {HOTKEYS.map((a) => {
+          const changed = custom[a.id] !== undefined;
+          return (
+            <div key={a.id} className="hk-row">
+              <span>{a.label}</span>
+              <button className={`hk-key ${wait === a.id ? "wait" : ""} ${changed ? "changed" : ""}`} onClick={() => setWait(wait === a.id ? null : a.id)}>
+                {wait === a.id ? "нажми клавиши…" : prettyCombo(b.get(a.id) ?? "", mac)}
+              </button>
+              {changed && (
+                <button className="icon-btn" title={`Вернуть ${prettyCombo(a.combo, mac)}`} onClick={() => updateSettings({ hotkeys: rebind(custom, a.id, a.combo) })}>
+                  ↺
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {Object.keys(custom).length > 0 && (
+        <button className="link-btn" onClick={() => updateSettings({ hotkeys: {} })}>
+          Вернуть все как было
+        </button>
       )}
     </section>
   );
@@ -803,6 +870,7 @@ export function Settings() {
       </header>
 
       <SidebarSection />
+      <HotkeysSection />
       <BackupSection />
       <UpdatesSection />
 

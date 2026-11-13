@@ -34,6 +34,10 @@ interface AppState {
   whatsNew?: { title: string; entries: ChangelogEntry[] };
   /** Открыт ли текст песни поверх окон. */
   overlay: boolean;
+  /** Шпаргалка по горячим клавишам (Ctrl+/). */
+  cheatsheet?: boolean;
+  /** Открыта правка песни (id трека). */
+  trackEdit?: string;
   /** Написали в быстрый чат на главной — чат «Камадо» отправит это сразу, как откроется. */
   chatPending?: string;
 }

@@ -16,7 +16,7 @@ export const HOTKEYS: HotkeyAction[] = [
   { id: "palette", label: "Поиск и команды", group: "Главное", combo: "Mod+K" },
   { id: "cheatsheet", label: "Шпаргалка по клавишам", group: "Главное", combo: "Mod+/" },
   { id: "chat", label: "Спросить Камадо (чат)", group: "Главное", combo: "Mod+J" },
-  { id: "voice", label: "Голосом: зажми и говори", group: "Главное", combo: "Mod+Shift+Space" },
+  { id: "voice", label: "Сказать Камадо голосом", group: "Главное", combo: "Mod+Shift+M" },
   { id: "focus", label: "Фокус: старт / пауза", group: "Главное", combo: "F" },
   { id: "screensaver", label: "Заставка", group: "Главное", combo: "Z" },
   { id: "settings", label: "Настройки", group: "Главное", combo: "Mod+," },
