@@ -14,11 +14,12 @@ import {
   screen,
   shell,
   Tray,
+  net,
 } from "electron";
 import { Bot } from "grammy";
 import { existsSync } from "node:fs";
 import { randomInt } from "node:crypto";
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { API_KEY_KV, BOT_COMMANDS } from "../../src/bot.js";
@@ -29,7 +30,8 @@ import { heardLineTimes } from "../../src/camado/listen.js";
 import { GEMINI_MODELS, geminiKeyProblem } from "../../src/llm/gemini.js";
 import { UnsupportedAttachmentError } from "../../src/llm/types.js";
 import { cardsFromNote, splitIntoSteps, tutor } from "../../src/camado/study.js";
-import { isLocalUrl } from "../../src/llm/openai.js";
+import { isLocalUrl, serviceName } from "../../src/llm/openai.js";
+import { humanAiError, networkHint } from "../../src/llm/errors.js";
 import { KEY_KV, OPENAI_PRESETS, type AiConfig } from "../../src/llm/providers.js";
 import { checkAnthropicKey } from "../../src/llm/anthropic.js";
 import { BudgetExceededError } from "../../src/llm/metered.js";
@@ -402,6 +404,56 @@ const handlers: Record<string, Handler> = {
     }
   },
 
+  /** «Проверить связь»: интернет → сервис ИИ → ключ. Каждая строка — что проверили и что вышло. */
+  "ai.diagnose": async () => {
+    const cfg = currentAiConfig(core);
+    const key = aiKey(core, cfg.kind);
+    const out: { ok: boolean; text: string }[] = [];
+    const probe = async (url: string, init?: RequestInit) => {
+      try {
+        return await fetch(url, { ...init, signal: AbortSignal.timeout(12_000) });
+      } catch {
+        return undefined;
+      }
+    };
+    const net0 = await probe("https://www.gstatic.com/generate_204");
+    out.push(net0 ? { ok: true, text: "Интернет есть" } : { ok: false, text: "Нет интернета (или он закрыт для программ) — проверь сеть" });
+    if (cfg.kind === "gemini") {
+      const r = await probe("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", key ? { headers: { "x-goog-api-key": key } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint("Gemini") });
+      else if (r.ok) out.push({ ok: true, text: "Gemini доступен, ключ подходит ✓" });
+      else {
+        const d = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        out.push({ ok: false, text: humanAiError("Gemini", r.status, d.error?.message ?? "") });
+      }
+    } else if (cfg.kind === "openai" && cfg.baseUrl) {
+      const base = cfg.baseUrl.replace(/\/$/, "");
+      const name = serviceName(base);
+      const r = await probe(`${base}/models`, key ? { headers: { Authorization: `Bearer ${key}` } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint(name) });
+      else if (r.ok) out.push({ ok: true, text: `${name} доступен ✓` });
+      else {
+        const d = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        out.push({ ok: false, text: humanAiError(name, r.status, d.error?.message ?? "") });
+      }
+      if (/openrouter/i.test(base) && key) {
+        const k = await probe("https://openrouter.ai/api/v1/key", { headers: { Authorization: `Bearer ${key}` } });
+        const d = k?.ok ? ((await k.json().catch(() => ({}))) as { data?: { is_free_tier?: boolean; limit_remaining?: number | null } }) : undefined;
+        if (d?.data) {
+          const model = cfg.models?.brain ?? "";
+          if (d.data.is_free_tier && d.data.limit_remaining === 0 && !model.endsWith(":free"))
+            out.push({ ok: false, text: "Ключ OpenRouter бесплатный (денег 0) — модель должна быть с «:free» в названии, например nvidia/nemotron-3-ultra-550b-a55b:free" });
+          else out.push({ ok: true, text: d.data.is_free_tier ? "Ключ OpenRouter рабочий (бесплатный: до ~50 запросов в день)" : "Ключ OpenRouter рабочий" });
+        } else if (k) out.push({ ok: false, text: humanAiError("OpenRouter", k.status) });
+      }
+    } else if (cfg.kind === "anthropic") {
+      const r = await probe("https://api.anthropic.com/v1/models", key ? { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint("Anthropic") });
+      else out.push(r.ok ? { ok: true, text: "Claude доступен, ключ подходит ✓" } : { ok: false, text: humanAiError("Anthropic", r.status) });
+    }
+    if (!key && cfg.kind !== "openai") out.push({ ok: false, text: "Ключ не вставлен" });
+    return out;
+  },
   "ai.status": () => {
     const cfg = currentAiConfig(core);
     const key = aiKey(core, cfg.kind);
@@ -515,6 +567,15 @@ const handlers: Record<string, Handler> = {
   "library.addPaths": (paths: string[]) => library.addPaths(paths),
   "library.removeFolder": (path: string) => library.removeFolder(path),
   "library.rescan": () => library.rescan(),
+  "library.edit": (id: string, patch: Parameters<Library["edit"]>[1]) => library.edit(id, patch ?? {}),
+  "library.setCover": async (id: string, image?: { data: string; mime: string }) => {
+    if (image?.data) return library.setCover(id, Buffer.from(image.data, "base64"), image.mime);
+    const res = await dialog.showOpenDialog({ title: "Обложка", properties: ["openFile"], filters: [{ name: "Картинки", extensions: ["jpg", "jpeg", "png", "webp"] }] });
+    const f = res.filePaths[0];
+    if (res.canceled || !f) return library.track(id);
+    return library.setCover(id, await readFile(f), /\.png$/i.test(f) ? "image/png" : /\.webp$/i.test(f) ? "image/webp" : "image/jpeg");
+  },
+  "library.resetEdit": (id: string) => library.resetEdit(id),
 
   "lyrics.get": (q: Parameters<LyricsService["get"]>[0]) => lyrics.get(q),
 
@@ -1049,6 +1110,7 @@ core.camado.setAppTools([
   ...buildAppTools({
     lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
     tracks: () => library.view().tracks,
+    editTrack: (id, patch) => library.edit(id, patch),
     playlists: () => store.listPlaylists(),
     favorites: () => store.listFavorites(),
     nowPlaying: () => nowPlaying,
@@ -1120,6 +1182,15 @@ function enableSecretStorage(): void {
 }
 
 void app.whenReady().then(async () => {
+  // Сеть — через Chromium (как у браузера): так работают системный прокси и VPN в режиме «прокси» на Windows и Mac.
+  // Без этого Камадо шёл в интернет напрямую, и, например, Gemini отвечал «страна не поддерживается».
+  if (!process.env.CAMADO_NODE_FETCH) {
+    const nodeFetch = globalThis.fetch;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      return /^https?:/i.test(url) ? net.fetch(input as string, init as never) : nodeFetch(input, init);
+    }) as typeof fetch;
+  }
   enableSecretStorage();
   protocol.handle("camado-media", async (req) => {
     const url = new URL(req.url);

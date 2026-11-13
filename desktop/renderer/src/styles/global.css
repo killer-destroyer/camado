@@ -7753,3 +7753,44 @@ a.btn {
     right: 4px;
   }
 }
+
+/* Мини-плеер: шаффл, повтор, любимое, режим звука и таймер сна — без открытия большого плеера */
+.miniplayer .mp-opt {
+  opacity: 0.7;
+}
+.miniplayer .mp-opt.active,
+.miniplayer .mp-extra .icon-btn.active {
+  opacity: 1;
+  color: var(--accent);
+}
+.mp-extra {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.mp-extra .sleep-menu {
+  transform: none;
+  bottom: calc(100% + 14px);
+  top: auto;
+  right: 0;
+  left: auto;
+}
+
+/* «Проверить связь» в Настройках → ИИ */
+.ai-diag {
+  margin: 10px 0;
+}
+.ai-diag ul {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.ai-diag li.ok {
+  color: var(--accent-3);
+}
+.ai-diag li.bad {
+  color: var(--u-overdue);
+}

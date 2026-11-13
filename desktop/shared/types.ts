@@ -36,6 +36,8 @@ export interface Track {
   cover?: string;
   /** Есть .lrc рядом с файлом или текст в тегах. */
   hasLyrics: boolean;
+  /** Название/исполнитель/обложка поправлены в Камадо (файл не менялся). */
+  edited?: boolean;
 }
 
 export interface LyricsWord {
@@ -94,6 +96,8 @@ export interface AiStatus {
 
 /** Что играет — для мини-плеера в меню-баре, трея и Discord. */
 export interface NowPlayingState {
+  /** id трека в библиотеке. */
+  trackId?: string;
   title: string;
   artist: string;
   cover?: string;
@@ -430,6 +434,8 @@ export interface CamadoApi {
     clear(): Promise<void>;
   };
   ai: {
+    /** Проверить связь: интернет → сервис → ключ, по строкам. */
+    diagnose(): Promise<{ ok: boolean; text: string }[]>;
     status(): Promise<AiStatus>;
     setKey(key: string): Promise<{ ok: boolean; error?: string }>;
     /** Выбрать нейросеть (Gemini, Claude, OpenAI-совместимая) и ключ к ней. */
@@ -454,6 +460,11 @@ export interface CamadoApi {
     addPaths(paths: string[]): Promise<LibraryState>;
     removeFolder(path: string): Promise<LibraryState>;
     rescan(): Promise<LibraryState>;
+    /** Правка трека: null — вернуть как в файле. */
+    edit(id: string, patch: { title?: string | null; artist?: string | null; album?: string | null; cover?: string | null }): Promise<Track | undefined>;
+    /** Своя обложка: выбрать картинку на компьютере (без data — откроется окно выбора). */
+    setCover(id: string, image?: { data: string; mime: string }): Promise<Track | undefined>;
+    resetEdit(id: string): Promise<Track | undefined>;
   };
   lyrics: {
     get(query: LyricsQuery): Promise<Lyrics>;

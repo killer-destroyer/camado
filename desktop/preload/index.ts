@@ -116,6 +116,7 @@ const api: CamadoApi = {
     clear: call("chat.clear") as CamadoApi["chat"]["clear"],
   },
   ai: {
+    diagnose: call("ai.diagnose") as CamadoApi["ai"]["diagnose"],
     status: call("ai.status") as CamadoApi["ai"]["status"],
     setKey: call("ai.setKey") as CamadoApi["ai"]["setKey"],
     connect: call("ai.connect") as CamadoApi["ai"]["connect"],
@@ -137,6 +138,9 @@ const api: CamadoApi = {
     addPaths: call("library.addPaths") as CamadoApi["library"]["addPaths"],
     removeFolder: call("library.removeFolder") as CamadoApi["library"]["removeFolder"],
     rescan: call("library.rescan") as CamadoApi["library"]["rescan"],
+    edit: call("library.edit") as CamadoApi["library"]["edit"],
+    setCover: call("library.setCover") as CamadoApi["library"]["setCover"],
+    resetEdit: call("library.resetEdit") as CamadoApi["library"]["resetEdit"],
   },
   lyrics: { get: call("lyrics.get") as CamadoApi["lyrics"]["get"], aiSync: call("lyrics.aiSync") as CamadoApi["lyrics"]["aiSync"] },
   quick: { close: call("quick.close") as CamadoApi["quick"]["close"], key: call("quick.key") as CamadoApi["quick"]["key"] },

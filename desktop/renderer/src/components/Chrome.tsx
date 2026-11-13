@@ -25,6 +25,10 @@ import {
   VolumeX,
   Wallet,
   MoreHorizontal,
+  Shuffle,
+  Repeat,
+  Repeat1,
+  Heart,
 } from "lucide-react";
 import { useNarrow } from "../lib/narrow";
 import { fps, useFrame } from "../lib/frame";
@@ -32,8 +36,8 @@ import { PALETTES } from "../lib/palettes";
 import { useStore } from "../lib/store";
 import { api } from "../lib/api";
 import { app, go, toggleOverlay, updateSettings, type ScreenId } from "../state/app";
-import { next, nowMeta, player, prev, togglePlay } from "../state/player";
-import { Progress } from "./NowPlaying";
+import { currentTrack, cycleRepeat, next, nowMeta, player, prev, toggleFavorite, togglePlay } from "../state/player";
+import { Progress, SleepButton, SoundMenu } from "./NowPlaying";
 import { Slider } from "./ui";
 import { MiniSpectrum } from "./Visualizer";
 
@@ -152,7 +156,12 @@ function DesktopSidebar() {
 
 export function MiniPlayer() {
   const playing = useStore(player, (s) => s.playing);
+  const shuffle = useStore(player, (s) => s.shuffle);
+  const repeat = useStore(player, (s) => s.repeat);
+  const favorites = useStore(player, (s) => s.favorites);
   useStore(player, (s) => s.index);
+  const track = currentTrack();
+  const fav = !!track && favorites.includes(track.id);
   const volume = useStore(app, (s) => s.settings.volume);
   const overlayOn = useStore(app, (s) => s.overlay);
   const meta = nowMeta();
@@ -172,6 +181,9 @@ export function MiniPlayer() {
       </div>
       <div className="mp-center">
         <div className="mp-controls">
+          <button className={`icon-btn mp-opt ${shuffle ? "active" : ""}`} onClick={() => player.set({ shuffle: !shuffle })} title={shuffle ? "Умный рандом: вкл" : "Умный рандом: выкл"}>
+            <Shuffle size={16} />
+          </button>
           <button className="icon-btn" onClick={prev} title="Назад">
             <SkipBack size={18} fill="currentColor" />
           </button>
@@ -181,10 +193,22 @@ export function MiniPlayer() {
           <button className="icon-btn" onClick={() => next()} title="Дальше">
             <SkipForward size={18} fill="currentColor" />
           </button>
+          <button className={`icon-btn mp-opt ${repeat !== "off" ? "active" : ""}`} onClick={cycleRepeat} title={repeat === "one" ? "Повтор песни" : repeat === "all" ? "Повтор списка" : "Без повтора"}>
+            {repeat === "one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
+          </button>
         </div>
         <Progress />
       </div>
       <MiniSpectrum />
+      <div className="mp-extra">
+        {track && (
+          <button className={`icon-btn ${fav ? "active" : ""}`} title={fav ? "Убрать из любимого" : "В любимое"} onClick={() => void toggleFavorite(track.id)}>
+            <Heart size={17} fill={fav ? "currentColor" : "none"} />
+          </button>
+        )}
+        <SoundMenu />
+        <SleepButton />
+      </div>
       <button className={`icon-btn ${overlayOn ? "active" : ""}`} title="Текст песни поверх всех окон" onClick={() => void toggleOverlay()}>
         <Sparkles size={18} />
       </button>

@@ -1,5 +1,6 @@
 // Google Gemini через официальный REST API (generativelanguage.googleapis.com).
 // Бесплатный ключ — aistudio.google.com. Умеет инструменты, картинки и голос.
+import { isLocationError, LOCATION_HINT, networkHint } from "./errors.js";
 import type { AgentRequest, AgentResult, LLMProvider, Tier, Usage } from "./types.js";
 
 // Проверено вживую (ноябрь 2026, бесплатный ключ): самые новые flash (3.7, 3.8, «flash-latest») часто зависают
@@ -100,7 +101,8 @@ export class GeminiProvider implements LLMProvider {
     /** Бесплатный тариф — запросы ничего не стоят (для учёта трат). */
     private free = true,
     private price: { input: number; output: number } = { input: 0, output: 0 },
-    private fetchImpl: typeof fetch = fetch,
+    // берём fetch в момент запроса: в программе он подменяется на сетевой стек Chromium (системный прокси и VPN)
+    private fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   async runAgent(req: AgentRequest): Promise<AgentResult> {
@@ -143,7 +145,7 @@ export class GeminiProvider implements LLMProvider {
         } catch (err) {
           // зависла (не ответила вовремя) или оборвалась связь
           const timeout = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
-          failed = new GeminiError(timeout ? "Gemini слишком долго не отвечает. Попробуй ещё раз чуть позже." : "Нет связи с Gemini. Проверь интернет.", timeout ? 504 : 0);
+          failed = new GeminiError(timeout ? "Gemini слишком долго не отвечает. Попробуй ещё раз чуть позже." : networkHint("Gemini"), timeout ? 504 : 0);
           if (!timeout) throw failed;
         }
         if (!failed) break;
@@ -203,6 +205,7 @@ export class GeminiProvider implements LLMProvider {
 }
 
 function geminiMessage(status: number, data: GenerateResponse): string {
+  if (isLocationError(data.error?.message ?? "")) return LOCATION_HINT;
   if (status === 429) return "Бесплатный лимит Gemini на сегодня закончился. Завтра снова заработает — или подключи другую модель в Настройках → ИИ.";
   if (status === 400 && /API key/i.test(data.error?.message ?? "")) return "Google не принял ключ Gemini. Проверь его в Настройках → ИИ.";
   if (status === 403) return "У ключа Gemini нет доступа. Создай новый на aistudio.google.com.";
@@ -223,6 +226,7 @@ export async function geminiKeyProblem(apiKey: string, fetchImpl: typeof fetch =
   if (res.ok) return undefined;
   const data = (await res.json().catch(() => ({}))) as { error?: { message?: string; status?: string; details?: { reason?: string }[] } };
   const reason = [data.error?.status, data.error?.message, ...(data.error?.details ?? []).map((d) => d.reason)].join(" ");
+  if (isLocationError(reason)) return LOCATION_HINT;
   if (res.status === 400 || res.status === 401 || res.status === 403) {
     if (/ACCESS_TOKEN_TYPE_UNSUPPORTED|SERVICE_BLOCKED|SERVICE_DISABLED/i.test(reason))
       return "Google не пустил этот ключ к Gemini API. Создай новый ключ на aistudio.google.com (Create API key → «Create API key in new project») и вставь его.";

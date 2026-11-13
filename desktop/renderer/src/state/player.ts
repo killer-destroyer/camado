@@ -274,7 +274,12 @@ export function duration(): number {
 // ---------- Библиотека ----------
 
 export async function loadLibrary(): Promise<void> {
-  player.set({ library: await api.library.get() });
+  const library = await api.library.get();
+  // поправили название или обложку — очередь показывает новое
+  const byId = new Map(library.tracks.map((t) => [t.id, t]));
+  const queue = player.get().queue;
+  const fresh = queue.map((t) => byId.get(t.id) ?? t);
+  player.set(fresh.some((t, i) => t !== queue[i]) ? { library, queue: fresh } : { library });
   kickWords();
 }
 

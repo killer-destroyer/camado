@@ -17,7 +17,7 @@ export function NowPlayingFeed() {
     const push = () => {
       const m = nowMeta();
       const state: NowPlayingState | null = m
-        ? { title: m.title, artist: m.artist, cover: m.cover, playing: player.get().playing, position: position(), duration: duration(), sentAt: Date.now() }
+        ? { trackId: currentTrack()?.id, title: m.title, artist: m.artist, cover: m.cover, playing: player.get().playing, position: position(), duration: duration(), sentAt: Date.now() }
         : null;
       const key = state ? `${state.title}|${state.playing}|${Math.round(state.position)}` : "";
       if (key === last.current) return;

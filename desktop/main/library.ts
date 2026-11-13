@@ -13,10 +13,33 @@ interface Indexed extends Track {
   mtime: number;
 }
 
+/** Своя правка трека: файл не трогаем, правка хранится у нас и накладывается поверх тегов. */
+export interface TrackEdit {
+  title?: string;
+  artist?: string;
+  album?: string;
+  /** camado-media://cover/… */
+  cover?: string;
+}
+
 interface Saved {
   folders: string[];
   files: string[];
   tracks: Indexed[];
+  edits?: Record<string, TrackEdit>;
+}
+
+/** Накладывает правку на трек (пустые поля правки не считаются). */
+export function applyEdit<T extends Track>(t: T, e: TrackEdit | undefined): T {
+  if (!e) return t;
+  return {
+    ...t,
+    ...(e.title?.trim() ? { title: e.title.trim() } : {}),
+    ...(e.artist?.trim() ? { artist: e.artist.trim() } : {}),
+    ...(e.album !== undefined ? { album: e.album.trim() } : {}),
+    ...(e.cover ? { cover: e.cover } : {}),
+    edited: true,
+  };
 }
 
 export const trackId = (path: string) => createHash("sha1").update(path).digest("hex");
@@ -50,7 +73,7 @@ export class Library {
     if (existsSync(this.file)) {
       try {
         const saved = JSON.parse(await readFile(this.file, "utf8")) as Saved;
-        this.state = { folders: saved.folders ?? [], files: saved.files ?? [], tracks: saved.tracks ?? [] };
+        this.state = { folders: saved.folders ?? [], files: saved.files ?? [], tracks: saved.tracks ?? [], edits: saved.edits ?? {} };
       } catch (err) {
         console.error("library.json повреждён, начинаю заново:", err);
       }
@@ -67,8 +90,9 @@ export class Library {
   }
 
   view(): LibraryState {
+    const edits = this.state.edits ?? {};
     const tracks = this.state.tracks
-      .map(({ mtime: _m, ...t }) => t)
+      .map(({ mtime: _m, ...t }) => applyEdit(t, edits[t.id]))
       .sort((a, b) => a.artist.localeCompare(b.artist, "ru") || a.album.localeCompare(b.album, "ru") || a.title.localeCompare(b.title, "ru"));
     return { folders: [...this.state.folders], tracks, scanning: this.scanning };
   }
@@ -76,6 +100,50 @@ export class Library {
   /** Путь к файлу трека — только для треков из библиотеки (защита от чтения чего попало). */
   trackPath(id: string): string | undefined {
     return this.byId.get(id)?.path;
+  }
+
+  /** Трек с учётом правки — для ИИ и для поиска текста песни. */
+  track(id: string): Track | undefined {
+    const t = this.byId.get(id);
+    if (!t) return undefined;
+    const { mtime: _m, ...rest } = t;
+    return applyEdit(rest, this.state.edits?.[id]);
+  }
+
+  /** Поправить название/исполнителя/альбом. null в поле — вернуть как в файле. */
+  async edit(id: string, patch: { title?: string | null; artist?: string | null; album?: string | null; cover?: string | null }): Promise<Track | undefined> {
+    if (!this.byId.has(id)) return undefined;
+    const edits = (this.state.edits ??= {});
+    const cur: TrackEdit = { ...edits[id] };
+    for (const k of ["title", "artist", "album", "cover"] as const) {
+      const v = patch[k];
+      if (v === undefined) continue;
+      if (v === null) delete cur[k];
+      else cur[k] = k === "cover" ? v : v.trim().slice(0, 200);
+    }
+    if (Object.keys(cur).length) edits[id] = cur;
+    else delete edits[id];
+    await this.save();
+    this.onChange();
+    return this.track(id);
+  }
+
+  /** Своя обложка из картинки (байты) → файл в covers, ссылка в правку. */
+  async setCover(id: string, data: Uint8Array, mime: string): Promise<Track | undefined> {
+    if (!this.byId.has(id) || data.byteLength === 0 || data.byteLength > 15 * 1024 * 1024) return undefined;
+    const e = /png/.test(mime) ? "png" : /webp/.test(mime) ? "webp" : "jpg";
+    const name = `${createHash("sha1").update(data).digest("hex")}.${e}`;
+    const file = join(this.coversDir, name);
+    if (!existsSync(file)) await writeFile(file, data);
+    return this.edit(id, { cover: `camado-media://cover/${name}` });
+  }
+
+  /** Убрать все правки трека. */
+  async resetEdit(id: string): Promise<Track | undefined> {
+    if (this.state.edits) delete this.state.edits[id];
+    await this.save();
+    this.onChange();
+    return this.track(id);
   }
 
   coverPath(name: string): string | undefined {

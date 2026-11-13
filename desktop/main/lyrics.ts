@@ -90,7 +90,8 @@ export class LyricsService {
   constructor(
     private cacheDir: string,
     private trackPath: (id: string) => string | undefined,
-    private fetchImpl: typeof fetch = fetch,
+    // берём fetch в момент запроса: в программе он подменяется на сетевой стек Chromium (системный прокси и VPN)
+    private fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   async get(q: LyricsQuery): Promise<Lyrics> {

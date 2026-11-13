@@ -25,6 +25,8 @@ export interface AppToolDeps {
   act(action: AppAction): void;
   showWindow(): void;
   window(action: "hide" | "minimize" | "fullscreen" | "windowed" | "quit" | "restart"): void;
+  /** Правка трека (название, исполнитель, альбом; null — как в файле). */
+  editTrack?(id: string, patch: { title?: string | null; artist?: string | null; album?: string | null }): Promise<Track | undefined>;
   /** Уроки «Прокачки» — чтобы открыть нужный по словам. */
   lessons?(): { course: string; id: string; title: string; module: string }[];
 }
@@ -137,6 +139,37 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         }
         d.act({ type: "music", action: i.action });
         return { pause: "Пауза.", resume: "Продолжаю.", next: "Следующая.", prev: "Предыдущая." }[i.action];
+      },
+    }),
+
+    defineTool({
+      name: "app_track_edit",
+      description:
+        "Поправить у песни в библиотеке название, исполнителя или альбом (файл не меняется, правка хранится в Камадо). " +
+        "Песня — та, что играет сейчас (track не указан), или найденная по словам track. reset=true — вернуть всё как в файле.",
+      schema: z.object({
+        track: z.string().optional().describe("Какую песню: название/исполнитель. Пусто — та, что играет сейчас"),
+        title: z.string().optional(),
+        artist: z.string().optional(),
+        album: z.string().optional(),
+        reset: z.boolean().optional(),
+      }),
+      run: async (i) => {
+        if (!d.editTrack) return "Правка треков здесь недоступна.";
+        const tracks = d.tracks();
+        let t: Track | undefined;
+        if (i.track) {
+          const found = findMusic(i.track, tracks, [], []);
+          t = found?.ids.length === 1 || found ? tracks.find((x) => x.id === found!.ids[0]) : undefined;
+        } else {
+          const np = d.nowPlaying();
+          t = np ? tracks.find((x) => x.id === np.trackId) : undefined;
+        }
+        if (!t) return i.track ? `Не нашёл в библиотеке «${i.track}».` : "Сейчас ничего не играет — скажи, какую песню поправить.";
+        const was = `«${t.title}» — ${t.artist}`;
+        const res = await d.editTrack(t.id, i.reset ? { title: null, artist: null, album: null } : { title: i.title, artist: i.artist, album: i.album });
+        if (!res) return "Не получилось поправить.";
+        return i.reset ? `Вернул как в файле: «${res.title}» — ${res.artist}.` : `Было ${was}, стало «${res.title}» — ${res.artist}${res.album ? ` (альбом «${res.album}»)` : ""}.`;
       },
     }),
 

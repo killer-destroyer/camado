@@ -420,12 +420,43 @@ function AiSection() {
           {busy ? "Проверяю…" : current && !key ? "Сохранить" : "Подключить"}
         </button>
       </div>
+      <DiagnoseRow />
       <div className="set-hint">
         Ключ проверяется бесплатным запросом и хранится только у тебя на компьютере, в зашифрованном виде.
         {kind === "gemini" &&
           " На бесплатном тарифе Google может использовать запросы для улучшения своих моделей, и есть дневной лимит — когда он кончится, Камадо скажет и перейдёт в ручной режим до завтра."}
       </div>
     </section>
+  );
+}
+
+/** «Проверить связь»: есть ли интернет, доступен ли сервис ИИ, подходит ли ключ — человеческим языком. */
+function DiagnoseRow() {
+  const [res, setRes] = useState<{ ok: boolean; text: string }[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="ai-diag">
+      <button
+        className="btn sm"
+        disabled={busy}
+        onClick={async () => {
+          setBusy(true);
+          setRes(await api.ai.diagnose());
+          setBusy(false);
+        }}
+      >
+        {busy ? "Проверяю…" : "Проверить связь"}
+      </button>
+      {res && (
+        <ul>
+          {res.map((r, i) => (
+            <li key={i} className={r.ok ? "ok" : "bad"}>
+              {r.ok ? "✓" : "✕"} {r.text}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

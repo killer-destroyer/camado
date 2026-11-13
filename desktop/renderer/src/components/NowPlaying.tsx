@@ -161,7 +161,7 @@ const SOUND = [
 ];
 
 /** Режим звука и его скорость: ползунок, чтобы nightcore не был бешеным, а slowed — слишком тягучим. */
-function SoundMenu() {
+export function SoundMenu() {
   const mode = useStore(app, (s) => s.settings.soundMode);
   const slowed = useStore(app, (s) => s.settings.slowedRate);
   const nightcore = useStore(app, (s) => s.settings.nightcoreRate);
@@ -317,7 +317,7 @@ function TrackLevel({ trackId }: { trackId: string }) {
   );
 }
 
-function SleepButton() {
+export function SleepButton() {
   const sleep = useStore(player, (s) => s.sleep);
   const [open, setOpen] = useState(false);
   const [, tick] = useState(0);

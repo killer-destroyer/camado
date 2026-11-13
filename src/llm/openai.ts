@@ -1,5 +1,6 @@
 // Любая модель с «OpenAI-совместимым» API: OpenRouter, DeepSeek, Groq, GLM, а также своя на компьютере
 // (Ollama, LM Studio). Адрес, ключ и названия моделей задаются в Настройках → ИИ.
+import { humanAiError, networkHint } from "./errors.js";
 import type { AgentRequest, AgentResult, LLMProvider, Tier, Usage } from "./types.js";
 
 interface Msg {
@@ -32,7 +33,8 @@ export const isLocalUrl = (url: string) => /^https?:\/\/(localhost|127\.0\.0\.1|
 export class OpenAiCompatProvider implements LLMProvider {
   constructor(
     private o: OpenAiOptions,
-    private fetchImpl: typeof fetch = fetch,
+    // берём fetch в момент запроса: в программе он подменяется на сетевой стек Chromium (системный прокси и VPN)
+    private fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   async runAgent(req: AgentRequest): Promise<AgentResult> {
@@ -73,12 +75,13 @@ export class OpenAiCompatProvider implements LLMProvider {
           ...(openrouter ? { usage: { include: true } } : {}),
         }),
         signal: AbortSignal.timeout(120_000),
+      }).catch((err: unknown) => {
+        if (err instanceof Error && /timeout|aborted/i.test(err.name + err.message)) throw new Error(`${serviceName(this.o.baseUrl)} слишком долго не отвечает. Попробуй ещё раз.`);
+        throw new Error(networkHint(serviceName(this.o.baseUrl)));
       });
       const data = (await res.json().catch(() => ({}))) as ChatResponse;
       if (!res.ok) {
-        if (res.status === 429) throw new Error("Лимит запросов у этой модели закончился. Попробуй позже или выбери другую в Настройках → ИИ.");
-        if (res.status === 401) throw new Error("Сервис не принял ключ. Проверь его в Настройках → ИИ.");
-        throw new Error(`Модель ответила ошибкой ${res.status}${data.error?.message ? `: ${data.error.message}` : ""}`);
+        throw new Error(humanAiError(serviceName(this.o.baseUrl), res.status, data.error?.message ?? ""));
       }
       req.onUsage?.(this.usage(model, data));
       const choice = data.choices?.[0];
@@ -120,4 +123,22 @@ export class OpenAiCompatProvider implements LLMProvider {
             : undefined;
     return { model: data.model ?? model, inputTokens: input, outputTokens: output, cacheReadTokens: u.prompt_tokens_details?.cached_tokens ?? 0, cacheWriteTokens: 0, costUsd: cost };
   }
+}
+
+/** «openrouter.ai» → «OpenRouter» — для понятных сообщений об ошибках. */
+export function serviceName(baseUrl: string): string {
+  const host = (() => {
+    try {
+      return new URL(baseUrl).hostname;
+    } catch {
+      return baseUrl;
+    }
+  })();
+  if (/openrouter/i.test(host)) return "OpenRouter";
+  if (/deepseek/i.test(host)) return "DeepSeek";
+  if (/openai\.com/i.test(host)) return "OpenAI";
+  if (/localhost|127\.0\.0\.1/i.test(host)) return "локальная модель";
+  if (/groq/i.test(host)) return "Groq";
+  if (/mistral/i.test(host)) return "Mistral";
+  return host || "сервис";
 }
