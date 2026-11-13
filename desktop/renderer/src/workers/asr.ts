@@ -91,8 +91,13 @@ function load(): Promise<AutomaticSpeechRecognitionPipeline> {
   return asr;
 }
 
-self.onmessage = async (e: MessageEvent<AsrIn>) => {
-  const m = e.data;
+// По одному запросу за раз: песня в фоне и голос («Камадо, …») не должны считать одновременно.
+let chain: Promise<void> = Promise.resolve();
+self.onmessage = (e: MessageEvent<AsrIn>) => {
+  chain = chain.then(() => handle(e.data)).catch(() => undefined);
+};
+
+async function handle(m: AsrIn): Promise<void> {
   if (m.type === "warm") {
     try {
       await load();
@@ -125,4 +130,4 @@ self.onmessage = async (e: MessageEvent<AsrIn>) => {
   } catch (err) {
     post({ type: "error", id: m.id, message: err instanceof Error ? err.message : String(err) });
   }
-};
+}

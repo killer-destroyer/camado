@@ -44,10 +44,26 @@ export interface Recording {
   cancel(): void;
 }
 
-/** Начать запись с микрофона (до 2 минут). */
-export async function startRecording(): Promise<Recording> {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+/** Начать запись с микрофона (до 2 минут). onLevel — громкость голоса ~20 раз в секунду (для «слушаю» и тишины). */
+export async function startRecording(opts: { onLevel?: (rms: number) => void; stream?: MediaStream } = {}): Promise<Recording> {
+  const stream = opts.stream ?? (await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } }));
   const rec = new MediaRecorder(stream);
+  let meter: { ctx: AudioContext; timer: number } | undefined;
+  if (opts.onLevel) {
+    const ctx = new AudioContext();
+    const an = ctx.createAnalyser();
+    an.fftSize = 1024;
+    ctx.createMediaStreamSource(stream).connect(an);
+    const buf = new Float32Array(an.fftSize);
+    const cb = opts.onLevel;
+    const timer = window.setInterval(() => {
+      an.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i]! * buf[i]!;
+      cb(Math.sqrt(sum / buf.length));
+    }, 50);
+    meter = { ctx, timer };
+  }
   const chunks: Blob[] = [];
   rec.ondataavailable = (e) => e.data.size && chunks.push(e.data);
   rec.start();
@@ -55,7 +71,13 @@ export async function startRecording(): Promise<Recording> {
   const limit = window.setTimeout(() => rec.state === "recording" && rec.stop(), 120_000);
   const finish = () => {
     clearTimeout(limit);
-    stream.getTracks().forEach((t) => t.stop());
+    if (meter) {
+      clearInterval(meter.timer);
+      void meter.ctx.close();
+      meter = undefined;
+    }
+    // общий поток (слушаем «Камадо») не закрываем — он нужен дальше
+    if (!opts.stream) stream.getTracks().forEach((t) => t.stop());
   };
   return {
     cancel() {
@@ -86,4 +108,19 @@ export async function startRecording(): Promise<Recording> {
         else rec.onstop?.(new Event("stop"));
       }),
   };
+}
+
+/** WAV 16 кГц (base64) → отсчёты для распознавания на компьютере. */
+export function wavToPcm(b64: string): Float32Array {
+  const bin = atob(b64);
+  const n = Math.max(0, (bin.length - 44) >> 1);
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const lo = bin.charCodeAt(44 + i * 2);
+    const hi = bin.charCodeAt(45 + i * 2);
+    let v = (hi << 8) | lo;
+    if (v >= 0x8000) v -= 0x10000;
+    out[i] = v / 0x8000;
+  }
+  return out;
 }

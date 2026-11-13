@@ -1,8 +1,12 @@
 // «Камадо»: разговор с ассистентом (тот же, что отвечает в Telegram).
 import { useEffect, useRef, useState } from "react";
-import { KeyRound, MessageSquarePlus, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
+import { KeyRound, MessageSquarePlus, Mic, Paperclip, SendHorizontal, Sparkles } from "lucide-react";
+import { prettyCombo, bindings } from "../../../shared/hotkeys";
+import { isMac } from "../state/hotkeys";
+import { toggleVoice, voice } from "../state/voice";
 import type { ChatEntry } from "../../../shared/types";
 import { api } from "../lib/api";
+import { useStore } from "../lib/store";
 import { insertAtCursor, pastedWithLinks } from "../lib/paste";
 import { app, go, toast } from "../state/app";
 import { Empty } from "../components/ui";
@@ -27,6 +31,15 @@ export function Chat() {
     el.style.height = "auto";
     el.style.height = `${Math.min(el.scrollHeight, 200)}px`;
   }, [text]);
+
+  const voicePhase = useStore(voice, (v) => v.phase);
+  const voiceKey = useStore(app, (x) => bindings(x.settings.hotkeys).get("voice") ?? "");
+  // ответил голосом — показать разговор и здесь
+  useEffect(() => {
+    const upd = () => void api.chat.history().then(setItems);
+    window.addEventListener("camado-chat-changed", upd);
+    return () => window.removeEventListener("camado-chat-changed", upd);
+  }, []);
 
   useEffect(() => {
     void api.ai.status().then((s) => setAiOn(s.enabled));
@@ -184,6 +197,14 @@ export function Chat() {
             if (f) void sendFile(f);
           }}
         />
+        <button
+          className={`icon-btn ${voicePhase !== "idle" ? "active" : ""}`}
+          disabled={busy || !aiOn}
+          onClick={toggleVoice}
+          title={`Сказать голосом — Камадо ответит вслух (${prettyCombo(voiceKey, isMac())})`}
+        >
+          <Mic size={18} />
+        </button>
         <button className="play-btn sm" onClick={() => void send()} disabled={busy}>
           <SendHorizontal size={18} />
         </button>

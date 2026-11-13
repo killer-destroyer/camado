@@ -43,6 +43,8 @@ export interface AppSettings {
   lyricsSync: Record<string, LyricsSync>;
   /** Подгонять текст по звуку сам (ИИ слушает песню), когда текст в базе от версии другой длины. */
   lyricsByEar: boolean;
+  /** Голосовой Камадо: speak — читать ответы вслух; wake — слушать слово «Камадо» (микрофон включён, пока открыта программа). */
+  voice: { speak: boolean; wake: boolean; rate: number };
   /** Показывать перевод текста песни под строками (ИИ переводит один раз, перевод хранится). */
   lyricsTranslate: boolean;
   /** «Кастом»: боковая панель и главный экран. */
@@ -148,6 +150,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsSync: {},
   lyricsByEar: true,
   lyricsTranslate: false,
+  voice: { speak: true, wake: false, rate: 1.05 },
   wordSync: true,
   custom: DEFAULT_CUSTOM,
   hotkeys: {},
@@ -186,6 +189,7 @@ export function mergeSettings(saved: unknown): AppSettings {
     discord: { ...DEFAULT_SETTINGS.discord, ...(s.discord ?? {}) },
     alarm: { ...DEFAULT_SETTINGS.alarm, ...(s.alarm ?? {}) },
     eq: { ...DEFAULT_SETTINGS.eq, ...(s.eq ?? {}) },
+    voice: { ...DEFAULT_SETTINGS.voice, ...(s.voice ?? {}) },
     // Раньше заставка по умолчанию разворачивала окно на весь экран — теперь только если владелец сам это включил.
     screensaver: { ...DEFAULT_SETTINGS.screensaver, ...(s.screensaver ?? {}), ...(s.screensaver?.fsChosen ? {} : { fullscreen: false }) },
     ambience: { ...DEFAULT_SETTINGS.ambience, ...(s.ambience ?? {}), levels: { ...(s.ambience?.levels ?? DEFAULT_SETTINGS.ambience.levels) } },

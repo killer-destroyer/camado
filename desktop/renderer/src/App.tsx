@@ -19,6 +19,8 @@ import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSy
 import { Background } from "./components/Background";
 import { handleKey, handleKeyUp } from "./state/hotkeys";
 import { Cheatsheet } from "./components/Cheatsheet";
+import { VoiceBubble } from "./components/VoiceBubble";
+import { initVoice } from "./state/voice";
 import { TrackEditModal } from "./components/TrackEdit";
 import { Guard } from "./components/Guard";
 import { CommandPalette, FpsMeter, MiniPlayer, Sidebar, Toasts, UpdateBanner } from "./components/Chrome";
@@ -138,6 +140,7 @@ export function App() {
         toast(`Скоро пара: ${c.subject}${bits.length ? ` · ${bits.join(" · ")}` : ""}`, "info");
       }),
       initAlarms(),
+      initVoice(),
       watchIdle(),
       watchMenubar(() => data.get().tasks),
       watchAchievements(),
@@ -221,6 +224,7 @@ export function App() {
       )}
       <CommandPalette />
       <Cheatsheet />
+      <VoiceBubble />
       <TrackEditHost />
       <RecapModal />
       <WhatsNewModal />

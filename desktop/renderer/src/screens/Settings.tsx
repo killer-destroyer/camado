@@ -527,6 +527,34 @@ function DiagnoseRow() {
   );
 }
 
+function VoiceSection({ s }: { s: AppSettings }) {
+  const set = (patch: Partial<AppSettings["voice"]>) => updateSettings({ voice: { ...s.voice, ...patch } });
+  const key = prettyCombo(bindings(s.hotkeys).get("voice") ?? "", isMac());
+  return (
+    <section className="set-section glass">
+      <h3>Голос</h3>
+      <div className="set-hint">
+        Нажми микрофон в чате или {key} и говори: «что у меня завтра», «запиши дз по матану на пятницу», «включи что-нибудь спокойное». Замолчал — Камадо отвечает. Можно зажать
+        клавишу и отпустить, когда договоришь.
+      </div>
+      <Row title="Отвечать голосом" hint="Камадо читает ответ вслух (голосом системы); музыка на это время тише.">
+        <Toggle value={s.voice.speak} onChange={(v) => set({ speak: v })} />
+      </Row>
+      {s.voice.speak && (
+        <Row title="Скорость речи">
+          <Slider value={s.voice.rate} min={0.7} max={1.6} step={0.05} onChange={(v) => set({ rate: v })} label="Скорость речи" />
+        </Row>
+      )}
+      <Row
+        title="Отзываться на «Камадо»"
+        hint="Скажи «Камадо» — и дальше просьбу. Микрофон слушается на компьютере, никуда не уходит, пока не прозвучит слово. Работает, когда музыка не играет; первый раз скачает модель распознавания (~250 МБ) и немного нагружает процессор."
+      >
+        <Toggle value={s.voice.wake} onChange={(v) => set({ wake: v })} />
+      </Row>
+    </section>
+  );
+}
+
 function DiscordSection({ s }: { s: AppSettings }) {
   const [st, setSt] = useState<string>("off");
   const [id, setId] = useState(s.discord.clientId);
@@ -1062,6 +1090,7 @@ export function Settings() {
 
       <DiscordSection s={s} />
       <AiSection />
+      <VoiceSection s={s} />
       <BotSection s={s} />
 
       <div className="about muted small">

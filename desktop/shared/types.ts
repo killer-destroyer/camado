@@ -473,6 +473,10 @@ export interface CamadoApi {
     /** Перевод строк на русский (той же длины). native — текст и так русский. */
     translate(lines: string[], about?: { title?: string; artist?: string }): Promise<{ lines: string[]; native?: boolean } | { error: string }>;
   };
+  voice: {
+    /** Голос (WAV 16 кГц base64) или уже распознанный текст → ответ Камадо. */
+    ask(input: { wav?: string; text?: string }): Promise<{ answer: string; heard?: string } | { error: string }>;
+  };
   quick: {
     /** Закрыть окно быстрой записи. */
     close(): Promise<void>;

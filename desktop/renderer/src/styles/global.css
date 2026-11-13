@@ -7942,3 +7942,59 @@ kbd,
     opacity: 0.4;
   }
 }
+
+/* Голосовой Камадо */
+.voice-bubble {
+  position: fixed;
+  left: 50%;
+  bottom: 104px;
+  transform: translateX(-50%);
+  z-index: 160;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 10px 8px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--bg-2) 94%, transparent);
+  animation: pop 0.3s var(--spring) both;
+}
+.vb-mic {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  color: var(--on-accent);
+  background: var(--accent);
+  cursor: pointer;
+}
+.vb-mic > svg {
+  position: relative;
+}
+.vb-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: rgb(var(--accent-rgb) / 0.35);
+  transition: transform 0.08s linear;
+}
+.voice-bubble.thinking .vb-mic {
+  animation: tr-pulse 1.1s ease-in-out infinite;
+}
+.vb-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.vb-err {
+  color: var(--u-overdue);
+}

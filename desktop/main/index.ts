@@ -371,6 +371,18 @@ const handlers: Record<string, Handler> = {
       return { answer: await core.camado.handle({ text: note ? `${prompt}\nПодпись: ${note}` : prompt, attachments: [{ mime, data }] }) };
     }),
 
+  /** Голосовой Камадо: голос (или уже распознанный текст) → короткий ответ, который прочитают вслух. */
+  "voice.ask": (input: { wav?: string; text?: string }) =>
+    withAi(async () => {
+      const VOICE = "[Хозяин говорит голосом — ответ прочитают вслух: отвечай коротко, 1–3 предложения, без списков, таблиц, ссылок и эмодзи. Просьбы выполняй как обычно.]";
+      if (typeof input?.text === "string" && input.text.trim()) {
+        const text = input.text.trim().slice(0, 2000);
+        return { answer: await core.camado.handle({ text: `${VOICE}\n${text}` }), heard: text };
+      }
+      if (typeof input?.wav !== "string" || !input.wav || input.wav.length > 12 * 1024 * 1024) return { error: "Не расслышал — попробуй ещё раз" };
+      return { answer: await core.camado.handle({ text: `${VOICE}\nПослушай и ответь или выполни.`, attachments: [{ mime: "audio/wav", data: input.wav }] }) };
+    }),
+
   "cards.list": (opts?: { noteId?: number; due?: boolean }) => store.listCards({ noteId: opts?.noteId, dueBefore: opts?.due ? new Date() : undefined }),
   "cards.add": (cards: { question: string; answer: string; noteId?: number | null; subject?: string | null }[]) => store.addCards(cards),
   "cards.review": (id: number, grade: 0 | 1 | 2) => store.reviewCard(id, grade),

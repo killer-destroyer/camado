@@ -72,6 +72,23 @@ function recognize(pcm: Float32Array, starts: number[], language: string | undef
   });
 }
 
+/** Распознать речь (16 кГц) на компьютере — для голосового Камадо, когда модель ИИ не слышит звук. */
+export async function transcribeLocal(pcm: Float32Array, language = "ru"): Promise<string> {
+  const sec = pcm.length / 16000;
+  const starts = sec <= ASR_WINDOW ? [0] : asrWindows(sec);
+  const padded = pcm.length >= 16000 ? pcm : (() => {
+    const p = new Float32Array(16000);
+    p.set(pcm);
+    return p;
+  })();
+  const r = await recognize(padded, starts, language, 16000, [], sec);
+  return (r.heardLines ?? [])
+    .map((l) => l.text)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 // ---------- очередь ----------
 
 let running = false;
