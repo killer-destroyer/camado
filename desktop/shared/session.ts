@@ -32,3 +32,86 @@ export function progressOf(tickets: SessionTicket[]): { known: number; review: n
   const review = tickets.filter((t) => t.status === "review").length;
   return { known, review, fresh: tickets.length - known - review, pct: tickets.length ? Math.round(((known + review * 0.5) / tickets.length) * 100) : 0 };
 }
+
+// ---------- Автопилот сессии (1.5.0) ----------
+
+export interface PlanDay {
+  /** Сколько дней от сегодня (0 — сегодня). */
+  offset: number;
+  /** Номера билетов на этот день. */
+  nums: number[];
+  /** learn — новые и «повторить», final — накануне: пробежать всё. */
+  kind: "learn" | "final";
+  /** Из них — второй заход по «не знаю». */
+  again: number[];
+}
+
+/** Сколько полных дней до экзамена (сегодня считается, день экзамена — нет). */
+export function daysUntil(examAt: Date, now = new Date()): number {
+  const a = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const b = new Date(examAt.getFullYear(), examAt.getMonth(), examAt.getDate()).getTime();
+  return Math.round((b - a) / 86400e3);
+}
+
+/**
+ * План по дням до экзамена: «не знаю» — два захода (второй — через пару дней), «повторить» — один,
+ * накануне — пробежать всё, что не «знаю». Сегодня — первым днём.
+ */
+export function sessionPlan(tickets: SessionTicket[], examAt: Date, now = new Date()): PlanDay[] {
+  const days = daysUntil(examAt, now);
+  if (days <= 0 || !tickets.length) return [];
+  const fresh = tickets.filter((t) => t.status === "new").sort((a, b) => a.num - b.num);
+  const review = tickets.filter((t) => t.status === "review").sort((a, b) => a.num - b.num);
+  const left = [...fresh, ...review].map((t) => t.num);
+  if (days === 1) return left.length ? [{ offset: 0, nums: left, kind: "final", again: [] }] : [];
+  const workDays = days - 1;
+  // первый заход: новые и «повторить»; второй: новые ещё раз — в конце
+  const first = [...fresh.map((t) => t.num), ...review.map((t) => t.num)];
+  const second = fresh.map((t) => t.num);
+  const queue = [...first.map((n) => ({ n, again: false })), ...second.map((n) => ({ n, again: true }))];
+  const perDay = Math.max(1, Math.ceil(queue.length / workDays));
+  const out: PlanDay[] = [];
+  for (let d = 0; d < workDays; d++) {
+    const part = queue.slice(d * perDay, (d + 1) * perDay);
+    if (!part.length) break;
+    // один билет дважды в один день — второй заход переносим
+    const nums = [...new Set(part.map((p) => p.n))];
+    out.push({ offset: d, nums, kind: "learn", again: part.filter((p) => p.again).map((p) => p.n) });
+  }
+  if (left.length) out.push({ offset: days - 1, nums: left, kind: "final", again: [] });
+  return out;
+}
+
+/** «Готов на N%» и в каком ты темпе: сколько билетов в день нужно и не много ли это. */
+export function readiness(tickets: SessionTicket[], examAt: Date, now = new Date()): { pct: number; perDay: number; days: number; verdict: string } {
+  const { pct } = progressOf(tickets);
+  const days = daysUntil(examAt, now);
+  const plan = sessionPlan(tickets, examAt, now);
+  const perDay = plan.find((d) => d.kind === "learn")?.nums.length ?? plan[0]?.nums.length ?? 0;
+  const verdict =
+    days < 0
+      ? "экзамен прошёл"
+      : pct >= 90
+        ? "почти готов — повторяй «знаю» понемногу"
+        : days <= 1
+          ? "завтра экзамен — пробеги всё, что не «знаю»"
+          : perDay <= 4
+            ? "успеваешь спокойно"
+            : perDay <= 8
+              ? "успеваешь, если не пропускать дни"
+              : "много — начни сегодня и не пропускай";
+  return { pct, perDay, days, verdict };
+}
+
+/** Коротко номера: [1,2,3,5,7,8] → «1–3, 5, 7–8». */
+export function rangeText(nums: number[]): string {
+  const s = [...new Set(nums)].sort((a, b) => a - b);
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i++) {
+    let j = i;
+    while (j + 1 < s.length && s[j + 1] === s[j]! + 1) j++;
+    out.push(j > i ? `${s[i]}–${s[j]}` : String(s[i]));
+    i = j;
+  }
+  return out.join(", ");
+}

@@ -45,6 +45,7 @@ import { importFromHtml, importFromUrl } from "./download.js";
 import { freeTracks, searchFree } from "./freeMusic.js";
 import { Library } from "./library.js";
 import { SheetsService, sheetTools } from "./sheets.js";
+import { autopilotTick, autopilotToPlan, autopilotTools } from "./autopilot.js";
 import { MOODS, STREAM_HOSTS, Wave } from "./wave.js";
 import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
 import { LyricsService } from "./lyrics.js";
@@ -436,6 +437,12 @@ const handlers: Record<string, Handler> = {
   "exams.remove": (id: number) => store.deleteExam(id),
   "tickets.set": (examId: number, titles: string[]) => store.setTickets(examId, titles),
   "tickets.status": (id: number, status: "new" | "review" | "known") => store.setTicketStatus(id, status),
+  /** Автопилот: билеты по дням → блоки в «Плане». */
+  "exams.toPlan": (examId: number) => {
+    const r = autopilotToPlan(store, Number(examId), { hour: settings.autopilot.studyHour, tz: config.CAMADO_TIMEZONE });
+    send("data-changed");
+    return r;
+  },
 
   "plan.list": (fromIso: string, toIso: string) => store.listPlan(new Date(fromIso), new Date(toIso)),
   "plan.save": (input: Parameters<typeof store.savePlanBlock>[0]) => store.savePlanBlock(input),
@@ -1174,6 +1181,7 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
 // Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
 core.camado.setAppTools([
   ...sheetTools(sheets),
+  ...autopilotTools(store, config.CAMADO_TIMEZONE, () => send("data-changed")),
   ...lifeTools({ handlers: life.handlers, core, timeZone: config.CAMADO_TIMEZONE, act: (a) => send("ai-action", a) }),
   ...buildAppTools({
     lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
@@ -1322,6 +1330,24 @@ void app.whenReady().then(async () => {
   startBot();
   updates.start();
   sheets.start();
+  // вечерний экзаменатор: раз в минуту смотрим, не пора ли
+  setInterval(() => {
+    try {
+      autopilotTick(store, {
+        on: settings.autopilot.on,
+        hour: settings.autopilot.hour,
+        tz: config.CAMADO_TIMEZONE,
+        send: (text) => {
+          notify("Камадо · сессия", text);
+          send("reminder", { text });
+          const owner = botOwner();
+          if (bot && owner) void bot.api.sendMessage(owner, text).catch(() => undefined);
+        },
+      });
+    } catch (err) {
+      console.error("Автопилот сессии:", err);
+    }
+  }, 60_000);
   startReminderLoop(
     store,
     async (text) => {

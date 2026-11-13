@@ -186,6 +186,7 @@ const api: CamadoApi = {
     remove: call("exams.remove") as CamadoApi["exams"]["remove"],
     setTickets: call("tickets.set") as CamadoApi["exams"]["setTickets"],
     ticketStatus: call("tickets.status") as CamadoApi["exams"]["ticketStatus"],
+    toPlan: call("exams.toPlan") as CamadoApi["exams"]["toPlan"],
   },
   plan: {
     list: call("plan.list") as CamadoApi["plan"]["list"],

@@ -322,6 +322,8 @@ export interface CamadoApi {
     remove(id: number): Promise<void>;
     setTickets(examId: number, titles: string[]): Promise<void>;
     ticketStatus(id: number, status: "new" | "review" | "known"): Promise<void>;
+    /** Автопилот: разложить билеты по дням в «План». */
+    toPlan(examId: number): Promise<{ blocks: number } | { error: string }>;
   };
   plan: {
     list(fromIso: string, toIso: string): Promise<PlanBlock[]>;

@@ -1,11 +1,11 @@
 // «Сессия»: экзамены с обратным отсчётом, билеты «знаю / повторить / не знаю», что учить сегодня.
 import { useEffect, useState } from "react";
-import { GraduationCap, ListPlus, Plus, Timer, Trash2, X } from "lucide-react";
-import { progressOf, todaysTickets } from "../../../shared/session";
+import { CalendarPlus, GraduationCap, ListPlus, Plus, Timer, Trash2, X, Zap } from "lucide-react";
+import { progressOf, rangeText, readiness, sessionPlan, todaysTickets } from "../../../shared/session";
 import type { Exam } from "../../../shared/types";
 import { api } from "../lib/api";
 import { useStore } from "../lib/store";
-import { go, toast } from "../state/app";
+import { app, go, toast, updateSettings } from "../state/app";
 import { data } from "../state/data";
 import { focus, setMode, start as startFocus } from "../state/focus";
 import { Empty } from "../components/ui";
@@ -29,7 +29,13 @@ function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
   const [paste, setPaste] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const prog = progressOf(exam.tickets);
-  const today = todaysTickets(exam.tickets, new Date(exam.at));
+  const ready = readiness(exam.tickets, new Date(exam.at));
+  const plan = sessionPlan(exam.tickets, new Date(exam.at));
+  // на сегодня — из плана автопилота (так же считает вечерний экзаменатор), иначе — по старой норме
+  const day0 = plan.find((d) => d.offset === 0);
+  const today = day0 ? day0.nums.map((n) => exam.tickets.find((t) => t.num === n)!).filter(Boolean) : todaysTickets(exam.tickets, new Date(exam.at));
+  const dayName = (offset: number) =>
+    offset === 0 ? "Сегодня" : offset === 1 ? "Завтра" : new Date(Date.now() + offset * 86400e3).toLocaleDateString("ru-RU", { weekday: "short", day: "numeric" });
   const cycle = async (id: number, cur: string) => {
     const next = cur === "new" ? "review" : cur === "review" ? "known" : "new";
     await api.exams.ticketStatus(id, next);
@@ -75,6 +81,37 @@ function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
               {prog.pct}% · знаю {prog.known}, повторить {prog.review}, не знаю {prog.fresh}
             </span>
           </div>
+          {plan.length > 0 && (
+            <div className="autopilot">
+              <div className="ap-head">
+                <Zap size={15} />
+                <b>Готов на {ready.pct}%</b>
+                <span className="muted small">
+                  · ~{ready.perDay} в день · {ready.verdict}
+                </span>
+                <button
+                  className="btn sm"
+                  title="Поставить занятия по билетам в «План» на каждый день до экзамена"
+                  onClick={async () => {
+                    const r = await api.exams.toPlan(exam.id);
+                    if ("error" in r) toast(r.error, "warn");
+                    else toast(`В «Плане»: ${r.blocks} занятий до экзамена`, "ok");
+                  }}
+                >
+                  <CalendarPlus size={14} /> В план
+                </button>
+              </div>
+              <div className="ap-days">
+                {plan.slice(0, 10).map((d) => (
+                  <div key={d.offset} className={`ap-day ${d.kind} ${d.offset === 0 ? "today" : ""}`}>
+                    <span>{dayName(d.offset)}</span>
+                    <b>{d.kind === "final" ? "всё" : rangeText(d.nums)}</b>
+                    {d.again.length > 0 && <i title="второй заход по «не знаю»">↻ {rangeText(d.again)}</i>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {today.length > 0 && (
             <div className="exam-today">
               <div className="et-head">
@@ -148,6 +185,36 @@ function ExamCard({ exam, reload }: { exam: Exam; reload: () => void }) {
   );
 }
 
+/** Автопилот: вечерний экзаменатор (напоминание и Telegram) и час занятий для «В план». */
+function AutopilotBar() {
+  const a = useStore(app, (s) => s.settings.autopilot);
+  const set = (patch: Partial<typeof a>) => updateSettings({ autopilot: { ...a, ...patch } });
+  const hours = Array.from({ length: 18 }, (_, i) => i + 6);
+  return (
+    <div className="card glass ap-bar">
+      <label className="ap-toggle">
+        <input type="checkbox" checked={a.on} onChange={(e) => set({ on: e.target.checked })} />
+        Вечерний экзаменатор в
+      </label>
+      <select className="input sm" value={a.hour} disabled={!a.on} onChange={(e) => set({ hour: Number(e.target.value) })}>
+        {hours.map((h) => (
+          <option key={h} value={h}>
+            {h}:00
+          </option>
+        ))}
+      </select>
+      <span className="muted small">— напомню, какие билеты на сегодня остались (и в Telegram). Занятия «В план» — в</span>
+      <select className="input sm" value={a.studyHour} onChange={(e) => set({ studyHour: Number(e.target.value) })}>
+        {hours.map((h) => (
+          <option key={h} value={h}>
+            {h}:00
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function Session() {
   const subjects = useStore(data, (s) => s.subjects);
   const tasks = useStore(data, (s) => s.tasks);
@@ -172,6 +239,7 @@ export function Session() {
           <Plus size={17} /> Экзамен
         </button>
       </header>
+      <AutopilotBar />
       {fromTasks.length > 0 && (
         <div className="card glass from-tasks">
           <span>Экзамены из заданий:</span>
