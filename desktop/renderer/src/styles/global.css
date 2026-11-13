@@ -8112,6 +8112,7 @@ kbd,
 /* Автопилот сессии */
 .ap-bar {
   display: flex;
+  flex-direction: row;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
@@ -8168,4 +8169,9 @@ kbd,
 }
 .ap-day.final {
   background: rgb(var(--accent-rgb) / 0.12);
+}
+.sheets-card .card-head .muted {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 500;
 }

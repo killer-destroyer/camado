@@ -186,6 +186,12 @@ export function App() {
       else if (name === "nowplaying") app.set({ nowPlaying: true });
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
+      else if (name === "cheatsheet") app.set({ cheatsheet: true });
+      else if (name === "trackedit") {
+        go("music");
+        const t = player.get().library.tracks[0];
+        if (t) app.set({ trackEdit: t.id });
+      }
       else if (name === "whatsnew") app.set({ whatsNew: { title: "Что нового", entries: CHANGELOG.slice(0, 1) } });
       else if (name.startsWith("grow-")) {
         go("grow");
