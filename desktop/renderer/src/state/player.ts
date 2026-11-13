@@ -1,4 +1,5 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
+import type { WaveMood } from "../../../shared/types";
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
 import { addAnchor, approximateTimes, cleanEarWindow, EAR_WINDOW, earWindows, lyricsSlope, mapLyricsTime, syncFromHeard } from "../../../shared/lrc";
@@ -32,6 +33,8 @@ interface PlayerState {
   earSyncing?: boolean;
   playlists: Playlist[];
   favorites: string[];
+  /** Играет «Моя волна»: настроение и что уже было. */
+  wave?: { mood: WaveMood; loading?: boolean; seen: string[] };
   /** Перевод текста песни: key — для какого текста, lines — по строкам (той же длины). */
   translation?: { key: string; lines?: string[]; native?: boolean; busy?: boolean; error?: string };
 }
@@ -193,7 +196,7 @@ export async function syncLyricsByEar(auto = false): Promise<boolean> {
   if (!auto) toast("Слушаю песню и подгоняю текст — это займёт 10–30 секунд…");
   try {
     // ИИ слушает 4 коротких отрывка (на всей песне целиком он путается в секундах к концу)
-    const pcm = await songPcm(`camado-media://track/${t.id}`);
+    const pcm = await songPcm(trackSrc(t));
     const windows = earWindows(pcm.length / SR, lyrics.lines);
     const results = await Promise.all(
       windows.map(async (w) => {
@@ -266,7 +269,7 @@ export function setAutoLevel(on: boolean): void {
   const t = currentTrack();
   if (!t) return;
   engine.setTrim(trackTrim(t.id));
-  if (on) void levelTrack(t.id, `camado-media://track/${t.id}`);
+  if (on && !t.web) void levelTrack(t.id, trackSrc(t));
 }
 
 export function duration(): number {
@@ -326,8 +329,13 @@ export function watchLibrary(): () => void {
 
 // ---------- Управление ----------
 
-export async function playQueue(tracks: Track[], index: number): Promise<void> {
-  player.set({ queue: tracks });
+/** Откуда играть: свой файл — с диска, трек из открытой базы — потоком через Камадо. */
+export function trackSrc(t: Track): string {
+  return t.web ? `camado-media://stream/?u=${encodeURIComponent(t.web.url)}` : `camado-media://track/${t.id}`;
+}
+
+export async function playQueue(tracks: Track[], index: number, keepWave = false): Promise<void> {
+  player.set(keepWave ? { queue: tracks } : { queue: tracks, wave: undefined });
   setIndex(index);
   await startCurrent(0.35);
 }
@@ -360,6 +368,8 @@ export async function loadPlaylists(): Promise<void> {
 export async function toggleFavorite(trackId: string): Promise<void> {
   // сразу на экране, потом в базе
   const fav = player.get().favorites;
+  const t = player.get().queue.find((x) => x.id === trackId) ?? player.get().library.tracks.find((x) => x.id === trackId);
+  if (t) void api.wave.feedback(t, fav.includes(trackId) ? "unlike" : "like");
   player.set({ favorites: fav.includes(trackId) ? fav.filter((x) => x !== trackId) : [trackId, ...fav] });
   await api.playlists.toggleFavorite(trackId);
 }
@@ -372,13 +382,82 @@ function flushListened(): void {
   const l = listened;
   listened = { id: "", seconds: 0 };
   if (!l.id || l.seconds < 30) return;
-  const t = player.get().library.tracks.find((x) => x.id === l.id);
+  const t = player.get().library.tracks.find((x) => x.id === l.id) ?? player.get().queue.find((x) => x.id === l.id);
   if (t) void api.plays.add({ trackId: t.id, title: t.title, artist: t.artist, seconds: Math.round(l.seconds) });
+}
+
+// ---------- «Моя волна» ----------
+
+export const WAVE_MOODS: { id: WaveMood; label: string }[] = [
+  { id: "mine", label: "Под меня" },
+  { id: "energy", label: "Бодро" },
+  { id: "calm", label: "Спокойно" },
+  { id: "study", label: "Учёба" },
+  { id: "new", label: "Что-то новое" },
+];
+
+export async function startWave(mood: WaveMood = "mine"): Promise<void> {
+  player.set({ wave: { mood, loading: true, seen: [] } });
+  const tracks = await api.wave.next(mood, []).catch(() => [] as Track[]);
+  if (player.get().wave?.mood !== mood) return;
+  if (!tracks.length) {
+    player.set({ wave: undefined });
+    toast("Волна пока пустая: добавь музыку в библиотеку или проверь интернет", "warn");
+    return;
+  }
+  player.set({ wave: { mood, seen: tracks.map((t) => t.id) } });
+  await playQueue(tracks, 0, true);
+  toast(`«Моя волна» · ${WAVE_MOODS.find((m) => m.id === mood)?.label}`, "info");
+}
+
+export function stopWave(): void {
+  player.set({ wave: undefined });
+}
+
+let extending: Promise<void> | undefined;
+/** Подгрузить ещё, пока волна не кончилась. */
+export function extendWave(): Promise<void> {
+  const w = player.get().wave;
+  if (!w) return Promise.resolve();
+  extending ??= (async () => {
+    player.set({ wave: { ...w, loading: true } });
+    const more = await api.wave.next(w.mood, w.seen).catch(() => [] as Track[]);
+    const cur = player.get();
+    if (cur.wave?.mood !== w.mood) return;
+    const fresh = more.filter((t) => !cur.queue.some((q) => q.id === t.id));
+    // очередь не растёт бесконечно: старое (давно сыгранное) убираем
+    const drop = Math.max(0, cur.index - 20);
+    player.set({
+      queue: [...cur.queue.slice(drop), ...fresh],
+      index: cur.index - drop,
+      wave: { mood: w.mood, seen: [...w.seen, ...fresh.map((t) => t.id)].slice(-400) },
+    });
+  })().finally(() => (extending = undefined));
+  return extending;
+}
+
+/** «Не то»: больше такого не ставить, сразу дальше. */
+export function waveDislike(): void {
+  const t = currentTrack();
+  if (!t) return;
+  void api.wave.feedback(t, "dislike");
+  toast("Понял, такое больше не ставлю", "info");
+  next(false);
+}
+
+/** «Сохранить к себе»: трек из открытой базы скачивается в «Музыка/Камадо». */
+export async function saveWebTrack(t: Track): Promise<void> {
+  if (!t.web) return;
+  toast(`Сохраняю «${t.title}»…`, "info");
+  const r = await api.music.importUrl(t.web.url);
+  if (r.kind === "saved") toast(`«${t.title}» теперь в твоей библиотеке`, "ok");
+  else if (r.kind === "error") toast(r.error, "warn");
 }
 
 async function startCurrent(fade = 0): Promise<void> {
   const t = currentTrack();
   if (!t) return;
+  if (player.get().wave && player.get().index >= player.get().queue.length - 2) void extendWave();
   flushListened();
   listened = { id: t.id, seconds: 0 };
   history.push(t.id);
@@ -386,9 +465,10 @@ async function startCurrent(fade = 0): Promise<void> {
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
   player.set({ lyrics: undefined, lyricsLoading: true });
   try {
-    const url = `camado-media://track/${t.id}`;
+    const url = trackSrc(t);
     await engine.play(url, fade, trackTrim(t.id));
-    void levelTrack(t.id, url);
+    // громкость выравниваем по своим файлам; трек из интернета для этого пришлось бы качать дважды
+    if (!t.web) void levelTrack(t.id, url);
   } catch (err) {
     console.error(err);
     toast(`Не смог воспроизвести «${t.title}»`, "warn");
@@ -452,7 +532,7 @@ export function togglePlay(): void {
 function nextIndex(auto: boolean): number {
   const s = player.get();
   if (s.queue.length === 0) return -1;
-  if (s.shuffle && s.queue.length > 1) return pickShuffle(s.queue, s.index, history);
+  if (s.shuffle && !s.wave && s.queue.length > 1) return pickShuffle(s.queue, s.index, history);
   const i = s.index + 1;
   if (i >= s.queue.length) return s.repeat === "off" && auto ? -1 : 0;
   return i;
@@ -468,9 +548,27 @@ export function next(auto = false, fade = auto ? 0 : 0.4): void {
     toast("Таймер сна: трек закончился — спокойной ночи 🌙");
     return;
   }
-  if (auto && s.repeat === "one") {
+  if (auto && s.repeat === "one" && !s.wave) {
     engine.el.currentTime = 0;
     void engine.play();
+    return;
+  }
+  // волна учится: дослушал — нравится, пропустил в начале — не очень
+  const cur = currentTrack();
+  if (cur) {
+    const d = engine.el.duration || cur.duration;
+    const at = engine.el.currentTime;
+    if (auto) void api.wave.feedback(cur, "done");
+    else if (d > 0 && at > 2 && at < d * 0.4) void api.wave.feedback(cur, "skip");
+  }
+  if (s.wave && s.index >= s.queue.length - 1) {
+    // волна кончилась раньше, чем подгрузилась — дождаться и играть дальше
+    void extendWave().then(() => {
+      if (player.get().index < player.get().queue.length - 1) {
+        setIndex(player.get().index + 1);
+        void startCurrent(fade);
+      }
+    });
     return;
   }
   const i = nextIndex(auto);

@@ -68,3 +68,37 @@ export async function serveFile(path: string, rangeHeader: string | null): Promi
     headers: { ...headers, "Content-Length": String(st.size) },
   });
 }
+
+/**
+ * Трек из открытой базы потоком: окно просит camado-media://stream/?u=<ссылка>, а мы качаем её сами —
+ * только с разрешённых сайтов (allow), с перемоткой (Range), и отдаём окну с CORS, чтобы работали волны и эквалайзер.
+ */
+export async function serveRemote(raw: string | null, rangeHeader: string | null, allow: RegExp, fetchImpl: typeof fetch = (i, o) => fetch(i, o)): Promise<Response> {
+  let u: URL;
+  try {
+    u = new URL(raw ?? "");
+  } catch {
+    return new Response("bad url", { status: 400 });
+  }
+  if (u.protocol !== "https:" || !allow.test(u.hostname)) return new Response("not allowed", { status: 403 });
+  let res: Response;
+  try {
+    res = await fetchImpl(u.href, { headers: { "User-Agent": "Camado (study assistant)", ...(rangeHeader ? { Range: rangeHeader } : {}) }, redirect: "follow" });
+  } catch {
+    return new Response("offline", { status: 502 });
+  }
+  // после переадресаций — всё ещё разрешённый сайт (archive.org отдаёт файлы с ia8xxxxx.us.archive.org)
+  try {
+    if (res.url && !allow.test(new URL(res.url).hostname)) return new Response("not allowed", { status: 403 });
+  } catch {
+    // нет адреса — значит, без переадресации
+  }
+  const type = res.headers.get("content-type") ?? "application/octet-stream";
+  if (!/^(audio|image)\/|octet-stream/i.test(type)) return new Response("not media", { status: 415 });
+  const headers: Record<string, string> = { "Content-Type": type, "Accept-Ranges": "bytes", "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=3600" };
+  for (const h of ["content-length", "content-range"]) {
+    const v = res.headers.get(h);
+    if (v) headers[h] = v;
+  }
+  return new Response(res.body, { status: res.status, headers });
+}

@@ -12,6 +12,7 @@ import { app, toggleOverlay, updateSettings } from "../state/app";
 import { redoWords, words } from "../state/wordsync";
 import { currentTrack, cycleRepeat, duration, lyricsSyncOf, next, nowMeta, player, position, prev, resetLyricsSync, seek, setAutoLevel, setLyricsOffset, setSleep, setTrackGain, syncLyricsByEar, toggleFavorite, togglePlay, toggleTranslation } from "../state/player";
 import { Lyrics } from "./Lyrics";
+import { WebTrackButtons, WebTrackCredit } from "./WebTrackButtons";
 import { Segmented, Slider, Toggle } from "./ui";
 import { autoTrim } from "../lib/loudness";
 import { EqPanel } from "./Equalizer";
@@ -497,6 +498,7 @@ export function NowPlaying() {
           <div key={meta?.title} className="np-meta">
             <div className="np-title">{meta?.title ?? "Ничего не играет"}</div>
             <div className="np-artist">{meta?.artist ?? "Выбери трек в «Музыке»"}</div>
+            <WebTrackCredit track={track} />
           </div>
           <div ref={shakeLyrics} className={`np-lyrics mode-${mode}`}>
             <Lyrics lyrics={lyrics} mode={mode} />
@@ -525,6 +527,7 @@ export function NowPlaying() {
           <button className="icon-btn" title="Заставка-визуализатор на весь экран" onClick={() => startScreensaver()}>
             <Sparkles size={18} />
           </button>
+          <WebTrackButtons track={track} size={18} />
           {track && (
             <button className={`icon-btn ${isFav ? "active" : ""}`} title={isFav ? "Убрать из любимого" : "В любимое"} onClick={() => void toggleFavorite(track.id)}>
               <Heart size={18} fill={isFav ? "currentColor" : "none"} />

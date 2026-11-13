@@ -15,6 +15,8 @@ import { WhatsNewModal } from "./components/WhatsNew";
 import { redoWords } from "./state/wordsync";
 import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
+import type { WaveMood } from "../../shared/types";
+import { startWave, stopWave } from "./state/player";
 import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSync, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { handleKey, handleKeyUp } from "./state/hotkeys";
@@ -75,7 +77,8 @@ type AiAction =
   | { type: "focus"; action: "start" | "pause" | "reset" }
   | { type: "screensaver"; on: boolean }
   | { type: "grow"; tab: string; lesson?: string; modal?: string }
-  | { type: "words-redo"; trackId?: string };
+  | { type: "words-redo"; trackId?: string }
+  | { type: "wave"; mood: WaveMood | "stop" };
 
 function aiAction(a: AiAction): void {
   if (a.type === "screen") {
@@ -87,6 +90,9 @@ function aiAction(a: AiAction): void {
     if (!list.length) return;
     if (a.shuffle) player.set({ shuffle: true });
     void playQueue(list, Math.min(a.index, list.length - 1));
+  } else if (a.type === "wave") {
+    if (a.mood === "stop") stopWave();
+    else void startWave(a.mood);
   } else if (a.type === "music") {
     if (a.action === "next") next();
     else if (a.action === "prev") prev();

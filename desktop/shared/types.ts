@@ -52,7 +52,21 @@ export interface Track {
   hasLyrics: boolean;
   /** Название/исполнитель/обложка поправлены в Камадо (файл не менялся). */
   edited?: boolean;
+  /** Трек из открытой базы (слушаем потоком): откуда, лицензия, теги. */
+  web?: WebTrackInfo;
 }
+
+export interface WebTrackInfo {
+  url: string;
+  source: "ccMixter" | "Internet Archive";
+  page?: string;
+  license?: string;
+  licenseUrl?: string;
+  tags?: string[];
+}
+
+/** Настроение «Моей волны». */
+export type WaveMood = "mine" | "energy" | "calm" | "study" | "new";
 
 export interface LyricsWord {
   time: number;
@@ -486,6 +500,12 @@ export interface CamadoApi {
     aiSync(wav: string, lines: { n: number; text: string }[]): Promise<{ points: { n: number; t: number }[] } | { error: string }>;
     /** Перевод строк на русский (той же длины). native — текст и так русский. */
     translate(lines: string[], about?: { title?: string; artist?: string }): Promise<{ lines: string[]; native?: boolean } | { error: string }>;
+  };
+  wave: {
+    /** Следующие треки «Моей волны» (свои + открытая база). exclude — что уже было. */
+    next(mood: WaveMood, exclude?: string[]): Promise<Track[]>;
+    feedback(t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done"): Promise<void>;
+    moods(): Promise<{ id: WaveMood; label: string }[]>;
   };
   sheets: {
     list(): Promise<SheetView[]>;

@@ -8051,3 +8051,60 @@ kbd,
     grid-template-columns: 1fr;
   }
 }
+
+/* «Моя волна» */
+.wave-card {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  padding: 14px 16px;
+  border-radius: var(--r);
+  margin-bottom: 14px;
+}
+.wave-card.on {
+  box-shadow: inset 0 0 0 1px rgb(var(--accent-rgb) / 0.5);
+}
+.wave-play {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  border: 0;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  transition: transform 0.3s var(--spring);
+}
+.wave-play:hover {
+  transform: scale(1.06);
+}
+.wave-body {
+  flex: 1;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wave-body b {
+  font-family: var(--display);
+  font-size: 18px;
+}
+.wave-moods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip-btn.on {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.web-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.web-meta a {
+  color: inherit;
+}

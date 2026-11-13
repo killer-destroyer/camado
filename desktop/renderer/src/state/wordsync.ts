@@ -164,7 +164,8 @@ function next(): Track | undefined {
   const done = words.get().done;
   const need = (t: Track) => done[t.id] !== WORDSYNC_MODEL && !failed.has(t.id);
   const cur = currentOf();
-  if (cur && need(cur)) return cur;
+  // трек из открытой базы не размечаем (это пришлось бы качать его целиком ещё раз)
+  if (cur && !cur.web && need(cur)) return cur;
   // Пока играет музыка и окно на экране — не грузим процессор чужими песнями: остальные — на паузе или в фоне.
   if (isPlaying() && !document.hidden) return undefined;
   return tracksOf().find(need);

@@ -37,7 +37,8 @@ export type AppAction =
   | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
   | { type: "focus"; action: "start" | "pause" | "reset" }
   | { type: "screensaver"; on: boolean }
-  | { type: "grow"; tab: string; lesson?: string; modal?: string };
+  | { type: "grow"; tab: string; lesson?: string; modal?: string }
+  | { type: "wave"; mood: "mine" | "energy" | "calm" | "study" | "new" | "stop" };
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -170,6 +171,18 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         const res = await d.editTrack(t.id, i.reset ? { title: null, artist: null, album: null } : { title: i.title, artist: i.artist, album: i.album });
         if (!res) return "Не получилось поправить.";
         return i.reset ? `Вернул как в файле: «${res.title}» — ${res.artist}.` : `Было ${was}, стало «${res.title}» — ${res.artist}${res.album ? ` (альбом «${res.album}»)` : ""}.`;
+      },
+    }),
+
+    defineTool({
+      name: "app_wave",
+      description:
+        "«Моя волна» — бесконечный поток музыки под вкус хозяина: его треки + новая музыка из открытой базы (ccMixter, Internet Archive, свободные лицензии). " +
+        "mood: mine — под меня, energy — бодро, calm — спокойно, study — для учёбы, new — что-то новое; stop — выйти из волны. Популярных треков со стримингов там нет.",
+      schema: z.object({ mood: z.enum(["mine", "energy", "calm", "study", "new", "stop"]) }),
+      run: (i) => {
+        d.act({ type: "wave", mood: i.mood });
+        return i.mood === "stop" ? "Вышел из волны — музыка доиграет." : "Включил «Мою волну».";
       },
     }),
 
