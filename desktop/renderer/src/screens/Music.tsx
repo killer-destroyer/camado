@@ -1,6 +1,6 @@
 // «Музыка»: своя библиотека (карусель + список), добавление из папки, перетаскиванием или по ссылке.
 import { useEffect, useMemo, useState } from "react";
-import { Check, CloudRain, Disc3, Download, Flame, Folder, FolderPlus, Globe, Heart, Link2, ListMusic, Music2, Plus, RefreshCw, Search, Shuffle, Trash2, X } from "lucide-react";
+import { Check, CloudRain, Disc3, Download, Flame, Folder, FolderPlus, Globe, Heart, Link2, ListMusic, Music2, Pencil, Plus, RefreshCw, Search, Shuffle, Trash2, X } from "lucide-react";
 import type { FreeAlbum, Track } from "../../../shared/types";
 import { api } from "../lib/api";
 import { fmtTime } from "../lib/format";
@@ -10,6 +10,7 @@ import { loadPlaylists, player, playQueue, shuffleAll, toggleFavorite } from "..
 import { CoverFlow } from "../components/CoverFlow";
 import { AmbienceMixer } from "../components/Ambience";
 import { Empty } from "../components/ui";
+import { TrackEditModal } from "../components/TrackEdit";
 
 const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
 /** Вставили код страницы, а не ссылку. */
@@ -179,6 +180,7 @@ export function Music() {
   const [tab, setTab] = useState<Tab>({ kind: "all" });
   const [top, setTop] = useState<string[]>([]);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [editId, setEditId] = useState<string | null>(null);
   const [freeOpen, setFreeOpen] = useState(false);
   const [ambOpen, setAmbOpen] = useState(false);
   const ambOn = useStore(app, (s) => s.settings.ambience.on && Object.values(s.settings.ambience.levels).some((v) => v > 0));
@@ -460,6 +462,9 @@ export function Music() {
                       <Plus size={15} />
                     </button>
                   )}
+                  <button className="icon-btn" title="Поправить название, исполнителя, обложку" onClick={() => setEditId(t.id)}>
+                    <Pencil size={14} />
+                  </button>
                   {menuFor === t.id && <AddToPlaylist trackId={t.id} onDone={() => setMenuFor(null)} />}
                 </span>
                 <span className="tr-dur">{t.duration ? fmtTime(t.duration) : ""}</span>
@@ -532,6 +537,7 @@ export function Music() {
         </div>
       )}
       {drag && <div className="drop-hint">Отпусти — добавлю в библиотеку</div>}
+      {editId && byId.get(editId) && <TrackEditModal track={byId.get(editId)!} onClose={() => setEditId(null)} />}
     </div>
   );
 }

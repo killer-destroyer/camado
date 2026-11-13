@@ -1,4 +1,5 @@
 import { DEFAULT_CUSTOM, normalizeCustom, type CustomLayout } from "./custom.js";
+import { normalizeHotkeys } from "./hotkeys.js";
 // Настройки приложения. Хранятся в базе (kv), меняются в окне «Настройки».
 
 export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
@@ -44,6 +45,8 @@ export interface AppSettings {
   lyricsByEar: boolean;
   /** «Кастом»: боковая панель и главный экран. */
   custom: CustomLayout;
+  /** Свои горячие клавиши: id действия → сочетание ("" — выключено). Нет в списке — стандартное. */
+  hotkeys: Record<string, string>;
   /** Расставлять время каждому слову текста сам (распознавание на компьютере, заранее, для всех песен). */
   wordSync: boolean;
   shake: {
@@ -144,6 +147,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsByEar: true,
   wordSync: true,
   custom: DEFAULT_CUSTOM,
+  hotkeys: {},
   shake: { enabled: true, intensity: 0.45, sensitivity: 0.55, rotation: true, zoom: true, target: "scene" },
   vinyl: true,
   vinylVariant: {},
@@ -190,5 +194,6 @@ export function mergeSettings(saved: unknown): AppSettings {
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
     custom: normalizeCustom(s.custom),
+    hotkeys: normalizeHotkeys(s.hotkeys),
   };
 }

@@ -278,7 +278,10 @@ export async function loadLibrary(): Promise<void> {
   // поправили название или обложку — очередь показывает новое
   const byId = new Map(library.tracks.map((t) => [t.id, t]));
   const queue = player.get().queue;
-  const fresh = queue.map((t) => byId.get(t.id) ?? t);
+  const fresh = queue.map((t) => {
+    const n = byId.get(t.id);
+    return n && (n.title !== t.title || n.artist !== t.artist || n.album !== t.album || n.cover !== t.cover) ? { ...t, title: n.title, artist: n.artist, album: n.album, cover: n.cover } : t;
+  });
   player.set(fresh.some((t, i) => t !== queue[i]) ? { library, queue: fresh } : { library });
   kickWords();
 }

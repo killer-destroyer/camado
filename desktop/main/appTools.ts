@@ -160,7 +160,7 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         let t: Track | undefined;
         if (i.track) {
           const found = findMusic(i.track, tracks, [], []);
-          t = found?.ids.length === 1 || found ? tracks.find((x) => x.id === found!.ids[0]) : undefined;
+          t = found ? tracks.find((x) => x.id === found.ids[0]) : undefined;
         } else {
           const np = d.nowPlaying();
           t = np ? tracks.find((x) => x.id === np.trackId) : undefined;

@@ -6,7 +6,7 @@ import { api } from "../lib/api";
 import { useFrame } from "../lib/frame";
 import { applyPalette, paletteById } from "../lib/palettes";
 import { useStore } from "../lib/store";
-import { duration, nowMeta, player, position } from "../state/player";
+import { currentTrack, duration, nowMeta, player, position } from "../state/player";
 
 /** В главном окне: сообщает «что играет» мини-плееру, трею и Discord. */
 export function NowPlayingFeed() {

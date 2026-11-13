@@ -67,13 +67,14 @@ describe("плейлисты, любимое, история", () => {
   });
 
   it("считает, что слушал за неделю", () => {
-    const s = memoryStore();
-    const old = new Date(Date.now() - 20 * 86400e3).toISOString();
+    const s = memoryStore(); // «сейчас» в хранилище — 5 ноября 2026
+    const now = new Date("2026-11-05T15:00:00Z").getTime();
+    const old = new Date(now - 20 * 86400e3).toISOString();
     s.addPlay({ trackId: "a", title: "A", artist: "X", seconds: 100 });
     s.addPlay({ trackId: "a", title: "A", artist: "X", seconds: 120 });
     s.addPlay({ trackId: "b", title: "B", artist: "Y", seconds: 200 });
     s.addPlay({ trackId: "c", title: "C", artist: "Z", seconds: 50, playedAt: old });
-    const st = s.playStats(new Date(Date.now() - 7 * 86400e3));
+    const st = s.playStats(new Date(now - 7 * 86400e3));
     expect(st.map((x) => [x.trackId, x.plays, x.seconds])).toEqual([
       ["a", 2, 220],
       ["b", 1, 200],
