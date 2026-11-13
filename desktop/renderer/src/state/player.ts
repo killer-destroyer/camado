@@ -468,6 +468,9 @@ export async function saveWebTrack(t: Track): Promise<void> {
   else if (r.kind === "error") toast(r.error, "warn");
 }
 
+/** Сколько треков из открытой базы подряд не включилось. */
+let webFails = 0;
+
 async function startCurrent(fade = 0): Promise<void> {
   const t = currentTrack();
   if (!t) return;
@@ -483,9 +486,17 @@ async function startCurrent(fade = 0): Promise<void> {
     await engine.play(url, fade, trackTrim(t.id));
     // громкость выравниваем по своим файлам; трек из интернета для этого пришлось бы качать дважды
     if (!t.web) void levelTrack(t.id, url);
+    webFails = 0;
   } catch (err) {
     console.error(err);
-    toast(`Не смог воспроизвести «${t.title}»`, "warn");
+    // трек из открытой базы недоступен (сайт не отдал файл) — в волне тихо берём следующий, но не по кругу
+    if (t.web && player.get().wave && ++webFails <= 4) {
+      // не «не нравится»: трек просто недоступен, исполнителя за это не наказываем
+      if (currentTrack()?.id === t.id) next(false);
+      return;
+    }
+    toast(t.web && webFails > 4 ? "Открытая база сейчас не отдаёт музыку — проверь интернет или включи свою" : `Не смог воспроизвести «${t.title}»`, "warn");
+    webFails = 0;
   }
   void updateMediaSession(t);
   void loadLyrics();

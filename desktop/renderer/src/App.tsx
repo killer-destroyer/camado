@@ -187,6 +187,11 @@ export function App() {
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
       else if (name === "cheatsheet") app.set({ cheatsheet: true });
+      else if (name === "next") next();
+      else if (name.startsWith("wave-")) {
+        go("music");
+        void startWave(name.slice(5) as WaveMood);
+      }
       else if (name === "trackedit") {
         go("music");
         const t = player.get().library.tracks[0];

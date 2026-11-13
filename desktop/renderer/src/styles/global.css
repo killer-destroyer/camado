@@ -8175,3 +8175,10 @@ kbd,
   letter-spacing: 0;
   font-weight: 500;
 }
+/* подпись «ccMixter · лицензия» в нижней строке — в одну строку */
+.mp-meta .web-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11px;
+}

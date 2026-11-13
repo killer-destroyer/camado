@@ -1,4 +1,5 @@
 // Раздача музыки и обложек окну через свой протокол camado-media:// с поддержкой перемотки.
+import { siteReferer } from "./download.js";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname } from "node:path";
@@ -83,7 +84,11 @@ export async function serveRemote(raw: string | null, rangeHeader: string | null
   if (u.protocol !== "https:" || !allow.test(u.hostname)) return new Response("not allowed", { status: 403 });
   let res: Response;
   try {
-    res = await fetchImpl(u.href, { headers: { "User-Agent": "Camado (study assistant)", ...(rangeHeader ? { Range: rangeHeader } : {}) }, redirect: "follow" });
+    const ref = siteReferer(u);
+    res = await fetchImpl(u.href, {
+      headers: { "User-Agent": "Camado (study assistant)", ...(rangeHeader ? { Range: rangeHeader } : {}), ...(ref ? { Referer: ref } : {}) },
+      redirect: "follow",
+    });
   } catch {
     return new Response("offline", { status: 502 });
   }
@@ -94,6 +99,7 @@ export async function serveRemote(raw: string | null, rangeHeader: string | null
     // нет адреса — значит, без переадресации
   }
   const type = res.headers.get("content-type") ?? "application/octet-stream";
+  if (!res.ok) return new Response("upstream", { status: res.status });
   if (!/^(audio|image)\/|octet-stream/i.test(type)) return new Response("not media", { status: 415 });
   const headers: Record<string, string> = { "Content-Type": type, "Accept-Ranges": "bytes", "Access-Control-Allow-Origin": "*", "Cache-Control": "max-age=3600" };
   for (const h of ["content-length", "content-range"]) {

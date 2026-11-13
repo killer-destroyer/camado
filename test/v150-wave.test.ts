@@ -60,6 +60,22 @@ describe("открытая база", () => {
     expect(r.headers.get("access-control-allow-origin")).toBe("*");
     expect((await serveRemote("https://evil.com/a.mp3", null, STREAM_HOSTS, ok)).status).toBe(403);
     expect((await serveRemote("http://archive.org/a.mp3", null, STREAM_HOSTS, ok)).status).toBe(403);
+    // ccMixter отдаёт файл только «со своей страницы» — ставим Referer
+    let sentRef: string | undefined;
+    const cc = (async (_u: string, init: RequestInit) => {
+      sentRef = (init.headers as Record<string, string>).Referer;
+      return sentRef ? new Response("ID3", { headers: { "content-type": "audio/mpeg" } }) : new Response("Forbidden", { status: 403, headers: { "content-type": "text/html" } });
+    }) as unknown as typeof fetch;
+    expect((await serveRemote("https://ccmixter.org/content/x/a.mp3", null, STREAM_HOSTS, cc)).status).toBe(200);
+    expect(sentRef).toBe("https://ccmixter.org/");
+    const archiveRef: (string | undefined)[] = [];
+    await serveRemote("https://archive.org/download/x/a.mp3", null, STREAM_HOSTS, (async (_u: string, init: RequestInit) => {
+      archiveRef.push((init.headers as Record<string, string>).Referer);
+      return new Response("ID3", { headers: { "content-type": "audio/mpeg" } });
+    }) as unknown as typeof fetch);
+    expect(archiveRef).toEqual([undefined]);
+    const forbidden = (async () => new Response("Forbidden", { status: 403, headers: { "content-type": "text/html" } })) as unknown as typeof fetch;
+    expect((await serveRemote("https://ccmixter.org/content/x/a.mp3", null, STREAM_HOSTS, forbidden)).status).toBe(403);
     const html = (async () => new Response("<html>", { headers: { "content-type": "text/html" } })) as unknown as typeof fetch;
     expect((await serveRemote("https://archive.org/x", null, STREAM_HOSTS, html)).status).toBe(415);
   });
@@ -98,5 +114,23 @@ describe("волна", () => {
     w.feedback(lib("y", "Lumen"), "skip");
     w.feedback(lib("y", "Lumen"), "skip");
     expect(w.score(lib("y", "Lumen"), w.taste(), new Set())).toBeLessThan(before);
+  });
+});
+
+describe("сохранить к себе с ccMixter", () => {
+  it("скачивание тоже ставит Referer ccMixter", async () => {
+    const { importFromUrl, setHostLookup } = await import("../desktop/main/download.js");
+    const { mkdtemp, readdir } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    setHostLookup(async () => ["93.184.216.34"]);
+    const dir = await mkdtemp(join(tmpdir(), "camado-dl-"));
+    const f = (async (_u: string, init: RequestInit) =>
+      (init.headers as Record<string, string> | undefined)?.Referer === "https://ccmixter.org/"
+        ? new Response(new Uint8Array([0x49, 0x44, 0x33, 1, 2, 3]), { headers: { "content-type": "audio/mpeg" } })
+        : new Response("Forbidden", { status: 403, headers: { "content-type": "text/html" } })) as unknown as typeof fetch;
+    const r = await importFromUrl("https://ccmixter.org/content/dj/Night_Drive.mp3", dir, () => undefined, f);
+    expect(r.kind).toBe("saved");
+    expect(await readdir(dir)).toEqual(["Night_Drive.mp3"]);
   });
 });

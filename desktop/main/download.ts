@@ -74,6 +74,14 @@ async function isLocalHost(u: URL): Promise<boolean> {
 }
 
 /** Запрос с проверкой каждого перенаправления: сайт не может «перекинуть» Камадо в домашнюю сеть. */
+/**
+ * Сайты, которые отдают файл только «со своей страницы» (защита от чужих ссылок): ccMixter отвечает 403 на прямую
+ * ссылку на mp3. Ставим их собственную страницу — как будто нажал «скачать» на сайте (файлы там выложены для скачивания).
+ */
+export function siteReferer(u: URL): string | undefined {
+  return /(^|\.)ccmixter\.org$/i.test(u.hostname) ? "https://ccmixter.org/" : undefined;
+}
+
 async function publicFetch(
   start: URL,
   fetchImpl: typeof fetch,
@@ -83,7 +91,9 @@ async function publicFetch(
   for (let hop = 0; hop < 8; hop++) {
     if (!/^https?:$/.test(cur.protocol)) return { error: "Сайт перенаправил на неподдерживаемый адрес." };
     if (await isLocalHost(cur)) return { error: LOCAL_ONLY };
-    const res = await fetchImpl(cur.href, { ...init, redirect: "manual" });
+    const ref = siteReferer(cur);
+    const headers = ref ? { ...(init.headers as Record<string, string> | undefined), Referer: ref } : init.headers;
+    const res = await fetchImpl(cur.href, { ...init, headers, redirect: "manual" });
     const loc = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && loc) {
       cur = new URL(loc, cur);
