@@ -15,6 +15,7 @@ import { WhatsNewModal } from "./components/WhatsNew";
 import { redoWords } from "./state/wordsync";
 import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
+import { shuffleAll } from "./state/player";
 import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSync, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { handleKey, handleKeyUp } from "./state/hotkeys";
@@ -181,6 +182,9 @@ export function App() {
       else if (name === "palette") app.set({ palette: true });
       else if (name === "recap") app.set({ recap: true });
       else if (name === "cheatsheet") app.set({ cheatsheet: true });
+      else if (name === "next") next();
+      else if (name === "prev") prev();
+      else if (name === "shuffleall") void shuffleAll(player.get().library.tracks);
       else if (name === "trackedit") {
         go("music");
         const t = player.get().library.tracks[0];

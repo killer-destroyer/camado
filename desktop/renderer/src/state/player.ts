@@ -9,6 +9,7 @@ import { scratching } from "../lib/scratch";
 import { createStore } from "../lib/store";
 import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
+import { ahead, behind, pushBefore, pushNext, startTrail, stepBack, stepForward, type Trail } from "../../../shared/trail";
 import { app, toast, updateSettings } from "./app";
 import { initWordSync, kick as kickWords, withWords } from "./wordsync";
 
@@ -329,7 +330,34 @@ export function watchLibrary(): () => void {
 export async function playQueue(tracks: Track[], index: number): Promise<void> {
   player.set({ queue: tracks });
   setIndex(index);
+  // новый список — новая память «назад/вперёд»
+  const t = tracks[index];
+  trail = t ? startTrail(t.id) : startTrail("");
+  upcoming = undefined;
   await startCurrent(0.35);
+}
+
+/** Что играло до и после — чтобы «назад» и «вперёд» возвращали те же песни (и вперемешку тоже). */
+let trail: Trail = startTrail("");
+/** Заранее выбранная следующая песня «вперемешку» — чтобы подготовленная обложка и то, что заиграет, совпадали. */
+let upcoming: { id: string; shuffle: boolean; len: number } | undefined;
+
+const indexOf = (id: string | undefined) => (id ? player.get().queue.findIndex((t) => t.id === id) : -1);
+
+/** Куда поведёт «вперёд»: сначала по памяти, иначе — новая песня (по порядку или вперемешку). */
+function forwardIndex(auto: boolean): number {
+  const s = player.get();
+  const known = indexOf(ahead(trail));
+  if (known >= 0) return known;
+  if (s.shuffle && s.queue.length > 1) {
+    // выбираем один раз и запоминаем, пока не сменили режим или список
+    if (!upcoming || upcoming.shuffle !== s.shuffle || upcoming.len !== s.queue.length || indexOf(upcoming.id) < 0 || upcoming.id === s.queue[s.index]?.id) {
+      const i = pickShuffle(s.queue, s.index, history);
+      upcoming = { id: s.queue[i]!.id, shuffle: true, len: s.queue.length };
+    }
+    return indexOf(upcoming.id);
+  }
+  return nextIndex(auto);
 }
 
 /**
@@ -403,7 +431,8 @@ async function startCurrent(fade = 0): Promise<void> {
 function prefetchNeighbors(): void {
   const s = player.get();
   if (s.queue.length < 2) return;
-  const ids = new Set([nextIndex(false), (s.index - 1 + s.queue.length) % s.queue.length]);
+  const back = indexOf(behind(trail));
+  const ids = new Set([forwardIndex(false), back >= 0 ? back : (s.index - 1 + s.queue.length) % s.queue.length]);
   for (const i of ids) {
     const cover = s.queue[i]?.cover;
     if (cover && !paletteCache.has(paletteKey(cover))) void paletteFor(cover).catch(() => undefined);
@@ -473,8 +502,18 @@ export function next(auto = false, fade = auto ? 0 : 0.4): void {
     void engine.play();
     return;
   }
-  const i = nextIndex(auto);
+  const known = indexOf(ahead(trail));
+  if (known >= 0) {
+    // уже были здесь и вернулись назад — идём ровно туда, откуда ушли
+    trail = stepForward(trail);
+    setIndex(known);
+    void startCurrent(fade);
+    return;
+  }
+  const i = forwardIndex(auto);
   if (i < 0) return;
+  upcoming = undefined;
+  trail = pushNext(trail, s.queue[i]!.id);
   setIndex(i);
   void startCurrent(fade);
 }
@@ -486,7 +525,23 @@ export function prev(): void {
     return;
   }
   if (s.queue.length === 0) return;
-  setIndex((s.index - 1 + s.queue.length) % s.queue.length);
+  const known = indexOf(behind(trail));
+  if (known >= 0) {
+    // ровно та песня, что играла перед этой
+    trail = stepBack(trail);
+    setIndex(known);
+    void startCurrent(0.4);
+    return;
+  }
+  if (s.shuffle) {
+    // вперемешку и это первая песня — «до неё» ничего не было: просто с начала
+    engine.el.currentTime = 0;
+    return;
+  }
+  // по порядку — предыдущая в списке; текущая станет «впереди»
+  const i = (s.index - 1 + s.queue.length) % s.queue.length;
+  trail = pushBefore(trail, s.queue[i]!.id);
+  setIndex(i);
   void startCurrent(0.4);
 }
 
