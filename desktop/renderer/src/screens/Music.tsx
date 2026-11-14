@@ -352,7 +352,7 @@ export function Music() {
         </div>
       </header>
 
-      <WaveCard />
+      <WaveCard list={tab.kind === "all" ? undefined : { name: tabs.find((x) => tabKey(x.t) === tabKey(tab))?.label ?? "плейлист", tracks: tabTracks }} />
 
       {library.tracks.length > 0 && linkBar}
 

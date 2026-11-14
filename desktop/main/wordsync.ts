@@ -7,17 +7,21 @@ import { Readable } from "node:stream";
 import { pipeline as pump } from "node:stream/promises";
 import type { WordSync } from "../shared/wordsync.js";
 
-/** Единственная модель, которую разрешено скачивать. */
+/** Модель распознавания слов. */
 export const MODEL_REPO = "onnx-community/whisper-small_timestamped";
+/** Модель «отпечатка звука» для «Моей волны» (слушает песню и понимает стиль). */
+export const CLAP_REPO = "Xenova/larger_clap_music_and_speech";
+/** Только эти модели разрешено скачивать. */
+const REPOS = [MODEL_REPO, CLAP_REPO];
 const HF = "https://huggingface.co";
 
 /** «onnx-community/whisper-small_timestamped/resolve/main/onnx/encoder_model_q4.onnx» → путь в папке models. */
 export function modelFile(dataDir: string, rel: string): string | undefined {
-  const prefix = `${MODEL_REPO}/resolve/main/`;
-  if (!rel.startsWith(prefix)) return undefined;
-  const rest = rel.slice(prefix.length);
+  const repo = REPOS.find((r) => rel.startsWith(`${r}/resolve/main/`));
+  if (!repo) return undefined;
+  const rest = rel.slice(`${repo}/resolve/main/`.length);
   if (!/^[\w.-]+(\/[\w.-]+)?$/.test(rest) || rest.includes("..")) return undefined;
-  return join(dataDir, "models", MODEL_REPO, rest);
+  return join(dataDir, "models", repo, rest);
 }
 
 type Progress = (p: { file: string; loaded: number; total: number }) => void;
@@ -43,7 +47,8 @@ export function ensureModelFile(dataDir: string, rel: string, onProgress: Progre
       const total = Number(res.headers.get("content-length")) || 0;
       let loaded = 0;
       let last = 0;
-      const file = rel.split("/").pop()!;
+      // полный путь: по нему окно отличает модель слов от модели «Моей волны»
+      const file = rel;
       const counter = new TransformStream<Uint8Array, Uint8Array>({
         transform(chunk, ctl) {
           loaded += chunk.byteLength;

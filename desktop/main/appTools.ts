@@ -38,7 +38,7 @@ export type AppAction =
   | { type: "focus"; action: "start" | "pause" | "reset" }
   | { type: "screensaver"; on: boolean }
   | { type: "grow"; tab: string; lesson?: string; modal?: string }
-  | { type: "wave"; mood: "mine" | "energy" | "calm" | "study" | "new" | "stop" };
+  | { type: "wave"; mood: "mine" | "energy" | "calm" | "study" | "new" | "stop"; playlist?: string };
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -178,9 +178,16 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
       name: "app_wave",
       description:
         "«Моя волна» — бесконечный поток музыки под вкус хозяина: его треки + новая музыка из открытой базы (ccMixter, Internet Archive, свободные лицензии). " +
-        "mood: mine — под меня, energy — бодро, calm — спокойно, study — для учёбы, new — что-то новое; stop — выйти из волны. Популярных треков со стримингов там нет.",
-      schema: z.object({ mood: z.enum(["mine", "energy", "calm", "study", "new", "stop"]) }),
+        "mood: mine — под меня, energy — бодро, calm — спокойно, study — для учёбы, new — что-то новое; stop — выйти из волны. " +
+        "playlist — имя плейлиста: волна похожей музыки под стиль этого плейлиста (сами его песни не повторяются). Популярных треков со стримингов там нет.",
+      schema: z.object({ mood: z.enum(["mine", "energy", "calm", "study", "new", "stop"]), playlist: z.string().optional() }),
       run: (i) => {
+        if (i.playlist) {
+          const pl = d.playlists().find((p) => p.name.toLowerCase() === i.playlist!.toLowerCase()) ?? d.playlists().find((p) => p.name.toLowerCase().includes(i.playlist!.toLowerCase()));
+          if (!pl) return `Нет плейлиста «${i.playlist}». Есть: ${d.playlists().map((p) => `«${p.name}»`).join(", ") || "никаких"}.`;
+          d.act({ type: "wave", mood: "mine", playlist: pl.name });
+          return `Включил волну по плейлисту «${pl.name}» — похожая музыка, без его песен.`;
+        }
         d.act({ type: "wave", mood: i.mood });
         return i.mood === "stop" ? "Вышел из волны — музыка доиграет." : "Включил «Мою волну».";
       },

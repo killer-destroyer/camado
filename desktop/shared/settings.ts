@@ -48,6 +48,8 @@ export interface AppSettings {
   autopilot: { on: boolean; hour: number; studyHour: number };
   /** Голосовой Камадо: speak — читать ответы вслух; wake — слушать слово «Камадо» (микрофон включён, пока открыта программа). */
   voice: { speak: boolean; wake: boolean; rate: number };
+  /** «Характер» волны: незнакомое (похожее, но новое) или популярное (то же, но чаще слушаемое на площадке). */
+  waveCharacter: "new" | "popular";
   /** Темп и энергия своих треков (для «Моей волны» по настроению): id → {bpm, e}. */
   trackEnergy: Record<string, TrackEnergy>;
   /** Показывать перевод текста песни под строками (ИИ переводит один раз, перевод хранится). */
@@ -156,6 +158,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsByEar: true,
   lyricsTranslate: false,
   trackEnergy: {},
+  waveCharacter: "new",
   voice: { speak: true, wake: false, rate: 1.05 },
   autopilot: { on: true, hour: 20, studyHour: 18 },
   wordSync: true,

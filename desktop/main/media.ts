@@ -1,5 +1,5 @@
 // Раздача музыки и обложек окну через свой протокол camado-media:// с поддержкой перемотки.
-import { siteReferer } from "./download.js";
+import { isLocalHost, siteReferer } from "./download.js";
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { extname } from "node:path";
@@ -74,14 +74,23 @@ export async function serveFile(path: string, rangeHeader: string | null): Promi
  * Трек из открытой базы потоком: окно просит camado-media://stream/?u=<ссылка>, а мы качаем её сами —
  * только с разрешённых сайтов (allow), с перемоткой (Range), и отдаём окну с CORS, чтобы работали волны и эквалайзер.
  */
-export async function serveRemote(raw: string | null, rangeHeader: string | null, allow: RegExp, fetchImpl: typeof fetch = (i, o) => fetch(i, o)): Promise<Response> {
+export async function serveRemote(
+  raw: string | null,
+  rangeHeader: string | null,
+  allow: RegExp,
+  fetchImpl: typeof fetch = (i, o) => fetch(i, o),
+  /** Адрес выдал сам Камадо (из ответа открытой базы) — тогда можно и с узлов, которых нет в списке (у Audius их много). */
+  issued: (url: string) => boolean = () => false,
+): Promise<Response> {
   let u: URL;
   try {
     u = new URL(raw ?? "");
   } catch {
     return new Response("bad url", { status: 400 });
   }
-  if (u.protocol !== "https:" || !allow.test(u.hostname)) return new Response("not allowed", { status: 403 });
+  const trusted = issued(u.href);
+  if (u.protocol !== "https:" || (!allow.test(u.hostname) && !trusted)) return new Response("not allowed", { status: 403 });
+  if (trusted && (await isLocalHost(u))) return new Response("not allowed", { status: 403 });
   let res: Response;
   try {
     const ref = siteReferer(u);
@@ -94,7 +103,12 @@ export async function serveRemote(raw: string | null, rangeHeader: string | null
   }
   // после переадресаций — всё ещё разрешённый сайт (archive.org отдаёт файлы с ia8xxxxx.us.archive.org)
   try {
-    if (res.url && !allow.test(new URL(res.url).hostname)) return new Response("not allowed", { status: 403 });
+    if (res.url && res.url !== u.href) {
+      const fin = new URL(res.url);
+      // с выданного адреса Audius перекидывает на свои узлы хранения — любые, но только https и не в домашнюю сеть
+      const ok = allow.test(fin.hostname) || (trusted && fin.protocol === "https:" && !(await isLocalHost(fin)));
+      if (!ok) return new Response("not allowed", { status: 403 });
+    }
   } catch {
     // нет адреса — значит, без переадресации
   }

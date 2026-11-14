@@ -47,7 +47,7 @@ import { Library } from "./library.js";
 import { SheetsService, sheetTools } from "./sheets.js";
 import { moneySummary, parseMoney, type MoneyState } from "../shared/life.js";
 import { autopilotTick, autopilotToPlan, autopilotTools } from "./autopilot.js";
-import { MOODS, STREAM_HOSTS, Wave } from "./wave.js";
+import { EmbStore, gatherCandidates, MOODS, STREAM_HOSTS, Wave, type CandidateQuery } from "./wave.js";
 import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
 import { LyricsService } from "./lyrics.js";
 import { Updates } from "./updates.js";
@@ -248,8 +248,17 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
 }
 
 const wave = new Wave(store);
+const waveEmb = new EmbStore(join(dataDir, "wave-emb.json"));
+const waveCache = new Map<string, { at: number; t: Track[] }>();
+/** Адреса музыки и обложек, которые Камадо сам выдал окну из ответов открытой базы, — только их можно слушать потоком. */
+const issued = new Set<string>();
 /** Обложки из интернета — тоже через свой протокол (окно напрямую в интернет не ходит). */
-const viaStream = (t: Track): Track => (t.cover?.startsWith("https://") ? { ...t, cover: `camado-media://stream/?u=${encodeURIComponent(t.cover)}` } : t);
+const viaStream = (t: Track): Track => {
+  if (t.web?.url) issued.add(t.web.url);
+  if (!t.cover?.startsWith("https://")) return t;
+  issued.add(t.cover);
+  return { ...t, cover: `camado-media://stream/?u=${encodeURIComponent(t.cover)}` };
+};
 
 // Слежка за таблицами: изменения — уведомлением, в окно и в Telegram.
 const sheets = new SheetsService(
@@ -378,6 +387,29 @@ const handlers: Record<string, Handler> = {
   },
   "wave.feedback": (t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done") => {
     if (t && typeof t.id === "string" && ["like", "unlike", "dislike", "skip", "done"].includes(kind)) wave.feedback(t, kind);
+  },
+  /** Волна 2.0: кандидаты под стиль плейлиста (жанры угадало окно по звуку). */
+  "wave.candidates": async (q: CandidateQuery) => {
+    const safe: CandidateQuery = {
+      genres: (Array.isArray(q?.genres) ? q.genres : []).map(String).slice(0, 4),
+      ruShare: Math.max(0, Math.min(1, Number(q?.ruShare) || 0)),
+      artists: (Array.isArray(q?.artists) ? q.artists : []).map((a) => String(a).slice(0, 60)).slice(0, 30),
+      exclude: (Array.isArray(q?.exclude) ? q.exclude : []).map(String).slice(-500),
+    };
+    let list = await gatherCandidates(safe, (i, o) => fetch(i, o), waveCache);
+    // Audius молчит — берём старые открытые источники, чтобы волна не встала
+    if (!list.length) list = await wave.next({ mood: "new", count: 12, exclude: safe.exclude, library: [], favorites: [] }).catch(() => []);
+    return list.map(viaStream);
+  },
+  "wave.embGet": (ids: string[]) => waveEmb.get(Array.isArray(ids) ? ids.map(String) : []),
+  "wave.embPut": (entries: Record<string, string>) => waveEmb.put(entries && typeof entries === "object" ? entries : {}),
+  /** Что лайкал и что «не то»/пропускал — для подстройки волны на лету. */
+  "wave.taste": () => {
+    const t = wave.taste().tracks;
+    return {
+      liked: Object.entries(t).filter(([, e]) => e.v === 1).map(([id]) => id).slice(-200),
+      disliked: Object.entries(t).filter(([, e]) => e.v === -1 || (e.skips ?? 0) >= 2).map(([id]) => id).slice(-200),
+    };
   },
   "wave.moods": () => Object.entries(MOODS).map(([id, m]) => ({ id, label: m.label })),
 
@@ -1186,6 +1218,7 @@ async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
       );
       console.log(`[дамп ${name}] ${html}`);
     }
+    if (process.env.CAMADO_SHOT_EVAL) console.log(`[eval ${name}] ${await w.webContents.executeJavaScript(process.env.CAMADO_SHOT_EVAL).catch((e: Error) => e.message)}`);
     const img = await w.webContents.capturePage();
     await writeFile(join(dir, `${name}.png`), img.toPNG());
     if (overlay && !overlay.isDestroyed()) {
@@ -1291,7 +1324,7 @@ void app.whenReady().then(async () => {
     const url = new URL(req.url);
     const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
     // «Моя волна» и открытая база: поток с разрешённых сайтов (ccMixter, Internet Archive)
-    if (url.hostname === "stream") return serveRemote(url.searchParams.get("u"), req.headers.get("range"), STREAM_HOSTS);
+    if (url.hostname === "stream") return serveRemote(url.searchParams.get("u"), req.headers.get("range"), STREAM_HOSTS, undefined, (u) => issued.has(u));
     // модель распознавания слов: качается с Hugging Face один раз, дальше — с диска
     if (url.hostname === "model") {
       try {
@@ -1382,5 +1415,6 @@ void app.whenReady().then(async () => {
 app.on("will-quit", () => {
   globalShortcut.unregisterAll();
   void discord.stop();
+  void waveEmb.flush();
   void stopBot();
 });

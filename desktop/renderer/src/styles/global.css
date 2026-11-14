@@ -8182,3 +8182,10 @@ kbd,
   text-overflow: ellipsis;
   font-size: 11px;
 }
+.wave-play.busy {
+  animation: tr-pulse 1.1s ease-in-out infinite;
+}
+.chip-btn.ghost {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px rgb(var(--text-rgb) / 0.15);
+}

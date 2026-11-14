@@ -138,6 +138,8 @@ export function initWordSync(deps: {
   if (deps.energy) onEnergy = deps.energy;
   SR = deps.sr;
   api.on("model-progress", (p) => {
+    // модель «Моей волны» качается отдельно — её показывает волна
+    if (/clap/i.test(p.file)) return;
     fileProgress.set(p.file, { loaded: p.loaded, total: p.total });
     let loaded = 0;
     let total = 0;

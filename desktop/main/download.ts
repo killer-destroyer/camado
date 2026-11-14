@@ -65,7 +65,7 @@ export function setHostLookup(fn: HostLookup): void {
 
 const LOCAL_ONLY = "Это адрес домашней сети или самого компьютера — оттуда Камадо не скачивает. Нужна ссылка из интернета.";
 
-async function isLocalHost(u: URL): Promise<boolean> {
+export async function isLocalHost(u: URL): Promise<boolean> {
   const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "localhost" || /\.(localhost|local|internal|lan|home|arpa)$/.test(host)) return true;
   if (isIP(host)) return isPrivateIp(host);
@@ -73,7 +73,6 @@ async function isLocalHost(u: URL): Promise<boolean> {
   return ips.some(isPrivateIp);
 }
 
-/** Запрос с проверкой каждого перенаправления: сайт не может «перекинуть» Камадо в домашнюю сеть. */
 /**
  * Сайты, которые отдают файл только «со своей страницы» (защита от чужих ссылок): ccMixter отвечает 403 на прямую
  * ссылку на mp3. Ставим их собственную страницу — как будто нажал «скачать» на сайте (файлы там выложены для скачивания).
@@ -82,6 +81,7 @@ export function siteReferer(u: URL): string | undefined {
   return /(^|\.)ccmixter\.org$/i.test(u.hostname) ? "https://ccmixter.org/" : undefined;
 }
 
+/** Запрос с проверкой каждого перенаправления: сайт не может «перекинуть» Камадо в домашнюю сеть. */
 async function publicFetch(
   start: URL,
   fetchImpl: typeof fetch,

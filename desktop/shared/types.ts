@@ -58,11 +58,13 @@ export interface Track {
 
 export interface WebTrackInfo {
   url: string;
-  source: "ccMixter" | "Internet Archive";
+  source: "ccMixter" | "Internet Archive" | "Audius";
   page?: string;
   license?: string;
   licenseUrl?: string;
   tags?: string[];
+  /** Сколько раз слушали на площадке (для «Популярного»). */
+  plays?: number;
 }
 
 /** Настроение «Моей волны». */
@@ -508,6 +510,12 @@ export interface CamadoApi {
     next(mood: WaveMood, exclude?: string[]): Promise<Track[]>;
     feedback(t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done"): Promise<void>;
     moods(): Promise<{ id: WaveMood; label: string }[]>;
+    /** Волна 2.0: кандидаты с Audius под стиль плейлиста. */
+    candidates(q: { genres: string[]; ruShare: number; artists: string[]; exclude: string[] }): Promise<Track[]>;
+    /** Отпечатки звука (base64 float32) по id песен. */
+    embGet(ids: string[]): Promise<Record<string, string>>;
+    embPut(entries: Record<string, string>): Promise<void>;
+    taste(): Promise<{ liked: string[]; disliked: string[] }>;
   };
   sheets: {
     list(): Promise<SheetView[]>;

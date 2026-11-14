@@ -274,3 +274,94 @@ export class Wave {
 }
 
 const clamp = (v: number) => Math.max(-10, Math.min(10, Math.round(v * 100) / 100));
+
+// ---------- «Моя волна» 2.0: кандидаты с Audius под стиль плейлиста ----------
+
+export interface CandidateQuery {
+  /** Жанры, которые окно угадало по звуку плейлиста (см. guessGenres). */
+  genres: string[];
+  /** Доля русских песен в плейлисте. */
+  ruShare: number;
+  /** Исполнители из плейлиста — их треки, каверы и ремиксы на Audius. */
+  artists: string[];
+  exclude: string[];
+}
+
+/** Кандидаты для волны: популярное в угаданных жанрах + поиск по исполнителям + русское, если плейлист русский. */
+export async function gatherCandidates(q: CandidateQuery, fetchImpl: typeof fetch, cache = new Map<string, { at: number; t: Track[] }>()): Promise<Track[]> {
+  const { audiusSearch, audiusTrending, RU_WORDS } = await import("./audius.js");
+  const cached = async (key: string, fn: () => Promise<Track[]>) => {
+    const hit = cache.get(key);
+    if (hit && Date.now() - hit.at < 30 * 60_000) return hit.t;
+    const t = await fn().catch(() => [] as Track[]);
+    if (t.length) cache.set(key, { at: Date.now(), t });
+    return t;
+  };
+  const shuffle = <T>(a: T[]) => [...a].sort(() => Math.random() - 0.5);
+  const times = ["week", "month", "allTime"] as const;
+  const jobs: Promise<Track[]>[] = [];
+  for (const g of q.genres.slice(0, 3)) {
+    const time = times[Math.floor(Math.random() * times.length)]!;
+    jobs.push(cached(`tr:${g}:${time}`, () => audiusTrending(g, time, fetchImpl)).then((t) => shuffle(t).slice(0, 18)));
+  }
+  for (const a of shuffle(q.artists.filter((a) => a && !/неизвестн|unknown/i.test(a))).slice(0, 3)) {
+    jobs.push(cached(`s:${a.toLowerCase()}`, () => audiusSearch(a, fetchImpl)).then((t) => t.slice(0, 6)));
+  }
+  // русские песни — поиском по частым русским словам внутри угаданных жанров (без жанра поиск даёт что попало)
+  const ruN = q.ruShare >= 0.15 ? Math.max(2, Math.round(q.ruShare * 6)) : 0;
+  const ruGenres = q.genres.length ? q.genres.slice(0, 2) : [undefined];
+  shuffle(RU_WORDS)
+    .slice(0, ruN)
+    .forEach((w, k) => {
+      const g = ruGenres[k % ruGenres.length];
+      jobs.push(cached(`s:${w}:${g ?? ""}`, () => audiusSearch(w, fetchImpl, g)).then((t) => t.filter((x) => /[а-яё]/i.test(`${x.title} ${x.artist}`))));
+    });
+  const skip = new Set(q.exclude);
+  const all = new Map<string, Track>();
+  for (const t of (await Promise.all(jobs)).flat()) if (!skip.has(t.id)) all.set(t.id, t);
+  return shuffle([...all.values()]).slice(0, 70);
+}
+
+/** Отпечатки звука (CLAP) песен — чтобы не слушать одну песню дважды. Хранится файлом в папке программы. */
+export class EmbStore {
+  private data?: Record<string, string>;
+  private timer?: NodeJS.Timeout;
+  constructor(private file: string) {}
+
+  private async load(): Promise<Record<string, string>> {
+    if (this.data) return this.data;
+    const { readFile } = await import("node:fs/promises");
+    try {
+      const raw = JSON.parse(await readFile(this.file, "utf8")) as unknown;
+      this.data = raw && typeof raw === "object" ? (raw as Record<string, string>) : {};
+    } catch {
+      this.data = {};
+    }
+    return this.data;
+  }
+
+  async get(ids: string[]): Promise<Record<string, string>> {
+    const d = await this.load();
+    const out: Record<string, string> = {};
+    for (const id of ids.slice(0, 2000)) if (d[id]) out[id] = d[id]!;
+    return out;
+  }
+
+  async put(entries: Record<string, string>): Promise<void> {
+    const d = await this.load();
+    for (const [id, v] of Object.entries(entries)) {
+      // только похоже на вектор: base64 от 512 чисел float32
+      if (typeof id === "string" && id.length < 80 && typeof v === "string" && v.length < 4000 && /^[A-Za-z0-9+/=]+$/.test(v)) d[id] = v;
+    }
+    const keys = Object.keys(d);
+    if (keys.length > 8000) for (const k of keys.slice(0, keys.length - 8000)) delete d[k];
+    clearTimeout(this.timer);
+    this.timer = setTimeout(() => void this.flush(), 1500);
+  }
+
+  async flush(): Promise<void> {
+    if (!this.data) return;
+    const { writeFile } = await import("node:fs/promises");
+    await writeFile(this.file, JSON.stringify(this.data)).catch(() => undefined);
+  }
+}

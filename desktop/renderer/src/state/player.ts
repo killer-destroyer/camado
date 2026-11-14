@@ -13,6 +13,7 @@ import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
 import { app, toast, updateSettings } from "./app";
 import { initWordSync, kick as kickWords, withWords } from "./wordsync";
+import { extendWave, waveFeedback } from "./wave";
 
 interface PlayerState {
   library: LibraryState;
@@ -34,8 +35,8 @@ interface PlayerState {
   earSyncing?: boolean;
   playlists: Playlist[];
   favorites: string[];
-  /** Играет «Моя волна»: настроение и что уже было. */
-  wave?: { mood: WaveMood; loading?: boolean; seen: string[] };
+  /** Играет «Моя волна»: настроение (или плейлист name), что уже было. */
+  wave?: { mood: WaveMood; name?: string; loading?: boolean; seen: string[] };
   /** Перевод текста песни: key — для какого текста, lines — по строкам (той же длины). */
   translation?: { key: string; lines?: string[]; native?: boolean; busy?: boolean; error?: string };
 }
@@ -383,7 +384,10 @@ export async function toggleFavorite(trackId: string): Promise<void> {
   // сразу на экране, потом в базе
   const fav = player.get().favorites;
   const t = player.get().queue.find((x) => x.id === trackId) ?? player.get().library.tracks.find((x) => x.id === trackId);
-  if (t) void api.wave.feedback(t, fav.includes(trackId) ? "unlike" : "like");
+  if (t) {
+    void api.wave.feedback(t, fav.includes(trackId) ? "unlike" : "like");
+    if (!fav.includes(trackId)) waveFeedback(t, "like");
+  }
   player.set({ favorites: fav.includes(trackId) ? fav.filter((x) => x !== trackId) : [trackId, ...fav] });
   await api.playlists.toggleFavorite(trackId);
 }
@@ -400,64 +404,7 @@ function flushListened(): void {
   if (t) void api.plays.add({ trackId: t.id, title: t.title, artist: t.artist, seconds: Math.round(l.seconds) });
 }
 
-// ---------- «Моя волна» ----------
-
-export const WAVE_MOODS: { id: WaveMood; label: string }[] = [
-  { id: "mine", label: "Под меня" },
-  { id: "energy", label: "Бодро" },
-  { id: "calm", label: "Спокойно" },
-  { id: "study", label: "Учёба" },
-  { id: "new", label: "Что-то новое" },
-];
-
-export async function startWave(mood: WaveMood = "mine"): Promise<void> {
-  player.set({ wave: { mood, loading: true, seen: [] } });
-  const tracks = await api.wave.next(mood, []).catch(() => [] as Track[]);
-  if (player.get().wave?.mood !== mood) return;
-  if (!tracks.length) {
-    player.set({ wave: undefined });
-    toast("Волна пока пустая: добавь музыку в библиотеку или проверь интернет", "warn");
-    return;
-  }
-  player.set({ wave: { mood, seen: tracks.map((t) => t.id) } });
-  await playQueue(tracks, 0, true);
-  toast(`«Моя волна» · ${WAVE_MOODS.find((m) => m.id === mood)?.label}`, "info");
-}
-
-export function stopWave(): void {
-  player.set({ wave: undefined });
-}
-
-let extending: Promise<void> | undefined;
-/** Подгрузить ещё, пока волна не кончилась. */
-export function extendWave(): Promise<void> {
-  const w = player.get().wave;
-  if (!w) return Promise.resolve();
-  extending ??= (async () => {
-    player.set({ wave: { ...w, loading: true } });
-    const more = await api.wave.next(w.mood, w.seen).catch(() => [] as Track[]);
-    const cur = player.get();
-    if (cur.wave?.mood !== w.mood) return;
-    const fresh = more.filter((t) => !cur.queue.some((q) => q.id === t.id));
-    // очередь не растёт бесконечно: старое (давно сыгранное) убираем
-    const drop = Math.max(0, cur.index - 20);
-    player.set({
-      queue: [...cur.queue.slice(drop), ...fresh],
-      index: cur.index - drop,
-      wave: { mood: w.mood, seen: [...w.seen, ...fresh.map((t) => t.id)].slice(-400) },
-    });
-  })().finally(() => (extending = undefined));
-  return extending;
-}
-
-/** «Не то»: больше такого не ставить, сразу дальше. */
-export function waveDislike(): void {
-  const t = currentTrack();
-  if (!t) return;
-  void api.wave.feedback(t, "dislike");
-  toast("Понял, такое больше не ставлю", "info");
-  next(false);
-}
+// ---------- «Моя волна» — в state/wave.ts ----------
 
 /** «Сохранить к себе»: трек из открытой базы скачивается в «Музыка/Камадо». */
 export async function saveWebTrack(t: Track): Promise<void> {
@@ -584,7 +531,10 @@ export function next(auto = false, fade = auto ? 0 : 0.4): void {
     const d = engine.el.duration || cur.duration;
     const at = engine.el.currentTime;
     if (auto) void api.wave.feedback(cur, "done");
-    else if (d > 0 && at > 2 && at < d * 0.4) void api.wave.feedback(cur, "skip");
+    else if (d > 0 && at > 2 && at < d * 0.4) {
+      void api.wave.feedback(cur, "skip");
+      if (s.wave) waveFeedback(cur, "skip");
+    }
   }
   if (s.wave && s.index >= s.queue.length - 1) {
     // волна кончилась раньше, чем подгрузилась — дождаться и играть дальше

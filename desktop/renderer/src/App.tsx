@@ -16,7 +16,7 @@ import { redoWords } from "./state/wordsync";
 import { CHANGELOG } from "./lib/changelog";
 import { Screensaver, startScreensaver, stopScreensaver, watchIdle } from "./components/Screensaver";
 import type { WaveMood } from "../../shared/types";
-import { startWave, stopWave } from "./state/player";
+import { startWave, stopWave, waveDebug, wavePreview } from "./state/wave";
 import { currentTrack, initPlayer, loadLibrary, player, playQueue, resetLyricsSync, seek, position, togglePlay, watchLibrary, startWordSync, next, prev } from "./state/player";
 import { Background } from "./components/Background";
 import { handleKey, handleKeyUp } from "./state/hotkeys";
@@ -78,7 +78,7 @@ type AiAction =
   | { type: "screensaver"; on: boolean }
   | { type: "grow"; tab: string; lesson?: string; modal?: string }
   | { type: "words-redo"; trackId?: string }
-  | { type: "wave"; mood: WaveMood | "stop" };
+  | { type: "wave"; mood: WaveMood | "stop"; playlist?: string };
 
 function aiAction(a: AiAction): void {
   if (a.type === "screen") {
@@ -92,7 +92,12 @@ function aiAction(a: AiAction): void {
     void playQueue(list, Math.min(a.index, list.length - 1));
   } else if (a.type === "wave") {
     if (a.mood === "stop") stopWave();
-    else void startWave(a.mood);
+    else if (a.playlist) {
+      const pl = player.get().playlists.find((p) => p.name === a.playlist);
+      const byId = new Map(player.get().library.tracks.map((t) => [t.id, t]));
+      const tracks = (pl?.trackIds ?? []).map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+      if (pl && tracks.length) void startWave("mine", tracks, pl.name);
+    } else void startWave(a.mood);
   } else if (a.type === "music") {
     if (a.action === "next") next();
     else if (a.action === "prev") prev();
@@ -167,6 +172,14 @@ export function App() {
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("keydown", onKey);
 
+    (window as unknown as { __camadoWave: () => string }).__camadoWave = () =>
+      JSON.stringify({
+        wave: player.get().wave,
+        queue: player.get().queue.map((t) => ({ title: t.title, artist: t.artist, tags: t.web?.tags, src: t.web?.source })),
+        index: player.get().index,
+        debug: waveDebug(),
+        preview: wavePreview(10),
+      });
     // Для проверки дизайна (снимки экранов).
     window.__camadoShot = (raw: string) => {
       // «burst@20:2» — экран, перемотать на 20 с, трек №2 (для проверки дизайна)
@@ -191,6 +204,13 @@ export function App() {
       else if (name.startsWith("wave-")) {
         go("music");
         void startWave(name.slice(5) as WaveMood);
+      } else if (name.startsWith("wavepl-")) {
+        // волна по плейлисту (для проверки подбора)
+        go("music");
+        const pl = player.get().playlists.find((p) => p.name === name.slice(7));
+        const byId = new Map(player.get().library.tracks.map((t) => [t.id, t]));
+        const tracks = (pl?.trackIds ?? []).map((id) => byId.get(id)).filter((t): t is NonNullable<typeof t> => !!t);
+        if (pl) void startWave("mine", tracks, pl.name);
       }
       else if (name === "trackedit") {
         go("music");

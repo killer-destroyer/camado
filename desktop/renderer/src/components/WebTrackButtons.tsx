@@ -2,7 +2,8 @@
 import { Download, ThumbsDown } from "lucide-react";
 import type { Track } from "../../../shared/types";
 import { useStore } from "../lib/store";
-import { player, saveWebTrack, waveDislike } from "../state/player";
+import { player, saveWebTrack } from "../state/player";
+import { waveDislike } from "../state/wave";
 
 export function WebTrackButtons({ track, size = 17 }: { track?: Track; size?: number }) {
   const wave = useStore(player, (s) => !!s.wave);
