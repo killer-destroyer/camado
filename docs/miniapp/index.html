@@ -1,0 +1,311 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Камадо</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+      /* Цвета — из темы Telegram (светлая/тёмная сама) */
+      :root {
+        --bg: var(--tg-theme-bg-color, #101014);
+        --bg2: var(--tg-theme-secondary-bg-color, #1b1b22);
+        --text: var(--tg-theme-text-color, #f2f2f5);
+        --muted: var(--tg-theme-hint-color, #8d8d99);
+        --accent: var(--tg-theme-button-color, #8b7bff);
+        --on-accent: var(--tg-theme-button-text-color, #fff);
+        --link: var(--tg-theme-link-color, #8b7bff);
+        --bad: #ff5d73;
+        --hot: #ff9f43;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 15px/1.4 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      main {
+        padding: 12px 14px calc(90px + env(safe-area-inset-bottom));
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 4px 0 2px;
+      }
+      .sub {
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+      .tabs {
+        display: flex;
+        gap: 6px;
+        overflow-x: auto;
+        margin: 0 0 12px;
+        scrollbar-width: none;
+      }
+      .tabs button {
+        flex: none;
+        border: 0;
+        border-radius: 999px;
+        padding: 8px 14px;
+        font: inherit;
+        font-weight: 600;
+        color: var(--muted);
+        background: var(--bg2);
+      }
+      .tabs button.on {
+        background: var(--accent);
+        color: var(--on-accent);
+      }
+      .card {
+        background: var(--bg2);
+        border-radius: 14px;
+        padding: 12px 14px;
+        margin-bottom: 10px;
+      }
+      .card h3 {
+        margin: 0 0 8px;
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 0;
+        border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+      }
+      .row:first-of-type {
+        border-top: 0;
+      }
+      .row .main {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .t {
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+      .row .s {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .due.over {
+        color: var(--bad);
+      }
+      .due.soon {
+        color: var(--hot);
+      }
+      .check {
+        flex: none;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        background: transparent;
+        color: var(--accent);
+        font-size: 16px;
+      }
+      .big {
+        font-size: 26px;
+        font-weight: 800;
+      }
+      .bar {
+        height: 6px;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--text) 10%, transparent);
+        overflow: hidden;
+        margin-top: 6px;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+      }
+      a {
+        color: var(--link);
+        text-decoration: none;
+      }
+      .add {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        display: flex;
+        gap: 8px;
+        padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+        background: var(--bg);
+        border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+      }
+      .add input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        border-radius: 12px;
+        padding: 11px 12px;
+        font: inherit;
+        color: var(--text);
+        background: var(--bg2);
+        outline: none;
+      }
+      .add button {
+        border: 0;
+        border-radius: 12px;
+        padding: 0 14px;
+        font: inherit;
+        font-weight: 700;
+        background: var(--accent);
+        color: var(--on-accent);
+      }
+      .empty {
+        color: var(--muted);
+        text-align: center;
+        padding: 24px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Камадо</h1>
+      <div class="sub" id="sub">…</div>
+      <div class="tabs" id="tabs"></div>
+      <div id="view"></div>
+    </main>
+    <div class="add">
+      <input id="addText" placeholder="Записать: «матан №5 к пятнице» или «кофе 250»" maxlength="300" />
+      <button id="addBtn">+</button>
+    </div>
+    <script>
+      // Данные приходят в ссылке после «#» — эта часть остаётся в телефоне и никуда не отправляется.
+      const tg = window.Telegram && window.Telegram.WebApp;
+      if (tg) {
+        tg.ready();
+        tg.expand();
+      }
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      let D = null;
+      let tab = "today";
+
+      async function load() {
+        const m = location.hash.match(/[#&]d=([\w-]+)/);
+        if (!m) return null;
+        const b64 = m[1].replace(/-/g, "+").replace(/_/g, "/");
+        const bin = Uint8Array.from(atob(b64 + "===".slice((b64.length + 3) % 4)), (c) => c.charCodeAt(0));
+        const stream = new Blob([bin]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+        return JSON.parse(await new Response(stream).text());
+      }
+
+      const fmt = (iso, opts) => (iso ? new Date(iso).toLocaleString("ru-RU", { timeZone: D.tz, ...opts }) : "");
+      function dueText(iso) {
+        if (!iso) return { text: "без срока", cls: "" };
+        const ms = new Date(iso).getTime() - Date.now();
+        const cls = ms < 0 ? "over" : ms < 2 * 86400e3 ? "soon" : "";
+        const d = fmt(iso, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+        return { text: ms < 0 ? `просрочено · ${d}` : d, cls };
+      }
+      const KIND = { homework: "ДЗ", test: "контрольная", exam: "экзамен", lab: "лаба", project: "проект", other: "" };
+
+      function send(obj) {
+        if (!tg || !tg.sendData) return alert("Открой через кнопку «📱 Камадо» в боте");
+        tg.sendData(JSON.stringify(obj)); // Telegram закроет окно и передаст боту
+      }
+
+      function taskRows(list) {
+        if (!list.length) return `<div class="empty">Ничего не задано 🎉</div>`;
+        return list
+          .map(([id, subj, title, due, kind]) => {
+            const d = dueText(due);
+            return `<div class="row"><button class="check" data-done="${id}" title="Сделано">✓</button><div class="main"><div class="t">${esc(title)}</div><div class="s">${esc(subj)}${subj ? " · " : ""}${esc(KIND[kind] ?? "")}${KIND[kind] ? " · " : ""}<span class="due ${d.cls}">${esc(d.text)}</span></div></div></div>`;
+          })
+          .join("");
+      }
+
+      function render() {
+        const tabs = [
+          ["today", "Сегодня"],
+          ["tasks", `Задания ${D.t.length}`],
+          ["exams", "Сессия"],
+          ["money", "Деньги"],
+          ["links", "Ссылки"],
+        ].filter(([id]) => id !== "money" || D.m);
+        $("tabs").innerHTML = tabs.map(([id, l]) => `<button class="${id === tab ? "on" : ""}" data-tab="${id}">${esc(l)}</button>`).join("");
+        let h = "";
+        if (tab === "today") {
+          const soon = D.t.filter(([, , , due]) => due && new Date(due).getTime() - Date.now() < 3 * 86400e3);
+          if (D.c && D.c.length)
+            h += `<div class="card"><h3>Пары сегодня</h3>${D.c
+              .map((c) => `<div class="row"><div class="main"><div class="t">${esc(c.subject)}</div><div class="s">${fmt(c.start, { hour: "2-digit", minute: "2-digit" })}–${fmt(c.end, { hour: "2-digit", minute: "2-digit" })}${c.room ? " · ауд. " + esc(c.room) : ""}</div></div></div>`)
+              .join("")}</div>`;
+          h += `<div class="card"><h3>Сроки на 3 дня</h3>${taskRows(soon)}</div>`;
+          if (D.m && D.m.perDay != null) h += `<div class="card"><h3>Можно тратить в день</h3><div class="big">${D.m.perDay.toLocaleString("ru-RU")} ₽</div><div class="s" style="color:var(--muted)">сегодня потрачено ${D.m.spentToday.toLocaleString("ru-RU")} ₽</div></div>`;
+          const ex = D.e[0];
+          if (ex) h += examCard([ex]);
+        } else if (tab === "tasks") h += `<div class="card">${taskRows(D.t)}</div>`;
+        else if (tab === "exams") h += D.e.length ? examCard(D.e) : `<div class="empty">Экзаменов нет</div>`;
+        else if (tab === "money" && D.m)
+          h += `<div class="card"><h3>Деньги</h3>${D.m.balance != null ? `<div class="row"><div class="main">На карте</div><b>${D.m.balance.toLocaleString("ru-RU")} ₽</b></div>` : ""}${D.m.perDay != null ? `<div class="row"><div class="main">Можно в день${D.m.daysLeft ? ` (ещё ${D.m.daysLeft} дн.)` : ""}</div><b>${D.m.perDay.toLocaleString("ru-RU")} ₽</b></div>` : ""}<div class="row"><div class="main">Потрачено сегодня</div><b>${D.m.spentToday.toLocaleString("ru-RU")} ₽</b></div></div><div class="sub">Трату — в поле внизу: «шаурма 290».</div>`;
+        else if (tab === "links")
+          h += D.l.length ? `<div class="card">${D.l.map(([t, u]) => `<div class="row"><div class="main"><a href="${esc(u)}" data-link="${esc(u)}">${esc(t)}</a></div></div>`).join("")}</div>` : `<div class="empty">Ссылок нет</div>`;
+        $("view").innerHTML = h;
+      }
+
+      function examCard(list) {
+        return `<div class="card"><h3>Сессия</h3>${list
+          .map(([title, at, pct]) => {
+            const days = Math.ceil((new Date(at).getTime() - Date.now()) / 86400e3);
+            return `<div class="row"><div class="main"><div class="t">${esc(title)}</div><div class="s">${fmt(at, { day: "numeric", month: "long" })} · через ${days} дн.${pct >= 0 ? ` · готов на ${pct}%` : ""}</div>${pct >= 0 ? `<div class="bar"><i style="width:${pct}%"></i></div>` : ""}</div></div>`;
+          })
+          .join("")}</div>`;
+      }
+
+      document.addEventListener("click", (e) => {
+        const t = e.target.closest("[data-tab],[data-done],[data-link]");
+        if (!t) return;
+        if (t.dataset.tab) {
+          tab = t.dataset.tab;
+          render();
+        } else if (t.dataset.done) {
+          tg && tg.HapticFeedback && tg.HapticFeedback.impactOccurred("light");
+          send({ a: "done", id: Number(t.dataset.done) });
+        } else if (t.dataset.link && /^https?:/i.test(t.dataset.link)) {
+          e.preventDefault();
+          if (tg && tg.openLink) tg.openLink(t.dataset.link);
+          else window.open(t.dataset.link, "_blank");
+        }
+      });
+
+      function submit() {
+        const text = $("addText").value.trim();
+        if (!text) return;
+        // «кофе 250», «+5000 стипендия» — трата; остальное — записать задание
+        const money = /^\+?\s*[^\d]{1,40}\s+\+?\d{1,7}([.,]\d{1,2})?\s*(₽|р|руб)?$|^\+?\d{1,7}\s*(₽|р|руб)?\s+[^\d]{1,40}$/i.test(text) && !/(дз|№|лаб|задач|к\s+\d|до\s+\d)/i.test(text);
+        send({ a: money ? "spend" : "add", text });
+      }
+      $("addBtn").onclick = submit;
+      $("addText").onkeydown = (e) => e.key === "Enter" && submit();
+
+      load()
+        .then((d) => {
+          if (!d) {
+            $("sub").textContent = "Открой через бота: команда /app";
+            return;
+          }
+          D = d;
+          const mins = Math.round((Date.now() - d.at) / 60000);
+          $("sub").textContent = mins < 2 ? "данные свежие" : `данные на ${fmt(new Date(d.at).toISOString(), { hour: "2-digit", minute: "2-digit" })} · обновить — /app`;
+          render();
+        })
+        .catch(() => ($("sub").textContent = "Не прочитал данные — открой заново через /app"));
+    </script>
+  </body>
+</html>

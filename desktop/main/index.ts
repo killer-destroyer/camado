@@ -1,0 +1,1478 @@
+// Приложение Камадо для компьютера: окно + всё ядро (задания, напоминания, ИИ, бот) в одном процессе.
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  globalShortcut,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Notification,
+  powerMonitor,
+  safeStorage,
+  protocol,
+  screen,
+  shell,
+  Tray,
+  net,
+} from "electron";
+import { Bot } from "grammy";
+import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
+import { randomInt } from "node:crypto";
+import { copyFile, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { basename, extname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { API_KEY_KV, BOT_COMMANDS } from "../../src/bot.js";
+import { loadConfig } from "../../src/config.js";
+import { aiKey, applyAi, createCore, createCoreBot, currentAiConfig, setAiConfig, setApiKey, type CamadoCore } from "../../src/core.js";
+import { buildAppTools } from "./appTools.js";
+import { heardLineTimes } from "../../src/camado/listen.js";
+import { GEMINI_MODELS, geminiKeyProblem } from "../../src/llm/gemini.js";
+import { UnsupportedAttachmentError } from "../../src/llm/types.js";
+import { cardsFromNote, splitIntoSteps, tutor } from "../../src/camado/study.js";
+import { isLocalUrl, serviceName } from "../../src/llm/openai.js";
+import { humanAiError, networkHint } from "../../src/llm/errors.js";
+import { KEY_KV, OPENAI_PRESETS, type AiConfig } from "../../src/llm/providers.js";
+import { checkAnthropicKey } from "../../src/llm/anthropic.js";
+import { BudgetExceededError } from "../../src/llm/metered.js";
+import { parseTaskArgs } from "../../src/manual.js";
+import { startReminderLoop } from "../../src/reminders.js";
+import { mergeSettings, type AppSettings } from "../shared/settings.js";
+import type { AppInfo, BotStatus, NowPlayingState, OverlayState, TaskInput, TaskPatch, Track, WaveMood } from "../shared/types.js";
+import { DiscordPresence } from "./discord.js";
+import { importFromHtml, importFromUrl } from "./download.js";
+import { freeTracks, searchFree } from "./freeMusic.js";
+import { Library } from "./library.js";
+import { SheetsService, sheetTools } from "./sheets.js";
+import { moneySummary, parseMoney, type MoneyState } from "../shared/life.js";
+import { autopilotTick, autopilotToPlan, autopilotTools } from "./autopilot.js";
+import { DEEZER_TRACK, Hits } from "./hits.js";
+import { EmbStore, gatherCandidates, MOODS, STREAM_HOSTS, Wave, type CandidateQuery } from "./wave.js";
+import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
+import { LyricsService } from "./lyrics.js";
+import { Updates } from "./updates.js";
+import { growHandlers } from "./grow.js";
+import { COURSES } from "../shared/courses/index.js";
+import { bookFilePath, booksHandlers } from "./books.js";
+import { ensureModelFile, modelFile, wordsyncHandlers } from "./wordsync.js";
+import { applyPendingRestore, lifeHandlers } from "./life.js";
+import { lifeTools } from "./lifeTools.js";
+import { importDocument } from "../../src/camado/docs.js";
+import { serveFile, serveRemote } from "./media.js";
+
+const here = fileURLToPath(new URL(".", import.meta.url));
+const SETTINGS_KV = "desktop_settings";
+
+protocol.registerSchemesAsPrivileged([
+  { scheme: "camado-media", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
+]);
+
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+  process.exit(0);
+}
+
+// Русский формат дат в полях ввода и системных подписях окна.
+app.commandLine.appendSwitch("lang", "ru-RU");
+
+// Без пометки «Electron» в User-Agent: иначе некоторые сайты (плееры) считают браузер устаревшим.
+app.userAgentFallback = app.userAgentFallback.replace(/\s?(Electron|camado)\/\S+/gi, "");
+
+// ---------- Настройки окружения ----------
+
+function loadEnv(): void {
+  const envFile = app.isPackaged ? join(app.getPath("userData"), ".env") : join(process.cwd(), ".env");
+  if (existsSync(envFile)) process.loadEnvFile(envFile);
+  if (app.isPackaged && !process.env.CAMADO_DB_PATH) {
+    process.env.CAMADO_DB_PATH = join(app.getPath("userData"), "camado.db");
+  }
+}
+
+loadEnv();
+const config = loadConfig();
+// «Вернуть резервную копию» — подменяем базу до того, как её открыть
+try {
+  if (applyPendingRestore(config.CAMADO_DB_PATH)) console.log("Вернул резервную копию базы");
+} catch (err) {
+  console.error("Не вернул копию:", err);
+}
+const core: CamadoCore = createCore(config);
+const { store } = core;
+// Каждый запуск — новый разговор: старая переписка не показывается и не путает ИИ.
+// Задания, ссылки, заметки и то, что Камадо «запомнил», остаются.
+store.clearChat();
+
+let settings: AppSettings = mergeSettings(JSON.parse(store.getKv(SETTINGS_KV) ?? "null"));
+const saveSettings = (patch: Partial<AppSettings>): AppSettings => {
+  settings = mergeSettings({ ...settings, ...patch });
+  store.setKv(SETTINGS_KV, JSON.stringify(settings));
+  return settings;
+};
+
+const dataDir = app.getPath("userData");
+let win: BrowserWindow | undefined;
+let tray: Tray | undefined;
+let quitting = false;
+let bot: Bot | undefined;
+const botStatus = { running: false } as Pick<BotStatus, "running" | "username" | "error">;
+
+// Бот настраивается прямо в приложении (токен и хозяин хранятся в базе), .env — запасной вариант.
+const TG_TOKEN_KV = "telegram_token";
+const TG_OWNER_KV = "telegram_owner";
+const botToken = () => store.getSecret(TG_TOKEN_KV) ?? config.TELEGRAM_BOT_TOKEN;
+const botOwner = (): number | undefined => {
+  const v = store.getKv(TG_OWNER_KV);
+  return v ? Number(v) : config.OWNER_TELEGRAM_ID;
+};
+let pairing: { code: string; until: number } | undefined;
+
+const send = (channel: string, payload?: unknown) => {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+};
+
+const library = new Library(dataDir, () => send("library-changed"));
+const updates = new Updates(
+  (s) => send("update-status", s),
+  () => {
+    // для установки программа должна правда закрыться, а не спрятаться в фон
+    quitting = true;
+  },
+);
+const discord = new DiscordPresence();
+let nowPlaying: NowPlayingState | null = null;
+const lyrics = new LyricsService(join(dataDir, "lyrics-cache"), (id) => library.trackPath(id));
+
+// Любое изменение данных (из окна, бота или ИИ) — окно перерисовывает списки.
+let changeTimer: NodeJS.Timeout | undefined;
+store.onChange = () => {
+  clearTimeout(changeTimer);
+  changeTimer = setTimeout(() => send("data-changed"), 60);
+};
+
+function iconPath(name: string): string {
+  // В установленной программе иконки лежат рядом с ней (resources/assets), а не внутри архива.
+  return app.isPackaged ? join(process.resourcesPath, "assets", name) : join(app.getAppPath(), "desktop", "assets", name);
+}
+
+function notify(title: string, body: string): void {
+  if (!Notification.isSupported()) return;
+  const n = new Notification({ title, body, icon: iconPath("icon.png"), silent: false });
+  n.on("click", () => showWindow());
+  n.show();
+}
+
+// ---------- Telegram-бот внутри приложения ----------
+
+function startBot(): void {
+  const token = botToken();
+  if (bot || !token || !settings.runBot) return;
+  try {
+    bot = createCoreBot(core, {
+      token,
+      owner: botOwner,
+      miniapp: {
+        // пары сегодня и деньги — их знает только программа
+        extras: () => {
+          const now = new Date();
+          const classes = (life.handlers["schedule.day"]!(now.toISOString() as never) as { startAt: string; endAt: string; subject: string; room?: string }[])
+            .filter((c) => new Date(c.endAt).getTime() > now.getTime())
+            .map((c) => ({ start: c.startAt, end: c.endAt, subject: c.subject, room: c.room }));
+          const m = moneySummary(life.handlers["money.get"]!() as MoneyState, now);
+          return { classes, money: { balance: m.balance, perDay: m.perDay, spentToday: m.spentToday, daysLeft: m.daysLeft } };
+        },
+        spend: (text) => {
+          const p = parseMoney(text);
+          if (!p) return "Не понял трату. Напиши так: «кофе 250» или «+5000 стипендия».";
+          life.handlers["money.add"]!(p.amount as never, p.title as never);
+          send("life-changed", "money");
+          return p.amount < 0 ? `Записал трату: ${p.title} — ${Math.abs(p.amount)} ₽` : `Записал: ${p.title} +${p.amount} ₽`;
+        },
+      },
+      pairing: {
+        code: () => (pairing && Date.now() < pairing.until ? pairing.code : undefined),
+        done: (userId) => {
+          store.setKv(TG_OWNER_KV, String(userId));
+          pairing = undefined;
+          notify("Камадо", "Telegram-бот привязан к тебе 🎉");
+        },
+      },
+    });
+  } catch (err) {
+    botStatus.error = err instanceof Error ? err.message : String(err);
+    return;
+  }
+  bot
+    .start({
+      onStart: (me) => {
+        void bot?.api.setMyCommands(BOT_COMMANDS).catch(() => undefined);
+        botStatus.running = true;
+        botStatus.username = me.username;
+        botStatus.error = undefined;
+      },
+    })
+    .catch((err: unknown) => {
+      botStatus.running = false;
+      botStatus.error =
+        err instanceof Error && /409/.test(err.message)
+          ? "Бот уже запущен где-то ещё (например, npm run dev). Оставь что-то одно."
+          : err instanceof Error
+            ? err.message
+            : String(err);
+      bot = undefined;
+    });
+}
+
+async function stopBot(): Promise<void> {
+  const b = bot;
+  bot = undefined;
+  botStatus.running = false;
+  await b?.stop().catch(() => undefined);
+}
+
+// ---------- Обмен с окном ----------
+
+type Handler = (...args: never[]) => unknown;
+
+/** Вызов ИИ с понятными ошибками: нет ключа, лимит трат, модель не умеет голос и т. п. */
+async function withAi<T extends object>(fn: () => Promise<T | { error: string }>): Promise<T | { error: string }> {
+  if (!core.ai.enabled) return { error: "ИИ выключен. Подключи его в Настройках → ИИ (бесплатный Gemini — пара минут)." };
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof BudgetExceededError) return { error: err.message };
+    if (err instanceof UnsupportedAttachmentError) return { error: err.message };
+    console.error("Ошибка ИИ:", err);
+    // наши сообщения (по-русски: нет денег на счёте, VPN, ключ, лимит) показываем как есть; чужие внутренние — общими словами
+    return { error: err instanceof Error && /[а-яё]/i.test(err.message) ? err.message : "Не получилось — проверь интернет и ключ (Настройки → ИИ → «Проверить связь»)." };
+  }
+}
+
+const wave = new Wave(store);
+const waveEmb = new EmbStore(join(dataDir, "wave-emb.json"));
+const hits = new Hits();
+const WISH_KV = "wave.wish";
+/** «Хочу послушать»: понравившиеся в волне хиты (играет отрывок — целиком откроешь на стриминге). */
+const wishList = (): Track[] => {
+  try {
+    const v = JSON.parse(store.getKv(WISH_KV) ?? "[]") as Track[];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
+const waveCache = new Map<string, { at: number; t: Track[] }>();
+/** Адреса музыки и обложек, которые Камадо сам выдал окну из ответов открытой базы, — только их можно слушать потоком. */
+const issued = new Set<string>();
+/** Обложки из интернета — тоже через свой протокол (окно напрямую в интернет не ходит). */
+const viaStream = (t: Track): Track => {
+  if (t.web?.url) issued.add(t.web.url);
+  if (!t.cover?.startsWith("https://")) return t;
+  issued.add(t.cover);
+  return { ...t, cover: `camado-media://stream/?u=${encodeURIComponent(t.cover)}` };
+};
+
+// Слежка за таблицами: изменения — уведомлением, в окно и в Telegram.
+const sheets = new SheetsService(
+  store,
+  (msg) => {
+    notify("Камадо · таблица", msg);
+    send("reminder", { text: msg });
+    const owner = botOwner();
+    if (bot && owner) void bot.api.sendMessage(owner, msg).catch(() => undefined);
+  },
+  () => send("sheets-changed"),
+);
+
+const life = lifeHandlers({
+  core,
+  withAi,
+  dataDir,
+  dbPath: () => config.CAMADO_DB_PATH,
+  dialog,
+  win: () => win,
+  notify: (t, b) => notify(t, b),
+  send: (c, p) => send(c, p),
+});
+
+const handlers: Record<string, Handler> = {
+  ...life.handlers,
+  /** Файл в чат: выгрузка учебного чата, PDF, Word, текст — разобрать и разложить полезное. */
+  "docs.import": (name: string, data: Uint8Array, note?: string) =>
+    withAi(async () => {
+      if (!(data instanceof Uint8Array) || data.length > 60 * 1024 * 1024) return { error: "Файл слишком большой (до 60 МБ)" };
+      const report = await importDocument(
+        { handle: (m, o) => core.camado.handle(m, o), timeZone: config.CAMADO_TIMEZONE, progress: (t) => send("import-progress", t) },
+        { name: String(name).slice(0, 200), data, caption: note ? String(note).slice(0, 2000) : undefined },
+      );
+      send("data-changed");
+      return { report };
+    }),
+  "backup.restore": async () => {
+    const r = (await life.handlers["backup.restore"]!()) as { ok?: true };
+    if (r.ok) {
+      setTimeout(() => {
+        app.relaunch();
+        app.exit(0);
+      }, 600);
+    }
+    return r;
+  },
+  ...growHandlers({ store, core, timeZone: config.CAMADO_TIMEZONE, withAi, dialog, win: () => win }),
+  ...booksHandlers({ store, dataDir, dialog, win: () => win, notify: () => send("books-changed") }),
+  ...wordsyncHandlers(dataDir, (id) => send("wordsync-changed", id)),
+  info: (): AppInfo => ({
+    platform: process.platform,
+    version: app.getVersion(),
+    timeZone: config.CAMADO_TIMEZONE,
+    refreshRate: Math.round(screen.getPrimaryDisplay().displayFrequency || 60),
+  }),
+
+  "tasks.list": (includeClosed?: boolean) => store.listTasks({ includeClosed }),
+  "tasks.add": (input: TaskInput) => store.addTask(input),
+  "tasks.update": (id: number, patch: TaskPatch) => store.updateTask(id, patch),
+  "tasks.quickAdd": (text: string, kind?: TaskInput["kind"]) => {
+    const parsed = parseTaskArgs(text, new Date(), config.CAMADO_TIMEZONE);
+    if ("error" in parsed) return { error: parsed.error };
+    return { task: store.addTask({ ...parsed, kind }) };
+  },
+
+  "subjects.list": () => store.listSubjects(),
+  "subjects.save": (input: { name: string; teacher?: string; info?: string }) => store.saveSubject(input),
+  "subjects.merge": (from: string[], into: string) => store.mergeSubjects(from, into),
+  "subjects.remove": (name: string) => store.deleteSubject(name),
+
+  "notes.list": () => store.listNotes(),
+  "notes.save": (input: Parameters<typeof store.saveNote>[0]) => store.saveNote(input),
+  "notes.remove": (id: number) => store.deleteNote(id),
+  /** Заметка в PDF: отдельное невидимое окно без скриптов печатает присланный HTML. */
+  "notes.pdf": async (title: string, html: string) => {
+    const safe = String(title).replace(/[\\/:*?"<>|\u0000-\u001f]/g, "_").slice(0, 80) || "Заметка";
+    const res = await dialog.showSaveDialog(win!, { title: "Сохранить PDF", defaultPath: join(app.getPath("documents"), `${safe}.pdf`), filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (res.canceled || !res.filePath) return false;
+    const pdfWin = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false, contextIsolation: true } });
+    try {
+      await pdfWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(String(html).slice(0, 5_000_000))}`);
+      const pdf = await pdfWin.webContents.printToPDF({ printBackground: true, pageSize: "A4" });
+      await writeFile(res.filePath, pdf);
+      return true;
+    } finally {
+      pdfWin.destroy();
+    }
+  },
+
+  "links.list": () => store.listLinks(),
+  "links.save": (input: Parameters<typeof store.saveLink>[0]) => store.saveLink(input),
+  "links.remove": (id: number) => store.deleteLink(id),
+  "links.open": (id: number) => {
+    const l = store.getLink(id);
+    if (!l || !/^https?:\/\//.test(l.url)) return false;
+    store.markLinkOpened(id);
+    void shell.openExternal(l.url);
+    return true;
+  },
+
+  "playlists.list": () => ({ playlists: store.listPlaylists(), favorites: store.listFavorites() }),
+  "playlists.create": (name: string, trackIds?: string[]) => {
+    const p = store.createPlaylist(name);
+    if (trackIds?.length) store.addToPlaylist(p.id, trackIds);
+    return p;
+  },
+  "playlists.rename": (id: number, name: string) => store.renamePlaylist(id, name),
+  "playlists.remove": (id: number) => store.deletePlaylist(id),
+  "playlists.add": (id: number, trackIds: string[]) => store.addToPlaylist(id, trackIds),
+  "playlists.removeTrack": (id: number, trackId: string) => store.removeFromPlaylist(id, trackId),
+  "playlists.reorder": (id: number, trackIds: string[]) => store.reorderPlaylist(id, trackIds),
+  "playlists.toggleFavorite": (trackId: string) => store.toggleFavorite(trackId),
+
+  "plays.add": (input: Parameters<typeof store.addPlay>[0]) => store.addPlay(input),
+  "plays.stats": (sinceIso: string, limit?: number) => store.playStats(new Date(sinceIso), limit),
+
+  "focus.add": (input: Parameters<typeof store.addFocusSession>[0]) => store.addFocusSession(input),
+  "focus.list": (sinceIso: string) => store.listFocusSessions(new Date(sinceIso)),
+
+  "wave.next": async (mood: WaveMood, exclude: string[] = []) => {
+    const since = new Date(Date.now() - 3 * 3600e3);
+    const recent = store.playStats(since, 60).map((p) => p.trackId);
+    const tracks = await wave.next({ mood, exclude: (Array.isArray(exclude) ? exclude : []).slice(-300), library: library.view().tracks, favorites: store.listFavorites(), recent, energy: settings.trackEnergy });
+    return tracks.map(viaStream);
+  },
+  "wave.feedback": (t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done") => {
+    if (!t || typeof t.id !== "string" || !["like", "unlike", "dislike", "skip", "done"].includes(kind)) return;
+    wave.feedback(t, kind);
+    // ♡ на отрывке — в «Хочу послушать»
+    if (t.web?.preview && (kind === "like" || kind === "unlike")) {
+      const rest = wishList().filter((x) => x.id !== t.id);
+      const item: Track = { id: t.id, path: String(t.web.url), title: String(t.title).slice(0, 200), artist: String(t.artist).slice(0, 200), album: String(t.album ?? "").slice(0, 200), duration: 30, hasLyrics: false, cover: t.cover, web: t.web };
+      store.setKv(WISH_KV, JSON.stringify((kind === "like" ? [item, ...rest] : rest).slice(0, 500)));
+      send("wish-changed");
+    }
+  },
+  /** Волна из актуальных хитов: похожие исполнители и популярность — по данным Deezer; играет 30-секундный отрывок. */
+  "wave.hits": async (q: { seedIds?: string[]; mood: WaveMood; exclude?: string[]; character?: "new" | "popular"; count?: number }) => {
+    const lib = library.view().tracks;
+    const byId = new Map(lib.map((t) => [t.id, t]));
+    let seeds = (Array.isArray(q?.seedIds) ? q.seedIds : []).map((id) => byId.get(String(id))).filter((t): t is Track => !!t);
+    if (!seeds.length) {
+      // «Под меня»: любимое и то, что слушаешь чаще всего; мало — вся библиотека
+      const fav = store.listFavorites().map((id) => byId.get(id)).filter((t): t is Track => !!t);
+      const top = store.playStats(new Date(Date.now() - 60 * 86400e3), 40).map((p) => byId.get(p.trackId)).filter((t): t is Track => !!t);
+      seeds = [...fav, ...fav, ...top];
+      if (new Set(seeds.map((t) => t.artist)).size < 4) seeds = [...seeds, ...lib.slice(0, 400)];
+    }
+    const taste = wave.taste();
+    const tracks = await hits.next({
+      seeds: seeds.slice(0, 500).map((t) => ({ title: t.title, artist: t.artist })),
+      mood: ["mine", "energy", "calm", "study", "new"].includes(q?.mood) ? q.mood : "mine",
+      character: q?.character === "new" ? "new" : "popular",
+      exclude: (Array.isArray(q?.exclude) ? q.exclude : []).map(String).slice(-600),
+      own: lib.map((t) => ({ title: t.title, artist: t.artist })),
+      dislikedArtists: Object.entries(taste.artists).filter(([, v]) => v <= -3).map(([a]) => a),
+      count: Math.max(1, Math.min(12, Number(q?.count) || 5)),
+    });
+    return tracks.map(viaStream);
+  },
+  "wave.wish": () => wishList().map(viaStream),
+  "wave.wishRemove": (id: string) => {
+    store.setKv(WISH_KV, JSON.stringify(wishList().filter((x) => x.id !== id)));
+    send("wish-changed");
+  },
+  /** Волна 2.0: кандидаты под стиль плейлиста (жанры угадало окно по звуку). */
+  "wave.candidates": async (q: CandidateQuery) => {
+    const safe: CandidateQuery = {
+      genres: (Array.isArray(q?.genres) ? q.genres : []).map(String).slice(0, 4),
+      ruShare: Math.max(0, Math.min(1, Number(q?.ruShare) || 0)),
+      artists: (Array.isArray(q?.artists) ? q.artists : []).map((a) => String(a).slice(0, 60)).slice(0, 30),
+      exclude: (Array.isArray(q?.exclude) ? q.exclude : []).map(String).slice(-500),
+    };
+    let list = await gatherCandidates(safe, (i, o) => fetch(i, o), waveCache);
+    // Audius молчит — берём старые открытые источники, чтобы волна не встала
+    if (!list.length) list = await wave.next({ mood: "new", count: 12, exclude: safe.exclude, library: [], favorites: [] }).catch(() => []);
+    return list.map(viaStream);
+  },
+  "wave.embGet": (ids: string[]) => waveEmb.get(Array.isArray(ids) ? ids.map(String) : []),
+  "wave.embPut": (entries: Record<string, string>) => waveEmb.put(entries && typeof entries === "object" ? entries : {}),
+  /** Что лайкал и что «не то»/пропускал — для подстройки волны на лету. */
+  "wave.taste": () => {
+    const t = wave.taste().tracks;
+    return {
+      liked: Object.entries(t).filter(([, e]) => e.v === 1).map(([id]) => id).slice(-200),
+      disliked: Object.entries(t).filter(([, e]) => e.v === -1 || (e.skips ?? 0) >= 2).map(([id]) => id).slice(-200),
+    };
+  },
+  "wave.moods": () => Object.entries(MOODS).map(([id, m]) => ({ id, label: m.label })),
+
+  "sheets.list": () => sheets.list(),
+  "sheets.add": (input: { name?: string; url: string; match?: string; everyMin?: number }) => sheets.add(input ?? { url: "" }),
+  "sheets.update": (id: string, patch: { name?: string; match?: string; everyMin?: number }) => sheets.update(id, patch ?? {}),
+  "sheets.remove": (id: string) => sheets.remove(id),
+  "sheets.check": (id: string) => sheets.check(id),
+
+  "chat.history": () => store.recentChat(60),
+  "chat.clear": () => store.clearChat(),
+  // ---------- Учёба: шаги, репетитор, фото/голос, карточки, сессия, планировщик ----------
+
+  "steps.list": (taskId?: number) => store.listSteps(taskId),
+  "steps.set": (taskId: number, titles: string[]) => store.setSteps(taskId, titles),
+  "steps.toggle": (id: number) => store.toggleStep(id),
+  "steps.ai": (taskId: number) =>
+    withAi(async () => {
+      const task = store.getTask(taskId);
+      if (!task) return { error: "Задание не найдено" };
+      const steps = await splitIntoSteps(core.llm, store, task);
+      return steps.length ? { steps } : { error: "Модель не прислала шаги — попробуй ещё раз" };
+    }),
+  "tutor.ask": (taskId: number, history: { role: "user" | "assistant"; content: string }[], message: string) =>
+    withAi(async () => {
+      const task = store.getTask(taskId);
+      if (!task) return { error: "Задание не найдено" };
+      return { answer: await tutor(core.llm, task, history.slice(-12), message) };
+    }),
+  /** Подгонка текста по звуку: ИИ слушает песню (сжатый WAV) и называет, когда начинают петь строки. */
+  "lyrics.aiSync": (wav: string, lines: { n: number; text: string }[]) =>
+    withAi(async () => {
+      if (typeof wav !== "string" || wav.length > 8 * 1024 * 1024) return { error: "Отрывок слишком большой" };
+      const safe = (Array.isArray(lines) ? lines : []).slice(0, 14).map((l) => ({ n: Number(l.n), text: String(l.text).slice(0, 200) }));
+      if (safe.length < 2) return { error: "В тексте слишком мало строк" };
+      return { points: await heardLineTimes(core.llm, wav, safe) };
+    }),
+  /** Фото доски / скрин / голосовое → Камадо разбирает и записывает задания. */
+  "ai.fromMedia": (kind: "photo" | "voice", mime: string, data: string, note?: string) =>
+    withAi(async () => {
+      if (data.length > 25 * 1024 * 1024) return { error: "Файл слишком большой" };
+      const prompt =
+        kind === "photo"
+          ? "[Фото от хозяина] Найди на фото учебные задания и сроки и запиши их. Если заданий нет — коротко скажи, что видишь."
+          : "[Голосовое от хозяина] Послушай и выполни просьбу: обычно это «запиши задание…» или вопрос.";
+      return { answer: await core.camado.handle({ text: note ? `${prompt}\nПодпись: ${note}` : prompt, attachments: [{ mime, data }] }) };
+    }),
+
+  /** Голосовой Камадо: голос (или уже распознанный текст) → короткий ответ, который прочитают вслух. */
+  "voice.ask": (input: { wav?: string; text?: string }) =>
+    withAi(async () => {
+      const VOICE = "[Хозяин говорит голосом — ответ прочитают вслух: отвечай коротко, 1–3 предложения, без списков, таблиц, ссылок и эмодзи. Просьбы выполняй как обычно.]";
+      if (typeof input?.text === "string" && input.text.trim()) {
+        const text = input.text.trim().slice(0, 2000);
+        return { answer: await core.camado.handle({ text: `${VOICE}\n${text}` }), heard: text };
+      }
+      if (typeof input?.wav !== "string" || !input.wav || input.wav.length > 12 * 1024 * 1024) return { error: "Не расслышал — попробуй ещё раз" };
+      return { answer: await core.camado.handle({ text: `${VOICE}\nПослушай и ответь или выполни.`, attachments: [{ mime: "audio/wav", data: input.wav }] }) };
+    }),
+
+  "cards.list": (opts?: { noteId?: number; due?: boolean }) => store.listCards({ noteId: opts?.noteId, dueBefore: opts?.due ? new Date() : undefined }),
+  "cards.add": (cards: { question: string; answer: string; noteId?: number | null; subject?: string | null }[]) => store.addCards(cards),
+  "cards.review": (id: number, grade: 0 | 1 | 2) => store.reviewCard(id, grade),
+  "cards.remove": (id: number) => store.deleteCard(id),
+  "cards.ai": (noteId: number) =>
+    withAi(async () => {
+      const note = store.getNote(noteId);
+      if (!note) return { error: "Заметка не найдена" };
+      if (note.body.trim().length < 40) return { error: "В заметке слишком мало текста для карточек" };
+      const added = await cardsFromNote(core.llm, store, note);
+      return added ? { added } : { error: "Модель не прислала карточки — попробуй ещё раз" };
+    }),
+
+  "exams.list": () => store.listExams(),
+  "exams.save": (input: Parameters<typeof store.saveExam>[0]) => store.saveExam(input),
+  "exams.remove": (id: number) => store.deleteExam(id),
+  "tickets.set": (examId: number, titles: string[]) => store.setTickets(examId, titles),
+  "tickets.status": (id: number, status: "new" | "review" | "known") => store.setTicketStatus(id, status),
+  /** Автопилот: билеты по дням → блоки в «Плане». */
+  "exams.toPlan": (examId: number) => {
+    const r = autopilotToPlan(store, Number(examId), { hour: settings.autopilot.studyHour, tz: config.CAMADO_TIMEZONE });
+    send("data-changed");
+    return r;
+  },
+
+  "plan.list": (fromIso: string, toIso: string) => store.listPlan(new Date(fromIso), new Date(toIso)),
+  "plan.save": (input: Parameters<typeof store.savePlanBlock>[0]) => store.savePlanBlock(input),
+  "plan.remove": (id: number) => store.deletePlanBlock(id),
+
+  "chat.send": async (text: string) => {
+    if (!core.ai.enabled) return { error: "ИИ выключен. Вставь ключ в Настройках → ИИ." };
+    try {
+      return { answer: await core.camado.handle({ text }) };
+    } catch (err) {
+      if (err instanceof BudgetExceededError) return { error: err.message };
+      console.error("Ошибка чата:", err);
+      // Показываем настоящую причину (что ответил сервис), а не общую фразу.
+      const why = err instanceof Error && err.message ? err.message.slice(0, 300) : "";
+      return { error: why ? `Не получилось ответить: ${why}` : "Не получилось ответить — нет связи с сервисом." };
+    }
+  },
+
+  /** «Проверить связь»: интернет → сервис ИИ → ключ. Каждая строка — что проверили и что вышло. */
+  "ai.diagnose": async () => {
+    const cfg = currentAiConfig(core);
+    const key = aiKey(core, cfg.kind);
+    const out: { ok: boolean; text: string }[] = [];
+    const probe = async (url: string, init?: RequestInit) => {
+      try {
+        return await fetch(url, { ...init, signal: AbortSignal.timeout(12_000) });
+      } catch {
+        return undefined;
+      }
+    };
+    const net0 = await probe("https://www.gstatic.com/generate_204");
+    out.push(net0 ? { ok: true, text: "Интернет есть" } : { ok: false, text: "Нет интернета (или он закрыт для программ) — проверь сеть" });
+    if (cfg.kind === "gemini") {
+      const r = await probe("https://generativelanguage.googleapis.com/v1beta/models?pageSize=1", key ? { headers: { "x-goog-api-key": key } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint("Gemini") });
+      else if (r.ok) out.push({ ok: true, text: "Gemini доступен, ключ подходит ✓" });
+      else {
+        const d = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        out.push({ ok: false, text: humanAiError("Gemini", r.status, d.error?.message ?? "") });
+      }
+    } else if (cfg.kind === "openai" && cfg.baseUrl) {
+      const base = cfg.baseUrl.replace(/\/$/, "");
+      const name = serviceName(base);
+      const r = await probe(`${base}/models`, key ? { headers: { Authorization: `Bearer ${key}` } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint(name) });
+      else if (r.ok) out.push({ ok: true, text: `${name} доступен ✓` });
+      else {
+        const d = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+        out.push({ ok: false, text: humanAiError(name, r.status, d.error?.message ?? "") });
+      }
+      if (/openrouter/i.test(base) && key) {
+        const k = await probe("https://openrouter.ai/api/v1/key", { headers: { Authorization: `Bearer ${key}` } });
+        const d = k?.ok ? ((await k.json().catch(() => ({}))) as { data?: { is_free_tier?: boolean; limit_remaining?: number | null } }) : undefined;
+        if (d?.data) {
+          const model = cfg.models?.brain ?? "";
+          if (d.data.is_free_tier && d.data.limit_remaining === 0 && !model.endsWith(":free"))
+            out.push({ ok: false, text: "Ключ OpenRouter бесплатный (денег 0) — модель должна быть с «:free» в названии, например nvidia/nemotron-3-ultra-550b-a55b:free" });
+          else out.push({ ok: true, text: d.data.is_free_tier ? "Ключ OpenRouter рабочий (бесплатный: до ~50 запросов в день)" : "Ключ OpenRouter рабочий" });
+        } else if (k) out.push({ ok: false, text: humanAiError("OpenRouter", k.status) });
+      }
+    } else if (cfg.kind === "anthropic") {
+      const r = await probe("https://api.anthropic.com/v1/models", key ? { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" } } : undefined);
+      if (!r) out.push({ ok: false, text: networkHint("Anthropic") });
+      else out.push(r.ok ? { ok: true, text: "Claude доступен, ключ подходит ✓" } : { ok: false, text: humanAiError("Anthropic", r.status) });
+    }
+    if (!key && cfg.kind !== "openai") out.push({ ok: false, text: "Ключ не вставлен" });
+    return out;
+  },
+  "ai.status": () => {
+    const cfg = currentAiConfig(core);
+    const key = aiKey(core, cfg.kind);
+    const preset = cfg.kind === "openai" ? OPENAI_PRESETS.find((p) => cfg.baseUrl?.startsWith(p.baseUrl)) : undefined;
+    const model =
+      cfg.models?.brain ||
+      (cfg.kind === "gemini" ? GEMINI_MODELS.brain : cfg.kind === "anthropic" ? config.CAMADO_MODEL_BRAIN : (preset?.models.brain ?? ""));
+    return {
+      enabled: core.ai.enabled,
+      keyHint: key ? `…${key.slice(-4)}` : undefined,
+      spentUsd: core.llm.spentThisMonth(),
+      budgetUsd: config.CAMADO_MONTHLY_BUDGET_USD,
+      model,
+      kind: cfg.kind,
+      config: cfg,
+      presets: OPENAI_PRESETS.map(({ id, name, baseUrl, hint, models }) => ({ id, name, baseUrl, hint, model: models.brain })),
+    };
+  },
+  /** Подключить нейросеть: проверяем ключ, сохраняем (ключ — зашифрованным) и переключаемся. */
+  "ai.connect": async (cfg: AiConfig, rawKey?: string) => {
+    const key = rawKey?.trim() || undefined;
+    // Gemini, подключённый как «другая модель», переводим на родной режим: там работают ключи AQ. и бесплатный тариф.
+    if (cfg.kind === "openai" && cfg.baseUrl && /generativelanguage\.googleapis\.com/i.test(cfg.baseUrl)) cfg = { kind: "gemini", free: true };
+    const have = key ?? aiKey(core, cfg.kind);
+    try {
+      if (cfg.kind === "anthropic") {
+        if (!have) return { ok: false, error: "Вставь ключ Anthropic (начинается с sk-ant-)" };
+        if (key && !/^sk-ant-[\w-]{20,}$/.test(key)) return { ok: false, error: "Ключ Anthropic начинается с sk-ant-" };
+        if (key && !(await checkAnthropicKey(key))) return { ok: false, error: "Anthropic не принял этот ключ" };
+      } else if (cfg.kind === "gemini") {
+        if (!have) return { ok: false, error: "Вставь ключ Gemini (начинается с AQ. или AIza)" };
+        const problem = key ? await geminiKeyProblem(key) : undefined;
+        if (problem) return { ok: false, error: problem };
+      } else {
+        if (!cfg.baseUrl || !/^https?:\/\//.test(cfg.baseUrl)) return { ok: false, error: "Нужен адрес API, например https://openrouter.ai/api/v1" };
+        const local = isLocalUrl(cfg.baseUrl);
+        const reportsCost = /openrouter\.ai/i.test(cfg.baseUrl);
+        if (!local && !reportsCost && !cfg.free && !(cfg.price && (cfg.price.input > 0 || cfg.price.output > 0)))
+          return { ok: false, error: "Укажи цену модели ($ за 1 млн токенов) или отметь «Бесплатная модель» — иначе не посчитать лимит трат" };
+        if (!local && !have) return { ok: false, error: "Вставь ключ этого сервиса" };
+      }
+    } catch {
+      return { ok: false, error: "Нет связи с сервисом, попробуй позже" };
+    }
+    setAiConfig(core, cfg, key);
+    if (!core.ai.enabled) return { ok: false, error: "Не получилось включить — проверь настройки" };
+    return { ok: true };
+  },
+  "ai.setKey": async (key: string) => {
+    const k = key.trim();
+    if (!/^sk-ant-[\w-]{20,}$/.test(k)) return { ok: false, error: "Ключ Anthropic начинается с sk-ant-" };
+    try {
+      if (!(await checkAnthropicKey(k))) return { ok: false, error: "Anthropic не принял этот ключ" };
+    } catch {
+      return { ok: false, error: "Нет связи с Anthropic, попробуй позже" };
+    }
+    setApiKey(core, k);
+    return { ok: true };
+  },
+  "ai.clearKey": () => {
+    const cfg = currentAiConfig(core);
+    store.deleteKv(KEY_KV[cfg.kind]);
+    applyAi(core);
+  },
+
+  "bot.status": (): BotStatus => ({ ...botStatus, configured: Boolean(botToken()), paired: Boolean(botOwner()) }),
+  "bot.connect": async (token: string) => {
+    const t = token.trim();
+    if (!/^\d+:[\w-]{30,}$/.test(t)) return { ok: false, error: "Токен выглядит так: 123456789:AAF… — скопируй его из сообщения @BotFather целиком" };
+    let username: string | undefined;
+    try {
+      username = (await new Bot(t).api.getMe()).username;
+    } catch {
+      return { ok: false, error: "Telegram не принял токен. Проверь, что скопировал его целиком, и что есть интернет." };
+    }
+    await stopBot();
+    store.setSecret(TG_TOKEN_KV, t);
+    store.deleteKv(TG_OWNER_KV); // новый бот — привязываем заново
+    saveSettings({ runBot: true });
+    startBot();
+    return { ok: true, username };
+  },
+  "bot.pairingCode": () => {
+    if (!pairing || Date.now() > pairing.until) {
+      pairing = { code: String(randomInt(100000, 1000000)), until: Date.now() + 15 * 60e3 };
+    }
+    return pairing.code;
+  },
+  "bot.disconnect": async () => {
+    await stopBot();
+    store.deleteKv(TG_TOKEN_KV);
+    store.deleteKv(TG_OWNER_KV);
+    botStatus.username = undefined;
+    botStatus.error = undefined;
+  },
+
+  "settings.get": () => settings,
+  "settings.set": async (patch: Partial<AppSettings>) => {
+    const before = settings.runBot;
+    const next = saveSettings(patch);
+    if (before !== next.runBot) next.runBot ? startBot() : await stopBot();
+    void discord.configure(next.discord.enabled, next.discord.clientId);
+    return next;
+  },
+
+  "library.get": () => library.view(),
+  "library.pickFolder": async () => {
+    const res = await dialog.showOpenDialog(win!, { title: "Папка с музыкой", properties: ["openDirectory", "multiSelections"] });
+    return res.canceled ? library.view() : library.addPaths(res.filePaths);
+  },
+  "library.addPaths": (paths: string[]) => library.addPaths(paths),
+  "library.removeFolder": (path: string) => library.removeFolder(path),
+  "library.rescan": () => library.rescan(),
+  "library.edit": (id: string, patch: Parameters<Library["edit"]>[1]) => library.edit(id, patch ?? {}),
+  "library.setCover": async (id: string, image?: { data: string; mime: string }) => {
+    if (image?.data) return library.setCover(id, Buffer.from(image.data, "base64"), image.mime);
+    const res = await dialog.showOpenDialog({ title: "Обложка", properties: ["openFile"], filters: [{ name: "Картинки", extensions: ["jpg", "jpeg", "png", "webp"] }] });
+    const f = res.filePaths[0];
+    if (res.canceled || !f) return library.track(id);
+    return library.setCover(id, await readFile(f), /\.png$/i.test(f) ? "image/png" : /\.webp$/i.test(f) ? "image/webp" : "image/jpeg");
+  },
+  "library.resetEdit": (id: string) => library.resetEdit(id),
+
+  "lyrics.get": (q: Parameters<LyricsService["get"]>[0]) => lyrics.get(q),
+  /** Перевод текста песни: один раз на текст, дальше — из сохранённого. */
+  "lyrics.translate": async (lines: string[], about?: { title?: string; artist?: string }) => {
+    const safe = (Array.isArray(lines) ? lines : []).slice(0, 400).map((l) => String(l ?? "").slice(0, 300));
+    if (!safe.length) return { error: "Нет текста" };
+    if (isMostlyCyrillic(safe)) return { lines: safe.map(() => ""), native: true };
+    const dir = join(dataDir, "lyrics-translate");
+    const file = join(dir, createHash("sha1").update(safe.join("\n")).digest("hex") + ".json");
+    const cached = await readFile(file, "utf8").then((t) => JSON.parse(t) as string[]).catch(() => null);
+    if (Array.isArray(cached) && cached.length === safe.length) return { lines: cached };
+    return withAi(async () => {
+      const tr = await translateLyrics(core.llm, safe, { title: about?.title?.slice(0, 200), artist: about?.artist?.slice(0, 200) });
+      if (!tr.some(Boolean)) return { error: "ИИ не прислал перевод — попробуй ещё раз" };
+      await mkdir(dir, { recursive: true });
+      await writeFile(file, JSON.stringify(tr));
+      return { lines: tr };
+    });
+  },
+
+  "alarm.pickSound": async () => {
+    const res = await dialog.showOpenDialog(win!, {
+      title: "Свой звук для напоминаний",
+      properties: ["openFile"],
+      filters: [{ name: "Звук", extensions: ["mp3", "m4a", "aac", "wav", "ogg", "opus", "flac", "webm"] }],
+    });
+    const src = res.filePaths[0];
+    if (res.canceled || !src) return null;
+    const dir = join(dataDir, "sounds");
+    await mkdir(dir, { recursive: true });
+    const name = `custom${extname(src).toLowerCase()}`;
+    await copyFile(src, join(dir, name));
+    return { name: basename(src), url: `camado-media://sound/${name}?v=${Date.now()}` };
+  },
+
+  "screensaver.pickImage": async () => {
+    const res = await dialog.showOpenDialog(win!, {
+      title: "Своя картинка для заставки",
+      properties: ["openFile"],
+      filters: [{ name: "Картинка", extensions: ["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif"] }],
+    });
+    const src = res.filePaths[0];
+    if (res.canceled || !src) return null;
+    const dir = join(dataDir, "screensaver");
+    await mkdir(dir, { recursive: true });
+    // старую картинку (другого формата) убираем, чтобы не копились
+    for (const old of await readdir(dir).catch(() => [] as string[])) if (/^picture\./.test(old)) await rm(join(dir, old), { force: true });
+    const name = `picture${extname(src).toLowerCase()}`;
+    await copyFile(src, join(dir, name));
+    return { name: basename(src), url: `camado-media://picture/${name}?v=${Date.now()}` };
+  },
+
+  "quick.close": () => quick?.close(),
+  "quick.key": () => QUICK_KEY,
+
+  "music.importHtml": async (html: string, baseUrl?: string) => {
+    const dir = join(app.getPath("music"), "Камадо");
+    const r = await importFromHtml(html, baseUrl, dir, (p) => send("download-progress", p));
+    if (r.kind === "saved") await library.addPaths([dir]);
+    return r;
+  },
+  "music.searchFree": (query: string) => searchFree(query),
+  "music.freeTracks": (id: string) => freeTracks(id),
+
+  "music.importUrl": async (url: string) => {
+    const dir = join(app.getPath("music"), "Камадо");
+    const r = await importFromUrl(url, dir, (p) => send("download-progress", p));
+    if (r.kind === "saved") await library.addPaths([dir]);
+    return r;
+  },
+
+
+
+  "system.idleSeconds": () => powerMonitor.getSystemIdleTime(),
+  "tray.status": (text: string) => {
+    studyStatus = String(text ?? "").slice(0, 40);
+    updateTray();
+  },
+  "window.isFullScreen": () => !!win?.isFullScreen(),
+  "window.setFullScreen": (on: boolean) => {
+    if (!win) return;
+    if (on && !win.isVisible()) return;
+    win.setFullScreen(!!on);
+  },
+    "window.setTitleBarColors": (symbol: string) => {
+    if (win && process.platform !== "darwin") win.setTitleBarOverlay({ color: "#00000000", symbolColor: symbol, height: 44 });
+  },
+
+  "overlay.toggle": () => toggleOverlay(),
+  "overlay.isOpen": () => Boolean(overlay && !overlay.isDestroyed()),
+  "overlay.push": (state: OverlayState) => {
+    if (overlay && !overlay.isDestroyed()) overlay.webContents.send("overlay-state", state);
+  },
+
+  "nowPlaying.push": (state: NowPlayingState | null) => {
+    nowPlaying = state;
+    updateTray();
+    if (mini && !mini.isDestroyed()) mini.webContents.send("np-state", state);
+    void discord.update(state);
+  },
+  "nowPlaying.action": (action: "playpause" | "next" | "prev" | "open") => {
+    if (action === "open") {
+      mini?.hide();
+      showWindow();
+    } else send("media-key", action);
+  },
+  "discord.status": () => discord.status,
+
+  "updates.status": () => updates.status,
+  "updates.check": () => updates.check(),
+  "updates.install": () => updates.download(),
+
+  notify: (title: string, body: string) => notify(title, body),
+};
+
+ipcMain.handle("camado", async (event, method: string, ...args: unknown[]) => {
+  if (!event.senderFrame || !isAppUrl(event.senderFrame.url)) throw new Error("forbidden");
+  const h = handlers[method];
+  if (!h) throw new Error(`Нет метода ${method}`);
+  return (h as (...a: unknown[]) => unknown)(...args);
+});
+
+/** Функции программы доступны только нашей собственной странице — не любому файлу с диска и не чужому сайту. */
+function isAppUrl(url: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  const dev = process.env.ELECTRON_RENDERER_URL;
+  if (dev) return u.origin === new URL(dev).origin;
+  if (u.protocol !== "file:") return false;
+  try {
+    return resolve(fileURLToPath(u)) === resolve(here, "../renderer/index.html");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Окна программы никуда не уходят: ни по ссылке, ни если в окно перетащили HTML-файл.
+ * Ссылки http(s) открываются в браузере, всё остальное — молча запрещено. Новые окна — тоже.
+ */
+app.on("web-contents-created", (_e, wc) => {
+  const guard = (e: { preventDefault(): void }, url: string) => {
+    if (isAppUrl(url)) return;
+    e.preventDefault();
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+  };
+  wc.on("will-navigate", guard);
+  wc.on("will-redirect", guard);
+  wc.on("will-attach-webview", (e) => e.preventDefault());
+  wc.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+});
+
+// ---------- Текст песни поверх всех окон ----------
+
+let overlay: BrowserWindow | undefined;
+
+function loadRenderer(w: BrowserWindow, hash?: string): void {
+  if (process.env.ELECTRON_RENDERER_URL) void w.loadURL(process.env.ELECTRON_RENDERER_URL + (hash ? `#${hash}` : ""));
+  else void w.loadFile(join(here, "../renderer/index.html"), hash ? { hash } : undefined);
+}
+
+function toggleOverlay(): boolean {
+  if (overlay && !overlay.isDestroyed()) {
+    overlay.close();
+    return false;
+  }
+  // На том экране, где сейчас мышь, а не всегда на основном.
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const width = Math.min(1100, area.width - 80);
+  const height = 170;
+  overlay = new BrowserWindow({
+    // На Mac «панель» умеет висеть и поверх программ, развёрнутых на весь экран.
+    ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: area.y + area.height - height - 24,
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    focusable: false,
+    resizable: false,
+    movable: false,
+    show: false,
+    webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+  });
+  overlay.setAlwaysOnTop(true, "screen-saver");
+  overlay.setIgnoreMouseEvents(true); // клики проходят сквозь текст
+  // skipTransformProcessType: без него Mac на время делает Камадо «фоновой» программой (без значка в Dock) —
+  // и главное окно выкидывает из полного экрана («как обои»). Панель и так висит поверх полноэкранных программ.
+  overlay.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true, skipTransformProcessType: true });
+  overlay.once("ready-to-show", () => overlay?.showInactive());
+  overlay.on("closed", () => {
+    overlay = undefined;
+    send("overlay-changed", false);
+  });
+  loadRenderer(overlay, "overlay");
+  send("overlay-changed", true);
+  return true;
+}
+
+// ---------- Быстрая запись из любой программы (Ctrl/Cmd+Shift+Пробел) ----------
+
+const QUICK_KEY = "CommandOrControl+Shift+Space";
+let quick: BrowserWindow | undefined;
+
+function toggleQuick(): void {
+  if (quick && !quick.isDestroyed()) {
+    quick.close();
+    return;
+  }
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const width = Math.min(680, area.width - 40);
+  const height = 190;
+  quick = new BrowserWindow({
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + area.height * 0.22),
+    frame: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    resizable: false,
+    show: false,
+    webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+  });
+  quick.setAlwaysOnTop(true, "floating");
+  quick.setVisibleOnAllWorkspaces(true, { skipTransformProcessType: true });
+  quick.once("ready-to-show", () => {
+    quick?.show();
+    quick?.focus();
+  });
+  // Щёлкнул мимо — окно само прячется.
+  quick.on("blur", () => quick?.close());
+  quick.on("closed", () => {
+    quick = undefined;
+  });
+  loadRenderer(quick, "quick");
+}
+
+// ---------- Мини-плеер в меню-баре (Mac) и меню трея ----------
+
+let mini: BrowserWindow | undefined;
+
+function toggleMini(bounds?: Electron.Rectangle): void {
+  if (mini && !mini.isDestroyed() && mini.isVisible()) {
+    mini.hide();
+    return;
+  }
+  if (!mini || mini.isDestroyed()) {
+    mini = new BrowserWindow({
+      width: 360,
+      height: 150,
+      frame: false,
+      resizable: false,
+      movable: false,
+      show: false,
+      skipTaskbar: true,
+      alwaysOnTop: true,
+      transparent: process.platform === "darwin",
+      backgroundColor: process.platform === "darwin" ? "#00000000" : "#14112a",
+      ...(process.platform === "darwin" ? { vibrancy: "popover" as const, visualEffectState: "active" as const } : {}),
+      webPreferences: { preload: join(here, "../preload/index.cjs"), contextIsolation: true, sandbox: true, spellcheck: false },
+    });
+    mini.on("blur", () => mini?.hide());
+    loadRenderer(mini, "mini");
+    mini.webContents.once("did-finish-load", () => mini?.webContents.send("np-state", nowPlaying));
+  }
+  const b = bounds ?? tray?.getBounds();
+  if (b) {
+    const area = screen.getDisplayMatching(b).workArea;
+    const x = Math.round(Math.min(Math.max(b.x + b.width / 2 - 180, area.x + 8), area.x + area.width - 368));
+    const y = process.platform === "darwin" ? b.y + b.height + 6 : b.y - 156;
+    mini.setPosition(x, y);
+  }
+  mini.show();
+  mini.focus();
+}
+
+function trayMenu(): Menu {
+  const np = nowPlaying;
+  return Menu.buildFromTemplate([
+    ...(np
+      ? [
+          { label: `${np.playing ? "▶" : "⏸"}  ${np.title.slice(0, 40)}`, enabled: false },
+          { label: `     ${np.artist.slice(0, 40)}`, enabled: false },
+          { type: "separator" as const },
+          { label: np.playing ? "Пауза" : "Играть", click: () => send("media-key", "playpause") },
+          { label: "Следующий трек", click: () => send("media-key", "next") },
+          { label: "Предыдущий трек", click: () => send("media-key", "prev") },
+          { type: "separator" as const },
+        ]
+      : []),
+    { label: "Открыть Камадо", click: () => showWindow() },
+    { label: "Быстрая запись…", accelerator: QUICK_KEY, click: () => toggleQuick() },
+    { label: "Текст песни поверх окон", click: () => toggleOverlay() },
+    { type: "separator" },
+    {
+      label: "Выйти",
+      click: () => {
+        quitting = true;
+        app.quit();
+      },
+    },
+  ]);
+}
+
+let lastTrayKey = "";
+/** Что показать в меню-баре от учёбы: таймер фокуса или ближайший дедлайн (присылает окно). */
+let studyStatus = "";
+
+function updateTray(): void {
+  if (!tray) return;
+  const np = nowPlaying;
+  const key = `${np ? `${np.title}|${np.playing}` : ""}|${studyStatus}`;
+  if (key === lastTrayKey) return;
+  lastTrayKey = key;
+  const song = np ? `${np.title} · ${np.artist}` : "";
+  tray.setToolTip([studyStatus, song].filter(Boolean).join(" — ") || "Камадо");
+  // На Mac рядом с иконкой: таймер фокуса / дедлайн, а если их нет — название трека (коротко)
+  const track = np && np.playing ? (np.title.length > 22 ? np.title.slice(0, 21) + "…" : np.title) : "";
+  if (process.platform === "darwin") tray.setTitle(studyStatus || track ? ` ${studyStatus || track}` : "");
+  if (process.platform !== "darwin") tray.setContextMenu(trayMenu());
+}
+
+// ---------- Окно и трей ----------
+
+/** Окно спрятали из полного экрана — при показе возвращаем полный экран. */
+let wasFullOnHide = false;
+function showWindow(): void {
+  if (!win) return createWindow();
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+  if (wasFullOnHide) {
+    wasFullOnHide = false;
+    win.setFullScreen(true);
+  }
+}
+
+function createWindow(): void {
+  const isMac = process.platform === "darwin";
+  win = new BrowserWindow({
+    width: 1400,
+    height: 880,
+    minWidth: 1040,
+    minHeight: 660,
+    show: false,
+    title: "Камадо",
+    backgroundColor: "#0b0a14",
+    icon: iconPath("icon.png"),
+    titleBarStyle: "hidden",
+    ...(isMac
+      ? { trafficLightPosition: { x: 18, y: 16 } }
+      : { titleBarOverlay: { color: "#00000000", symbolColor: "#f3f0ff", height: 44 } }),
+    webPreferences: {
+      preload: join(here, "../preload/index.cjs"),
+      contextIsolation: true,
+      sandbox: true,
+      spellcheck: false,
+      backgroundThrottling: false,
+    },
+  });
+
+  win.once("ready-to-show", () => {
+    win?.show();
+    // Был на весь экран в прошлый раз — открываемся так же (после обновления окно не «сворачивается»).
+    if (settings.windowFullScreen) win?.setFullScreen(true);
+  });
+  win.on("enter-full-screen", () => !settings.windowFullScreen && saveSettings({ windowFullScreen: true }));
+  win.on("leave-full-screen", () => settings.windowFullScreen && !wasFullOnHide && !quitting && saveSettings({ windowFullScreen: false }));
+  win.on("close", (e) => {
+    if (!quitting && settings.closeToTray && tray) {
+      e.preventDefault();
+      if (win?.isFullScreen()) {
+        // спрятать окно прямо из полного экрана — Mac оставит пустой стол с обоями; сначала выходим из него
+        win.once("leave-full-screen", () => win?.hide());
+        win.setFullScreen(false);
+        wasFullOnHide = true;
+      } else win?.hide();
+      // Вместе с окном прячем и «текст поверх окон» — иначе он висит сам по себе и непонятно, как его закрыть.
+      if (overlay && !overlay.isDestroyed()) overlay.close();
+      if (!settings.bgHintShown) {
+        saveSettings({ bgHintShown: true });
+        notify(
+          "Камадо работает в фоне",
+          process.platform === "darwin"
+            ? "Бот и напоминания работают. Выключить совсем — значок Камадо в строке меню → «Выйти» (или ⌘Q)."
+            : "Бот и напоминания работают. Выключить совсем — значок Камадо возле часов → «Выйти».",
+        );
+      }
+    }
+  });
+  win.on("closed", () => {
+    win = undefined;
+    overlay?.close();
+  });
+  // Если окно всё-таки упало целиком — перезапускаем его, а не оставляем белый экран.
+  win.webContents.on("render-process-gone", (_e, details) => {
+    console.error("Окно упало:", details.reason);
+    if (details.reason !== "clean-exit") win?.webContents.reload();
+  });
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:/.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+
+  loadRenderer(win);
+
+  if (process.env.CAMADO_SHOTS) {
+    win.webContents.on("console-message", (e) => console.log(`[окно] ${e.message}`));
+    void takeScreenshots(win, process.env.CAMADO_SHOTS);
+  }
+}
+
+function createTray(): void {
+  const isMac = process.platform === "darwin";
+  // На Mac — чёрно-белая «шаблонная» иконка: система сама подкрашивает её под тему меню-бара.
+  const img = nativeImage.createFromPath(iconPath(isMac ? "trayTemplate.png" : "tray.png"));
+  if (img.isEmpty()) return;
+  if (isMac) img.setTemplateImage(true);
+  tray = new Tray(img);
+  tray.setToolTip("Камадо");
+  if (isMac) {
+    tray.on("click", (_e, bounds) => toggleMini(bounds)); // клик — мини-плеер
+    tray.on("right-click", () => tray?.popUpContextMenu(trayMenu()));
+  } else {
+    tray.setContextMenu(trayMenu());
+    tray.on("click", () => showWindow());
+  }
+}
+
+/** Меню Mac по-русски (на Windows меню скрыто — у окна своя шапка). */
+function setAppMenu(): void {
+  if (process.platform !== "darwin") {
+    Menu.setApplicationMenu(null);
+    return;
+  }
+  Menu.setApplicationMenu(
+    Menu.buildFromTemplate([
+      {
+        label: "Camado",
+        submenu: [
+          { role: "about", label: "О программе Camado" },
+          { type: "separator" },
+          { label: "Настройки…", accelerator: "Cmd+,", click: () => send("go", "settings") },
+          { type: "separator" },
+          { role: "hide", label: "Скрыть Camado" },
+          { role: "hideOthers", label: "Скрыть остальные" },
+          { role: "unhide", label: "Показать все" },
+          { type: "separator" },
+          {
+            label: "Выйти из Camado",
+            accelerator: "Cmd+Q",
+            click: () => {
+              quitting = true;
+              app.quit();
+            },
+          },
+        ],
+      },
+      {
+        label: "Правка",
+        submenu: [
+          { role: "undo", label: "Отменить" },
+          { role: "redo", label: "Повторить" },
+          { type: "separator" },
+          { role: "cut", label: "Вырезать" },
+          { role: "copy", label: "Копировать" },
+          { role: "paste", label: "Вставить" },
+          { role: "selectAll", label: "Выбрать всё" },
+        ],
+      },
+      {
+        label: "Плеер",
+        submenu: [
+          { label: "Пауза / играть", click: () => send("media-key", "playpause") },
+          { label: "Следующий трек", accelerator: "Cmd+Right", click: () => send("media-key", "next") },
+          { label: "Предыдущий трек", accelerator: "Cmd+Left", click: () => send("media-key", "prev") },
+          { type: "separator" },
+          { label: "Текст песни поверх окон", accelerator: "Cmd+Shift+L", click: () => toggleOverlay() },
+        ],
+      },
+      {
+        label: "Вид",
+        submenu: [
+          { role: "togglefullscreen", label: "Во весь экран" },
+          { type: "separator" },
+          { role: "resetZoom", label: "Обычный размер" },
+          { role: "zoomIn", label: "Крупнее" },
+          { role: "zoomOut", label: "Мельче" },
+        ],
+      },
+      {
+        label: "Окно",
+        submenu: [
+          { role: "minimize", label: "Свернуть" },
+          { role: "zoom", label: "Развернуть" },
+          { role: "close", label: "Закрыть окно" },
+        ],
+      },
+    ]),
+  );
+}
+
+// Для проверки дизайна: CAMADO_SHOTS=папка — снимки экранов и выход.
+async function takeScreenshots(w: BrowserWindow, dir: string): Promise<void> {
+  const { mkdir, writeFile } = await import("node:fs/promises");
+  await mkdir(dir, { recursive: true });
+  await new Promise<void>((r) => w.webContents.once("did-finish-load", () => r()));
+  const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  await wait(2500);
+  const screens = (process.env.CAMADO_SHOT_LIST ?? "today").split(",");
+  for (const name of screens) {
+    await w.webContents.executeJavaScript(`window.__camadoShot && window.__camadoShot(${JSON.stringify(name)})`);
+    await wait(Number(process.env.CAMADO_SHOT_WAIT ?? 1600));
+    if (process.env.CAMADO_SHOT_DUMP) {
+      const html = await w.webContents.executeJavaScript(
+        `(document.querySelector(${JSON.stringify(process.env.CAMADO_SHOT_DUMP)})?.outerHTML ?? "нет элемента").slice(0, 1500)`,
+      );
+      console.log(`[дамп ${name}] ${html}`);
+    }
+    if (process.env.CAMADO_SHOT_EVAL) console.log(`[eval ${name}] ${await w.webContents.executeJavaScript(process.env.CAMADO_SHOT_EVAL).catch((e: Error) => e.message)}`);
+    const img = await w.webContents.capturePage();
+    await writeFile(join(dir, `${name}.png`), img.toPNG());
+    if (overlay && !overlay.isDestroyed()) {
+      await writeFile(join(dir, `${name}-overlay.png`), (await overlay.webContents.capturePage()).toPNG());
+    }
+  }
+  quitting = true;
+  app.quit();
+}
+
+// ---------- Пульт для ИИ ----------
+// Камадо (в чате и в Telegram) сам открывает экраны, включает музыку, меняет настройки, разворачивает окно.
+core.camado.setAppTools([
+  ...sheetTools(sheets),
+  ...autopilotTools(store, config.CAMADO_TIMEZONE, () => send("data-changed")),
+  ...lifeTools({ handlers: life.handlers, core, timeZone: config.CAMADO_TIMEZONE, act: (a) => send("ai-action", a) }),
+  ...buildAppTools({
+    lessons: () => COURSES.flatMap((c) => c.lessons.map((l) => ({ course: c.id, id: l.id, title: l.title, module: l.module }))),
+    tracks: () => library.view().tracks,
+    editTrack: (id, patch) => library.edit(id, patch),
+    playlists: () => store.listPlaylists(),
+    favorites: () => store.listFavorites(),
+    nowPlaying: () => nowPlaying,
+    settings: () => settings,
+    saveSettings: (patch) => send("settings-changed", saveSettings(patch)),
+    act: (a) => send("ai-action", a),
+    showWindow: () => showWindow(),
+    window: (action) => {
+      if (action === "quit" || action === "restart") {
+        quitting = true;
+        if (action === "restart") app.relaunch();
+        app.quit();
+        return;
+      }
+      if (!win) return;
+      if (action === "fullscreen") win.setFullScreen(true);
+      else if (action === "windowed") win.setFullScreen(false);
+      else if (action === "minimize") win.minimize();
+      else win.hide();
+    },
+  }),
+]);
+
+// ---------- Запуск ----------
+
+app.on("second-instance", () => showWindow());
+
+// Видеокарта не справилась (тяжёлая сцена заставки на большом экране): сообщаем окну — оно выключит заставку
+// и тяжёлые сцены, чтобы это не повторилось (иначе Chromium после нескольких падений закрывает программу).
+app.on("child-process-gone", (_e, details) => {
+  if (details.type !== "GPU") return;
+  console.error("Видеокарта упала:", details.reason);
+  saveSettings({ screensaver: { ...settings.screensaver, light: true } });
+  send("gpu-crashed");
+  send("settings-changed", settings);
+});
+
+app.on("before-quit", () => {
+  quitting = true;
+});
+
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin" || !tray) app.quit();
+});
+
+app.on("activate", () => showWindow());
+
+/**
+ * Ключ ИИ и токен бота — только в зашифрованном виде (Связка ключей на Mac, DPAPI на Windows).
+ * Шифрование доступно только после запуска программы, поэтому ключ ИИ перечитываем здесь.
+ */
+function enableSecretStorage(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    console.warn("Шифрование недоступно — секреты хранятся как есть");
+    return;
+  }
+  store.secretCodec = {
+    encrypt: (plain) => safeStorage.encryptString(plain).toString("base64"),
+    decrypt: (stored) => {
+      try {
+        return safeStorage.decryptString(Buffer.from(stored, "base64"));
+      } catch {
+        console.warn("Не смог расшифровать сохранённый ключ — его нужно ввести заново");
+        return undefined;
+      }
+    },
+  };
+  applyAi(core);
+}
+
+void app.whenReady().then(async () => {
+  // Сеть — через Chromium (как у браузера): так работают системный прокси и VPN в режиме «прокси» на Windows и Mac.
+  // Без этого Камадо шёл в интернет напрямую, и, например, Gemini отвечал «страна не поддерживается».
+  if (!process.env.CAMADO_NODE_FETCH) {
+    const nodeFetch = globalThis.fetch;
+    globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+      return /^https?:/i.test(url) ? net.fetch(input as string, init as never) : nodeFetch(input, init);
+    }) as typeof fetch;
+  }
+  enableSecretStorage();
+  protocol.handle("camado-media", async (req) => {
+    const url = new URL(req.url);
+    const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
+    // «Моя волна» и открытая база: поток с разрешённых сайтов (ccMixter, Internet Archive)
+    if (url.hostname === "stream") {
+      const u = url.searchParams.get("u") ?? "";
+      // отрывок хита: адрес у него живёт недолго — узнаём прямо сейчас
+      const dz = DEEZER_TRACK.exec(u);
+      if (dz) {
+        const preview = await hits.previewUrl(dz[1]!);
+        return preview ? serveRemote(preview, req.headers.get("range"), /(^|\.)dzcdn\.net$/i) : new Response("no preview", { status: 404 });
+      }
+      return serveRemote(u, req.headers.get("range"), STREAM_HOSTS, undefined, (x) => issued.has(x));
+    }
+    // модель распознавания слов: качается с Hugging Face один раз, дальше — с диска
+    if (url.hostname === "model") {
+      try {
+        const ok = await ensureModelFile(dataDir, name, (p) => send("model-progress", p));
+        const path = ok ? modelFile(dataDir, name) : undefined;
+        return path ? serveFile(path, req.headers.get("range")) : new Response("not found", { status: 404 });
+      } catch (err) {
+        return new Response(err instanceof Error ? err.message : "error", { status: 502 });
+      }
+    }
+    const path =
+      url.hostname === "track"
+        ? library.trackPath(name)
+        : url.hostname === "cover"
+          ? library.coverPath(name)
+          : url.hostname === "sound" && /^custom\.[a-z0-9]{2,5}$/.test(name)
+            ? join(dataDir, "sounds", name)
+            : url.hostname === "picture" && /^picture\.[a-z0-9]{2,5}$/.test(name)
+              ? join(dataDir, "screensaver", name)
+              : url.hostname === "book"
+                ? bookFilePath(dataDir, name)
+                : undefined;
+    if (!path) return new Response("not found", { status: 404 });
+    return serveFile(path, req.headers.get("range"));
+  });
+
+  await library.load();
+  library.watchFolders();
+  life.start();
+  setAppMenu();
+  if (process.platform === "darwin" && !app.isPackaged) app.dock?.setIcon(iconPath("icon.png"));
+  void discord.configure(settings.discord.enabled, settings.discord.clientId);
+  createWindow();
+  // Подхватить новые файлы в папках, добавленных раньше.
+  if (library.view().folders.length) void library.rescan();
+  createTray();
+
+  try {
+    globalShortcut.register(QUICK_KEY, toggleQuick);
+  } catch {
+    // сочетание занято другой программой
+  }
+  for (const [accel, action] of [
+    ["MediaPlayPause", "playpause"],
+    ["MediaNextTrack", "next"],
+    ["MediaPreviousTrack", "prev"],
+  ] as const) {
+    try {
+      globalShortcut.register(accel, () => send("media-key", action));
+    } catch {
+      // клавиша занята другой программой — не страшно
+    }
+  }
+
+  startBot();
+  updates.start();
+  sheets.start();
+  // вечерний экзаменатор: раз в минуту смотрим, не пора ли
+  setInterval(() => {
+    try {
+      autopilotTick(store, {
+        on: settings.autopilot.on,
+        hour: settings.autopilot.hour,
+        tz: config.CAMADO_TIMEZONE,
+        send: (text) => {
+          notify("Камадо · сессия", text);
+          send("reminder", { text });
+          const owner = botOwner();
+          if (bot && owner) void bot.api.sendMessage(owner, text).catch(() => undefined);
+        },
+      });
+    } catch (err) {
+      console.error("Автопилот сессии:", err);
+    }
+  }, 60_000);
+  startReminderLoop(
+    store,
+    async (text) => {
+      notify("Камадо", text);
+      send("reminder", { text });
+      const owner = botOwner();
+      if (bot && owner) await bot.api.sendMessage(owner, text).catch(() => undefined);
+    },
+    config.CAMADO_TIMEZONE,
+  );
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  void discord.stop();
+  void waveEmb.flush();
+  void stopBot();
+});

@@ -1,0 +1,105 @@
+name: Установщики
+
+# Собирает Camado-Setup.exe (Windows) и Camado-mac.dmg (macOS) и выкладывает их
+# в релиз «Камадо — последняя версия». Ссылки на скачивание не меняются:
+#   https://github.com/<владелец>/<репо>/releases/latest/download/Camado-Setup.exe
+on:
+  push:
+    branches: [main, "claude/**"]
+    # Записи в планах и описаниях не меняют программу — версию из-за них не пересобираем
+    paths-ignore:
+      - "docs/**"
+      - "README.md"
+      - "CLAUDE.md"
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: true
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            args: --win
+            files: |
+              release/Camado-Setup.exe
+              release/Camado-Setup.exe.blockmap
+              release/latest.yml
+          - os: macos-latest
+            args: --mac
+            files: |
+              release/Camado-mac.dmg
+              release/Camado-mac-arm64.zip
+              release/Camado-mac-x64.zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # Номер версии берём из package.json (его поднимаем при каждом выпуске) — по нему программа понимает,
+      # что вышло обновление. Номер сборки CI не подставляем: он меньше уже вышедших версий и сломал бы обновления.
+      - run: npx electron-vite build
+      - name: Собрать установщик
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        # electron-builder скачивает инструменты с GitHub; при временном сбое сети (504) пробуем ещё раз.
+        run: |
+          for i in 1 2 3; do
+            npx electron-builder ${{ matrix.args }} --publish never && exit 0
+            echo "Попытка $i не удалась, пробую снова через 20 с…"
+            sleep 20
+          done
+          exit 1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error
+
+  publish:
+    # Только если собрались все версии — иначе остаётся прошлый рабочий релиз.
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Обновить релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          ls -la artifacts
+          gh release delete camado-latest --yes --cleanup-tag || true
+          VERSION=$(grep -m1 '^version:' artifacts/latest.yml | awk '{print $2}')
+          # «Что нового» этой версии — из changelog.md; сам файл кладём в релиз: по нему программа показывает,
+          # что добавит обновление, ещё до скачивания.
+          cp repo/desktop/shared/changelog.md artifacts/changelog.md
+          CHANGES=$(awk -v v="$VERSION" '/^## /{p = ($2 == v); next} p && /^- /' repo/desktop/shared/changelog.md)
+          gh release create camado-latest artifacts/* \
+            --target "${{ github.sha }}" \
+            --title "Камадо $VERSION" \
+            --latest \
+            --notes "## Что нового
+          ${CHANGES}
+
+          Собрано автоматически из ${GITHUB_REF_NAME} (${GITHUB_SHA::7}).
+
+          **Windows:** скачай Camado-Setup.exe и запусти. Если появится «Windows защитила ваш компьютер» — нажми «Подробнее» → «Выполнить в любом случае» (программа без платной подписи).
+
+          **Mac:** открой Camado-mac.dmg и перетащи Камадо в «Программы». Если Mac пишет, что программа повреждена, выполни в Терминале: xattr -cr /Applications/Camado.app"

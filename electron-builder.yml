@@ -1,0 +1,65 @@
+# Сборка установщиков: npm run app:dist (или автоматически на GitHub, см. .github/workflows/release.yml)
+appId: com.camado.app
+productName: Camado
+copyright: Camado
+directories:
+  output: release
+  buildResources: desktop/assets
+files:
+  - out/**
+  - package.json
+extraResources:
+  - from: desktop/assets
+    to: assets
+    filter: ["*.png"]
+asar: true
+# «Предохранители» Electron: собранную программу нельзя запустить как обычный Node.js,
+# подсунуть ей код через переменные окружения или отладчик, или загрузить код не из её архива.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  resetAdHocDarwinSignature: true
+# Откуда программа берёт обновления: последний релиз на GitHub (latest.yml + установщик).
+publish:
+  - provider: generic
+    url: https://github.com/killer-destroyer/camado/releases/latest/download
+
+win:
+  icon: desktop/assets/icon.png
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Камадо
+  runAfterFinish: true
+  artifactName: Camado-Setup.${ext}
+
+mac:
+  icon: desktop/assets/icon.png
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [universal]
+    # архивы под каждый процессор — их качает обновление прямо в программе
+    - target: zip
+      arch: [arm64, x64]
+  artifactName: Camado-mac-${arch}.${ext}
+  # Без платного сертификата Apple — подпись «для себя».
+  identity: null
+  extendInfo:
+    NSMicrophoneUsageDescription: "Камадо слушает микрофон, только когда ты нажимаешь кнопку голоса или сам включил «Отзываться на слово Камадо» — чтобы говорить с ним голосом."
+dmg:
+  artifactName: Camado-mac.${ext}
+
+linux:
+  icon: desktop/assets/icon.png
+  category: Utility
+  target: [AppImage]
+appImage:
+  artifactName: Camado-linux.${ext}
