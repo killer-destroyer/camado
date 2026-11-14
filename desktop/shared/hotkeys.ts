@@ -32,6 +32,7 @@ export const HOTKEYS: HotkeyAction[] = [
   { id: "shuffle", label: "Вперемешку вкл/выкл", group: "Музыка", combo: "S" },
   { id: "repeat", label: "Повтор: нет → всё → одна", group: "Музыка", combo: "R" },
   { id: "player", label: "Плеер на весь экран", group: "Музыка", combo: "P" },
+  { id: "wave", label: "«Моя волна» вкл/выкл", group: "Музыка", combo: "W" },
   { id: "editTrack", label: "Поправить песню", group: "Музыка", combo: "E" },
   { id: "translate", label: "Перевод текста песни", group: "Музыка", combo: "T" },
   { id: "go:today", label: "Сегодня", group: "Разделы", combo: "Alt+1" },

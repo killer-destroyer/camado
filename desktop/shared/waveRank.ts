@@ -129,3 +129,14 @@ export function sameSong(a: { title: string; artist: string }, b: { title: strin
   for (const w of tokens(b)) if (A.has(w) && !titleWords.has(w)) return true;
   return false;
 }
+
+/** Где послушать песню целиком: поиск по «исполнитель название» на сервисах, которыми ты и так пользуешься. */
+export function fullLinks(t: { title: string; artist: string }): { name: string; url: string }[] {
+  const q = encodeURIComponent(`${t.artist} ${t.title}`.trim());
+  return [
+    { name: "Яндекс Музыка", url: `https://music.yandex.ru/search?text=${q}` },
+    { name: "VK Музыка", url: `https://vk.com/audio?q=${q}` },
+    { name: "YouTube", url: `https://www.youtube.com/results?search_query=${q}` },
+  ];
+}
+

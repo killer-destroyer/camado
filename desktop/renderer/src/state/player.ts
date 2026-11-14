@@ -619,7 +619,8 @@ export function toggleTranslation(): void {
 export async function loadLyrics(): Promise<void> {
   const meta = nowMeta();
   const id = ++lyricsReq;
-  if (!meta) return player.set({ lyrics: undefined, lyricsLoading: false });
+  // отрывок хита (30 секунд из середины песни) — текст по времени не совпал бы: не показываем
+  if (!meta || currentTrack()?.web?.preview) return player.set({ lyrics: undefined, lyricsLoading: false });
   player.set({ lyrics: undefined, lyricsLoading: true });
   const t = currentTrack();
   try {

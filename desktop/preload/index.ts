@@ -150,6 +150,9 @@ const api: CamadoApi = {
     embGet: call("wave.embGet") as CamadoApi["wave"]["embGet"],
     embPut: call("wave.embPut") as CamadoApi["wave"]["embPut"],
     taste: call("wave.taste") as CamadoApi["wave"]["taste"],
+    hits: call("wave.hits") as CamadoApi["wave"]["hits"],
+    wish: call("wave.wish") as CamadoApi["wave"]["wish"],
+    wishRemove: call("wave.wishRemove") as CamadoApi["wave"]["wishRemove"],
   },
   sheets: {
     list: call("sheets.list") as CamadoApi["sheets"]["list"],

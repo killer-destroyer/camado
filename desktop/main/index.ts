@@ -47,6 +47,7 @@ import { Library } from "./library.js";
 import { SheetsService, sheetTools } from "./sheets.js";
 import { moneySummary, parseMoney, type MoneyState } from "../shared/life.js";
 import { autopilotTick, autopilotToPlan, autopilotTools } from "./autopilot.js";
+import { DEEZER_TRACK, Hits } from "./hits.js";
 import { EmbStore, gatherCandidates, MOODS, STREAM_HOSTS, Wave, type CandidateQuery } from "./wave.js";
 import { isMostlyCyrillic, translateLyrics } from "../../src/camado/translate.js";
 import { LyricsService } from "./lyrics.js";
@@ -249,6 +250,17 @@ async function withAi<T extends object>(fn: () => Promise<T | { error: string }>
 
 const wave = new Wave(store);
 const waveEmb = new EmbStore(join(dataDir, "wave-emb.json"));
+const hits = new Hits();
+const WISH_KV = "wave.wish";
+/** «Хочу послушать»: понравившиеся в волне хиты (играет отрывок — целиком откроешь на стриминге). */
+const wishList = (): Track[] => {
+  try {
+    const v = JSON.parse(store.getKv(WISH_KV) ?? "[]") as Track[];
+    return Array.isArray(v) ? v : [];
+  } catch {
+    return [];
+  }
+};
 const waveCache = new Map<string, { at: number; t: Track[] }>();
 /** Адреса музыки и обложек, которые Камадо сам выдал окну из ответов открытой базы, — только их можно слушать потоком. */
 const issued = new Set<string>();
@@ -386,7 +398,44 @@ const handlers: Record<string, Handler> = {
     return tracks.map(viaStream);
   },
   "wave.feedback": (t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done") => {
-    if (t && typeof t.id === "string" && ["like", "unlike", "dislike", "skip", "done"].includes(kind)) wave.feedback(t, kind);
+    if (!t || typeof t.id !== "string" || !["like", "unlike", "dislike", "skip", "done"].includes(kind)) return;
+    wave.feedback(t, kind);
+    // ♡ на отрывке — в «Хочу послушать»
+    if (t.web?.preview && (kind === "like" || kind === "unlike")) {
+      const rest = wishList().filter((x) => x.id !== t.id);
+      const item: Track = { id: t.id, path: String(t.web.url), title: String(t.title).slice(0, 200), artist: String(t.artist).slice(0, 200), album: String(t.album ?? "").slice(0, 200), duration: 30, hasLyrics: false, cover: t.cover, web: t.web };
+      store.setKv(WISH_KV, JSON.stringify((kind === "like" ? [item, ...rest] : rest).slice(0, 500)));
+      send("wish-changed");
+    }
+  },
+  /** Волна из актуальных хитов: похожие исполнители и популярность — по данным Deezer; играет 30-секундный отрывок. */
+  "wave.hits": async (q: { seedIds?: string[]; mood: WaveMood; exclude?: string[]; character?: "new" | "popular"; count?: number }) => {
+    const lib = library.view().tracks;
+    const byId = new Map(lib.map((t) => [t.id, t]));
+    let seeds = (Array.isArray(q?.seedIds) ? q.seedIds : []).map((id) => byId.get(String(id))).filter((t): t is Track => !!t);
+    if (!seeds.length) {
+      // «Под меня»: любимое и то, что слушаешь чаще всего; мало — вся библиотека
+      const fav = store.listFavorites().map((id) => byId.get(id)).filter((t): t is Track => !!t);
+      const top = store.playStats(new Date(Date.now() - 60 * 86400e3), 40).map((p) => byId.get(p.trackId)).filter((t): t is Track => !!t);
+      seeds = [...fav, ...fav, ...top];
+      if (new Set(seeds.map((t) => t.artist)).size < 4) seeds = [...seeds, ...lib.slice(0, 400)];
+    }
+    const taste = wave.taste();
+    const tracks = await hits.next({
+      seeds: seeds.slice(0, 500).map((t) => ({ title: t.title, artist: t.artist })),
+      mood: ["mine", "energy", "calm", "study", "new"].includes(q?.mood) ? q.mood : "mine",
+      character: q?.character === "new" ? "new" : "popular",
+      exclude: (Array.isArray(q?.exclude) ? q.exclude : []).map(String).slice(-600),
+      own: lib.map((t) => ({ title: t.title, artist: t.artist })),
+      dislikedArtists: Object.entries(taste.artists).filter(([, v]) => v <= -3).map(([a]) => a),
+      count: Math.max(1, Math.min(12, Number(q?.count) || 5)),
+    });
+    return tracks.map(viaStream);
+  },
+  "wave.wish": () => wishList().map(viaStream),
+  "wave.wishRemove": (id: string) => {
+    store.setKv(WISH_KV, JSON.stringify(wishList().filter((x) => x.id !== id)));
+    send("wish-changed");
   },
   /** Волна 2.0: кандидаты под стиль плейлиста (жанры угадало окно по звуку). */
   "wave.candidates": async (q: CandidateQuery) => {
@@ -1324,7 +1373,16 @@ void app.whenReady().then(async () => {
     const url = new URL(req.url);
     const name = decodeURIComponent(url.pathname.replace(/^\//, ""));
     // «Моя волна» и открытая база: поток с разрешённых сайтов (ccMixter, Internet Archive)
-    if (url.hostname === "stream") return serveRemote(url.searchParams.get("u"), req.headers.get("range"), STREAM_HOSTS, undefined, (u) => issued.has(u));
+    if (url.hostname === "stream") {
+      const u = url.searchParams.get("u") ?? "";
+      // отрывок хита: адрес у него живёт недолго — узнаём прямо сейчас
+      const dz = DEEZER_TRACK.exec(u);
+      if (dz) {
+        const preview = await hits.previewUrl(dz[1]!);
+        return preview ? serveRemote(preview, req.headers.get("range"), /(^|\.)dzcdn\.net$/i) : new Response("no preview", { status: 404 });
+      }
+      return serveRemote(u, req.headers.get("range"), STREAM_HOSTS, undefined, (x) => issued.has(x));
+    }
     // модель распознавания слов: качается с Hugging Face один раз, дальше — с диска
     if (url.hostname === "model") {
       try {

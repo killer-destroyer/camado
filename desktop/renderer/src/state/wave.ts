@@ -71,9 +71,16 @@ function clap(): Worker {
 function embedPcm(pcm: Float32Array): Promise<Float32Array> {
   const id = ++reqId;
   return new Promise((ok, fail) => {
-    waits.set(id, { ok, fail });
-    const msg: ClapIn = { type: "embed", id, pcm };
-    clap().postMessage(msg, [pcm.buffer]);
+    // нейросеть не ответила за полторы минуты (не скачалась, зависла) — не ждём вечно
+    const timer = window.setTimeout(() => {
+      if (waits.delete(id)) fail(new Error("Нейросеть волны не отвечает"));
+    }, 90_000);
+    const done = <T,>(fn: (v: T) => void) => (v: T) => {
+      clearTimeout(timer);
+      fn(v);
+    };
+    waits.set(id, { ok: done(ok), fail: done(fail) });
+    return void clap().postMessage({ type: "embed", id, pcm } satisfies ClapIn, [pcm.buffer]);
   });
 }
 
@@ -160,9 +167,62 @@ let token = 0;
 
 const alive = (s: Session) => session === s && s.token === token && player.get().wave;
 
-/** Включить волну: по плейлисту (seeds), по настроению или «под меня» (вся библиотека / любимое). */
+// ---------- волна из хитов (по умолчанию): подбор делает ядро по данным Deezer, старт мгновенный ----------
+
+interface HitsSession {
+  mood: WaveMood;
+  name?: string;
+  seedIds?: string[];
+  token: number;
+}
+let hitsSession: HitsSession | undefined;
+
+async function startHits(mood: WaveMood, seedTracks: Track[] | undefined, name: string | undefined, my: number): Promise<boolean> {
+  const hs: HitsSession = { mood, name, seedIds: seedTracks?.map((t) => t.id), token: my };
+  hitsSession = hs;
+  session = undefined;
+  player.set({ wave: { mood, name, loading: true, seen: [] } });
+  waveStatus.set({ stage: "Подбираю волну…" });
+  const first = await api.wave.hits({ seedIds: hs.seedIds, mood, exclude: [], character: app.get().settings.waveCharacter, count: 4 }).catch(() => [] as Track[]);
+  if (token !== my) return true;
+  waveStatus.set({ stage: undefined });
+  if (!first.length) return false;
+  player.set({ wave: { mood, name, seen: first.map((t) => t.id) } });
+  await playQueue(first, 0, true);
+  toast(name ? `«Моя волна» по «${name}»` : `«Моя волна» · ${WAVE_MOODS.find((m) => m.id === mood)?.label}`, "info");
+  return true;
+}
+
+async function extendHits(hs: HitsSession): Promise<void> {
+  const w = player.get().wave;
+  if (!w || hs.token !== token) return;
+  const more = await api.wave.hits({ seedIds: hs.seedIds, mood: hs.mood, exclude: w.seen, character: app.get().settings.waveCharacter, count: 4 }).catch(() => [] as Track[]);
+  const cur = player.get();
+  if (!cur.wave || hs.token !== token) return;
+  const fresh = more.filter((t) => !cur.queue.some((q) => q.id === t.id));
+  const drop = Math.max(0, cur.index - 20);
+  player.set({
+    queue: [...cur.queue.slice(drop), ...fresh],
+    index: cur.index - drop,
+    wave: { ...cur.wave, loading: false, seen: [...cur.wave.seen, ...fresh.map((t) => t.id)].slice(-600) },
+  });
+}
+
+/** Включить волну: по плейлисту (seeds), по настроению или «под меня» (любимое и часто слушаемое). */
 export async function startWave(mood: WaveMood = "mine", seedTracks?: Track[], name?: string): Promise<void> {
   const my = ++token;
+  if (app.get().settings.waveSource !== "indie") {
+    try {
+      if (await startHits(mood, seedTracks, name, my)) return;
+    } catch (err) {
+      console.error(err);
+    }
+    if (token !== my) return;
+    hitsSession = undefined;
+    // хиты недоступны (нет связи с Deezer) — честно говорим и пробуем открытую базу с полными песнями
+    toast("Не достучался до базы хитов — включаю полные песни независимых музыкантов", "warn");
+  }
+  hitsSession = undefined;
   const lib = player.get().library.tracks;
   player.set({ wave: { mood, name, loading: true, seen: [] } });
   waveStatus.set({ stage: "Слушаю, что ты любишь…" });
@@ -200,6 +260,8 @@ export async function startWave(mood: WaveMood = "mine", seedTracks?: Track[], n
       waveStatus.set({ stage: `Слушаю ${name ? `«${name}»` : "твою музыку"}: ${++n} из ${sample.length}` });
       const v = await embedTrack(t);
       if (v) s.seeds.push(v);
+      // первая же песня не «послушалась» — нейросеть недоступна: не тратим время на остальные
+      else if (n === 1 && !s.seeds.length) break;
     }
     if (!alive(s)) return;
     if (!s.seeds.length) s.smart = false;
@@ -293,6 +355,13 @@ export const waveDebug = () => ({ genres: session?.genres, ruShare: session?.ruS
 let extending: Promise<void> | undefined;
 /** Подложить следующие песни, пока волна не кончилась. */
 export function extendWave(): Promise<void> {
+  if (hitsSession && player.get().wave) {
+    const hs = hitsSession;
+    extending ??= extendHits(hs)
+      .catch(() => undefined)
+      .finally(() => (extending = undefined));
+    return extending;
+  }
   const s = session;
   const w = player.get().wave;
   if (!w || !s || !alive(s)) return Promise.resolve();
@@ -316,6 +385,7 @@ export function extendWave(): Promise<void> {
 export function stopWave(): void {
   token++;
   session = undefined;
+  hitsSession = undefined;
   player.set({ wave: undefined });
   waveStatus.set({ stage: undefined });
 }
