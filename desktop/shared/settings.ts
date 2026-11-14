@@ -1,6 +1,5 @@
 import { DEFAULT_CUSTOM, normalizeCustom, type CustomLayout } from "./custom.js";
 import { normalizeHotkeys } from "./hotkeys.js";
-import type { TrackEnergy } from "./energy.js";
 // Настройки приложения. Хранятся в базе (kv), меняются в окне «Настройки».
 
 export type VisualizerStyle = "wave" | "ring" | "bars" | "off";
@@ -48,12 +47,6 @@ export interface AppSettings {
   autopilot: { on: boolean; hour: number; studyHour: number };
   /** Голосовой Камадо: speak — читать ответы вслух; wake — слушать слово «Камадо» (микрофон включён, пока открыта программа). */
   voice: { speak: boolean; wake: boolean; rate: number };
-  /** «Характер» волны: незнакомое (похожее, но новое) или популярное (то же, но чаще слушаемое на площадке). */
-  waveCharacter: "new" | "popular";
-  /** Откуда волна: hits — актуальные хиты отрывками по 30 с (Deezer); indie — полные песни независимых музыкантов (Audius). */
-  waveSource: "hits" | "indie";
-  /** Темп и энергия своих треков (для «Моей волны» по настроению): id → {bpm, e}. */
-  trackEnergy: Record<string, TrackEnergy>;
   /** Показывать перевод текста песни под строками (ИИ переводит один раз, перевод хранится). */
   lyricsTranslate: boolean;
   /** «Кастом»: боковая панель и главный экран. */
@@ -159,9 +152,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lyricsSync: {},
   lyricsByEar: true,
   lyricsTranslate: false,
-  trackEnergy: {},
-  waveCharacter: "popular",
-  waveSource: "hits",
   voice: { speak: true, wake: false, rate: 1.05 },
   autopilot: { on: true, hour: 20, studyHour: 18 },
   wordSync: true,
@@ -214,7 +204,6 @@ export function mergeSettings(saved: unknown): AppSettings {
     achievements: { ...(s.achievements ?? {}) },
     trackGain: { ...(s.trackGain ?? {}) },
     trackLoudness: { ...(s.trackLoudness ?? {}) },
-    trackEnergy: { ...(s.trackEnergy ?? {}) },
     custom: normalizeCustom(s.custom),
     hotkeys: normalizeHotkeys(s.hotkeys),
   };

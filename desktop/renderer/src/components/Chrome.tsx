@@ -38,7 +38,6 @@ import { api } from "../lib/api";
 import { app, go, toggleOverlay, updateSettings, type ScreenId } from "../state/app";
 import { currentTrack, cycleRepeat, next, nowMeta, player, prev, toggleFavorite, togglePlay } from "../state/player";
 import { Progress, SleepButton, SoundMenu } from "./NowPlaying";
-import { WebTrackButtons, WebTrackCredit } from "./WebTrackButtons";
 import { Slider } from "./ui";
 import { MiniSpectrum } from "./Visualizer";
 
@@ -179,7 +178,6 @@ export function MiniPlayer() {
       <div className="mp-meta" onClick={() => app.set({ nowPlaying: true })}>
         <div className="mp-title">{meta.title}</div>
         <div className="mp-artist">{meta.artist}</div>
-        <WebTrackCredit track={track} />
       </div>
       <div className="mp-center">
         <div className="mp-controls">
@@ -208,7 +206,6 @@ export function MiniPlayer() {
             <Heart size={17} fill={fav ? "currentColor" : "none"} />
           </button>
         )}
-        <WebTrackButtons track={track} />
         <SoundMenu />
         <SleepButton />
       </div>

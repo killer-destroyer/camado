@@ -65,7 +65,7 @@ export function setHostLookup(fn: HostLookup): void {
 
 const LOCAL_ONLY = "Это адрес домашней сети или самого компьютера — оттуда Камадо не скачивает. Нужна ссылка из интернета.";
 
-export async function isLocalHost(u: URL): Promise<boolean> {
+async function isLocalHost(u: URL): Promise<boolean> {
   const host = u.hostname.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "localhost" || /\.(localhost|local|internal|lan|home|arpa)$/.test(host)) return true;
   if (isIP(host)) return isPrivateIp(host);

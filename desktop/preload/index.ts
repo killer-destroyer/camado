@@ -142,18 +142,6 @@ const api: CamadoApi = {
     setCover: call("library.setCover") as CamadoApi["library"]["setCover"],
     resetEdit: call("library.resetEdit") as CamadoApi["library"]["resetEdit"],
   },
-  wave: {
-    next: call("wave.next") as CamadoApi["wave"]["next"],
-    feedback: call("wave.feedback") as CamadoApi["wave"]["feedback"],
-    moods: call("wave.moods") as CamadoApi["wave"]["moods"],
-    candidates: call("wave.candidates") as CamadoApi["wave"]["candidates"],
-    embGet: call("wave.embGet") as CamadoApi["wave"]["embGet"],
-    embPut: call("wave.embPut") as CamadoApi["wave"]["embPut"],
-    taste: call("wave.taste") as CamadoApi["wave"]["taste"],
-    hits: call("wave.hits") as CamadoApi["wave"]["hits"],
-    wish: call("wave.wish") as CamadoApi["wave"]["wish"],
-    wishRemove: call("wave.wishRemove") as CamadoApi["wave"]["wishRemove"],
-  },
   sheets: {
     list: call("sheets.list") as CamadoApi["sheets"]["list"],
     add: call("sheets.add") as CamadoApi["sheets"]["add"],

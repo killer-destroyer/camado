@@ -37,8 +37,7 @@ export type AppAction =
   | { type: "music"; action: "pause" | "resume" | "next" | "prev" }
   | { type: "focus"; action: "start" | "pause" | "reset" }
   | { type: "screensaver"; on: boolean }
-  | { type: "grow"; tab: string; lesson?: string; modal?: string }
-  | { type: "wave"; mood: "mine" | "energy" | "calm" | "study" | "new" | "stop"; playlist?: string };
+  | { type: "grow"; tab: string; lesson?: string; modal?: string };
 
 const norm = (s: string) => s.toLowerCase().replace(/ё/g, "е").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
@@ -171,25 +170,6 @@ export function buildAppTools(d: AppToolDeps): ToolDef[] {
         const res = await d.editTrack(t.id, i.reset ? { title: null, artist: null, album: null } : { title: i.title, artist: i.artist, album: i.album });
         if (!res) return "Не получилось поправить.";
         return i.reset ? `Вернул как в файле: «${res.title}» — ${res.artist}.` : `Было ${was}, стало «${res.title}» — ${res.artist}${res.album ? ` (альбом «${res.album}»)` : ""}.`;
-      },
-    }),
-
-    defineTool({
-      name: "app_wave",
-      description:
-        "«Моя волна» — бесконечный поток актуальных популярных песен, похожих на музыку хозяина (звучат отрывки по 30 секунд; целиком песню можно открыть на стриминге кнопкой «Целиком»). " +
-        "mood: mine — под меня, energy — бодро, calm — спокойно, study — для учёбы, new — что-то новое; stop — выйти из волны. " +
-        "playlist — имя плейлиста: волна похожей музыки под стиль этого плейлиста (сами его песни не повторяются).",
-      schema: z.object({ mood: z.enum(["mine", "energy", "calm", "study", "new", "stop"]), playlist: z.string().optional() }),
-      run: (i) => {
-        if (i.playlist) {
-          const pl = d.playlists().find((p) => p.name.toLowerCase() === i.playlist!.toLowerCase()) ?? d.playlists().find((p) => p.name.toLowerCase().includes(i.playlist!.toLowerCase()));
-          if (!pl) return `Нет плейлиста «${i.playlist}». Есть: ${d.playlists().map((p) => `«${p.name}»`).join(", ") || "никаких"}.`;
-          d.act({ type: "wave", mood: "mine", playlist: pl.name });
-          return `Включил волну по плейлисту «${pl.name}» — похожая музыка, без его песен.`;
-        }
-        d.act({ type: "wave", mood: i.mood });
-        return i.mood === "stop" ? "Вышел из волны — музыка доиграет." : "Включил «Мою волну».";
       },
     }),
 

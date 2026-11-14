@@ -1,6 +1,4 @@
 // Плеер: очередь, управление, тексты песен, палитра из обложки.
-import type { WaveMood } from "../../../shared/types";
-import type { TrackEnergy } from "../../../shared/energy";
 import type { LibraryState, Lyrics, Playlist, Track } from "../../../shared/types";
 import type { LyricsSync } from "../../../shared/settings";
 import { addAnchor, approximateTimes, cleanEarWindow, EAR_WINDOW, earWindows, lyricsSlope, mapLyricsTime, syncFromHeard } from "../../../shared/lrc";
@@ -13,7 +11,6 @@ import { paletteById, paletteFromPixels, type Palette } from "../lib/palettes";
 import { pickShuffle } from "../../../shared/shuffle";
 import { app, toast, updateSettings } from "./app";
 import { initWordSync, kick as kickWords, withWords } from "./wordsync";
-import { extendWave, waveFeedback } from "./wave";
 
 interface PlayerState {
   library: LibraryState;
@@ -35,8 +32,6 @@ interface PlayerState {
   earSyncing?: boolean;
   playlists: Playlist[];
   favorites: string[];
-  /** Играет «Моя волна»: настроение (или плейлист name), что уже было. */
-  wave?: { mood: WaveMood; name?: string; loading?: boolean; seen: string[] };
   /** Перевод текста песни: key — для какого текста, lines — по строкам (той же длины). */
   translation?: { key: string; lines?: string[]; native?: boolean; busy?: boolean; error?: string };
 }
@@ -198,7 +193,7 @@ export async function syncLyricsByEar(auto = false): Promise<boolean> {
   if (!auto) toast("Слушаю песню и подгоняю текст — это займёт 10–30 секунд…");
   try {
     // ИИ слушает 4 коротких отрывка (на всей песне целиком он путается в секундах к концу)
-    const pcm = await songPcm(trackSrc(t));
+    const pcm = await songPcm(`camado-media://track/${t.id}`);
     const windows = earWindows(pcm.length / SR, lyrics.lines);
     const results = await Promise.all(
       windows.map(async (w) => {
@@ -249,23 +244,11 @@ export function trackTrim(id: string): number {
 
 /** Измерить трек, если ещё не мерили, и плавно поправить громкость, пока он играет. */
 async function levelTrack(id: string, url: string): Promise<void> {
-  const st = app.get().settings;
-  const needLoud = st.autoLevel && st.trackLoudness[id] === undefined;
-  if (!needLoud && st.trackEnergy[id]) return;
-  const m = await measure(url);
-  if (!m) return;
-  const cur = app.get().settings;
-  updateSettings({
-    ...(needLoud ? { trackLoudness: { ...cur.trackLoudness, [id]: m.loud } } : {}),
-    ...(m.energy ? { trackEnergy: { ...cur.trackEnergy, [id]: m.energy } } : {}),
-  });
-  if (needLoud && currentTrack()?.id === id) engine.setTrim(trackTrim(id));
-}
-
-/** Энергию посчитали по пути (при разборе слов песни) — запомнить для «Моей волны». */
-export function rememberEnergy(id: string, en: TrackEnergy | undefined): void {
-  if (!en || app.get().settings.trackEnergy[id]) return;
-  updateSettings({ trackEnergy: { ...app.get().settings.trackEnergy, [id]: en } });
+  if (!app.get().settings.autoLevel || app.get().settings.trackLoudness[id] !== undefined) return;
+  const loud = await measure(url);
+  if (loud === undefined) return;
+  updateSettings({ trackLoudness: { ...app.get().settings.trackLoudness, [id]: loud } });
+  if (currentTrack()?.id === id) engine.setTrim(trackTrim(id));
 }
 
 /** Своя громкость песни, дБ. */
@@ -283,7 +266,7 @@ export function setAutoLevel(on: boolean): void {
   const t = currentTrack();
   if (!t) return;
   engine.setTrim(trackTrim(t.id));
-  if (on && !t.web) void levelTrack(t.id, trackSrc(t));
+  if (on) void levelTrack(t.id, `camado-media://track/${t.id}`);
 }
 
 export function duration(): number {
@@ -315,7 +298,6 @@ export function startWordSync(): () => void {
     },
     pcm: songPcm,
     sr: SR,
-    energy: rememberEnergy,
     playing: () => player.get().playing,
     resetSync: (id) => {
       const st = app.get().settings;
@@ -344,13 +326,8 @@ export function watchLibrary(): () => void {
 
 // ---------- Управление ----------
 
-/** Откуда играть: свой файл — с диска, трек из открытой базы — потоком через Камадо. */
-export function trackSrc(t: Track): string {
-  return t.web ? `camado-media://stream/?u=${encodeURIComponent(t.web.url)}` : `camado-media://track/${t.id}`;
-}
-
-export async function playQueue(tracks: Track[], index: number, keepWave = false): Promise<void> {
-  player.set(keepWave ? { queue: tracks } : { queue: tracks, wave: undefined });
+export async function playQueue(tracks: Track[], index: number): Promise<void> {
+  player.set({ queue: tracks });
   setIndex(index);
   await startCurrent(0.35);
 }
@@ -383,11 +360,6 @@ export async function loadPlaylists(): Promise<void> {
 export async function toggleFavorite(trackId: string): Promise<void> {
   // сразу на экране, потом в базе
   const fav = player.get().favorites;
-  const t = player.get().queue.find((x) => x.id === trackId) ?? player.get().library.tracks.find((x) => x.id === trackId);
-  if (t) {
-    void api.wave.feedback(t, fav.includes(trackId) ? "unlike" : "like");
-    if (!fav.includes(trackId)) waveFeedback(t, "like");
-  }
   player.set({ favorites: fav.includes(trackId) ? fav.filter((x) => x !== trackId) : [trackId, ...fav] });
   await api.playlists.toggleFavorite(trackId);
 }
@@ -400,28 +372,13 @@ function flushListened(): void {
   const l = listened;
   listened = { id: "", seconds: 0 };
   if (!l.id || l.seconds < 30) return;
-  const t = player.get().library.tracks.find((x) => x.id === l.id) ?? player.get().queue.find((x) => x.id === l.id);
+  const t = player.get().library.tracks.find((x) => x.id === l.id);
   if (t) void api.plays.add({ trackId: t.id, title: t.title, artist: t.artist, seconds: Math.round(l.seconds) });
 }
-
-// ---------- «Моя волна» — в state/wave.ts ----------
-
-/** «Сохранить к себе»: трек из открытой базы скачивается в «Музыка/Камадо». */
-export async function saveWebTrack(t: Track): Promise<void> {
-  if (!t.web) return;
-  toast(`Сохраняю «${t.title}»…`, "info");
-  const r = await api.music.importUrl(t.web.url);
-  if (r.kind === "saved") toast(`«${t.title}» теперь в твоей библиотеке`, "ok");
-  else if (r.kind === "error") toast(r.error, "warn");
-}
-
-/** Сколько треков из открытой базы подряд не включилось. */
-let webFails = 0;
 
 async function startCurrent(fade = 0): Promise<void> {
   const t = currentTrack();
   if (!t) return;
-  if (player.get().wave && player.get().index >= player.get().queue.length - 2) void extendWave();
   flushListened();
   listened = { id: t.id, seconds: 0 };
   history.push(t.id);
@@ -429,21 +386,12 @@ async function startCurrent(fade = 0): Promise<void> {
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
   player.set({ lyrics: undefined, lyricsLoading: true });
   try {
-    const url = trackSrc(t);
+    const url = `camado-media://track/${t.id}`;
     await engine.play(url, fade, trackTrim(t.id));
-    // громкость выравниваем по своим файлам; трек из интернета для этого пришлось бы качать дважды
-    if (!t.web) void levelTrack(t.id, url);
-    webFails = 0;
+    void levelTrack(t.id, url);
   } catch (err) {
     console.error(err);
-    // трек из открытой базы недоступен (сайт не отдал файл) — в волне тихо берём следующий, но не по кругу
-    if (t.web && player.get().wave && ++webFails <= 4) {
-      // не «не нравится»: трек просто недоступен, исполнителя за это не наказываем
-      if (currentTrack()?.id === t.id) next(false);
-      return;
-    }
-    toast(t.web && webFails > 4 ? "Открытая база сейчас не отдаёт музыку — проверь интернет или включи свою" : `Не смог воспроизвести «${t.title}»`, "warn");
-    webFails = 0;
+    toast(`Не смог воспроизвести «${t.title}»`, "warn");
   }
   void updateMediaSession(t);
   void loadLyrics();
@@ -504,7 +452,7 @@ export function togglePlay(): void {
 function nextIndex(auto: boolean): number {
   const s = player.get();
   if (s.queue.length === 0) return -1;
-  if (s.shuffle && !s.wave && s.queue.length > 1) return pickShuffle(s.queue, s.index, history);
+  if (s.shuffle && s.queue.length > 1) return pickShuffle(s.queue, s.index, history);
   const i = s.index + 1;
   if (i >= s.queue.length) return s.repeat === "off" && auto ? -1 : 0;
   return i;
@@ -520,30 +468,9 @@ export function next(auto = false, fade = auto ? 0 : 0.4): void {
     toast("Таймер сна: трек закончился — спокойной ночи 🌙");
     return;
   }
-  if (auto && s.repeat === "one" && !s.wave) {
+  if (auto && s.repeat === "one") {
     engine.el.currentTime = 0;
     void engine.play();
-    return;
-  }
-  // волна учится: дослушал — нравится, пропустил в начале — не очень
-  const cur = currentTrack();
-  if (cur) {
-    const d = engine.el.duration || cur.duration;
-    const at = engine.el.currentTime;
-    if (auto) void api.wave.feedback(cur, "done");
-    else if (d > 0 && at > 2 && at < d * 0.4) {
-      void api.wave.feedback(cur, "skip");
-      if (s.wave) waveFeedback(cur, "skip");
-    }
-  }
-  if (s.wave && s.index >= s.queue.length - 1) {
-    // волна кончилась раньше, чем подгрузилась — дождаться и играть дальше
-    void extendWave().then(() => {
-      if (player.get().index < player.get().queue.length - 1) {
-        setIndex(player.get().index + 1);
-        void startCurrent(fade);
-      }
-    });
     return;
   }
   const i = nextIndex(auto);
@@ -619,8 +546,7 @@ export function toggleTranslation(): void {
 export async function loadLyrics(): Promise<void> {
   const meta = nowMeta();
   const id = ++lyricsReq;
-  // отрывок хита (30 секунд из середины песни) — текст по времени не совпал бы: не показываем
-  if (!meta || currentTrack()?.web?.preview) return player.set({ lyrics: undefined, lyricsLoading: false });
+  if (!meta) return player.set({ lyrics: undefined, lyricsLoading: false });
   player.set({ lyrics: undefined, lyricsLoading: true });
   const t = currentTrack();
   try {

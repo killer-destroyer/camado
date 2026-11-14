@@ -52,29 +52,7 @@ export interface Track {
   hasLyrics: boolean;
   /** Название/исполнитель/обложка поправлены в Камадо (файл не менялся). */
   edited?: boolean;
-  /** Трек из открытой базы (слушаем потоком): откуда, лицензия, теги. */
-  web?: WebTrackInfo;
 }
-
-export interface WebTrackInfo {
-  url: string;
-  source: "ccMixter" | "Internet Archive" | "Audius" | "Deezer";
-  page?: string;
-  license?: string;
-  licenseUrl?: string;
-  tags?: string[];
-  /** Сколько раз слушали на площадке (для «Популярного»). */
-  plays?: number;
-  /** Это 30-секундный отрывок (хиты из Deezer); целиком песню можно открыть на стриминге. */
-  preview?: boolean;
-  /** Оценка подбора от движка волны (0..1+). */
-  score?: number;
-  /** Длина полной песни, сек. */
-  fullDuration?: number;
-}
-
-/** Настроение «Моей волны». */
-export type WaveMood = "mine" | "energy" | "calm" | "study" | "new";
 
 export interface LyricsWord {
   time: number;
@@ -511,23 +489,6 @@ export interface CamadoApi {
     /** Перевод строк на русский (той же длины). native — текст и так русский. */
     translate(lines: string[], about?: { title?: string; artist?: string }): Promise<{ lines: string[]; native?: boolean } | { error: string }>;
   };
-  wave: {
-    /** Следующие треки «Моей волны» (свои + открытая база). exclude — что уже было. */
-    next(mood: WaveMood, exclude?: string[]): Promise<Track[]>;
-    feedback(t: Track, kind: "like" | "unlike" | "dislike" | "skip" | "done"): Promise<void>;
-    moods(): Promise<{ id: WaveMood; label: string }[]>;
-    /** Волна 2.0: кандидаты с Audius под стиль плейлиста. */
-    candidates(q: { genres: string[]; ruShare: number; artists: string[]; exclude: string[] }): Promise<Track[]>;
-    /** Отпечатки звука (base64 float32) по id песен. */
-    embGet(ids: string[]): Promise<Record<string, string>>;
-    embPut(entries: Record<string, string>): Promise<void>;
-    taste(): Promise<{ liked: string[]; disliked: string[] }>;
-    /** Волна из актуальных хитов (отрывки 30 с): под плейлист (seedIds), под меня или под настроение. */
-    hits(q: { seedIds?: string[]; mood: WaveMood; exclude?: string[]; character?: "new" | "popular"; count?: number }): Promise<Track[]>;
-    /** «Хочу послушать» — что понравилось в волне. */
-    wish(): Promise<Track[]>;
-    wishRemove(id: string): Promise<void>;
-  };
   sheets: {
     list(): Promise<SheetView[]>;
     add(input: { name?: string; url: string; match?: string; everyMin?: number }): Promise<SheetView | { error: string }>;
@@ -598,7 +559,7 @@ export interface CamadoApi {
   notify(title: string, body: string): Promise<void>;
   /** Путь к файлу, перетащенному в окно. */
   pathForFile(file: File): string;
-  on(event: "data-changed" | "library-changed" | "media-key" | "sheets-changed" | "wish-changed", cb: (payload?: unknown) => void): () => void;
+  on(event: "data-changed" | "library-changed" | "media-key" | "sheets-changed", cb: (payload?: unknown) => void): () => void;
   on(event: "download-progress", cb: (payload: { name: string; received: number; total: number }) => void): () => void;
   on(event: "reminder", cb: (payload: { text: string }) => void): () => void;
   on(event: "update-status", cb: (payload: UpdateStatus) => void): () => void;

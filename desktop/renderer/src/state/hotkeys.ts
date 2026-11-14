@@ -3,7 +3,6 @@ import { actionFor, comboOf, isBare } from "../../../shared/hotkeys";
 import { app, go, toast, updateSettings, type ScreenId } from "./app";
 import { cycleRepeat, currentTrack, toggleTranslation, next, player, position, prev, seek, toggleFavorite, togglePlay } from "./player";
 import { focus, pause as pauseFocus, start as startFocus } from "./focus";
-import { startWave, stopWave } from "./wave";
 
 export const isMac = () => app.get().info.platform === "darwin";
 
@@ -98,8 +97,6 @@ export function runAction(id: string): void {
       if (t && player.get().library.tracks.some((x) => x.id === t.id)) app.set({ trackEdit: t.id });
       return;
     }
-    case "wave":
-      return player.get().wave ? stopWave() : void startWave("mine");
     case "translate":
       return toggleTranslation();
     default:

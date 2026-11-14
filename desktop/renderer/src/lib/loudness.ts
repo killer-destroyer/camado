@@ -2,7 +2,6 @@
 // Меряем среднюю громкость всей песни (тишину не считаем) и подтягиваем к одному уровню.
 import { engine } from "./audio";
 import { offerScratchBuffer } from "./scratch";
-import { tempoEnergy, type TrackEnergy } from "../../../shared/energy";
 
 /** К какому уровню подтягиваем (дБ от максимума). Современные треки обычно −8…−12, старые и тихие −16…−20. */
 export const TARGET_DB = -13;
@@ -35,10 +34,10 @@ export function loudnessOf(buffer: AudioBuffer): number {
 
 export const autoTrim = (loudnessDb: number) => Math.max(-MAX_TRIM, Math.min(MAX_TRIM, TARGET_DB - loudnessDb));
 
-const pending = new Map<string, Promise<{ loud: number; energy?: TrackEnergy } | undefined>>();
+const pending = new Map<string, Promise<number | undefined>>();
 
-/** Измерить трек по адресу (в фоне): громкость, темп и энергию. Заодно отдаём раскодированный звук скретчу — второй раз не раскодируем. */
-export function measure(url: string): Promise<{ loud: number; energy?: TrackEnergy } | undefined> {
+/** Измерить трек по адресу (в фоне). Заодно отдаём раскодированный звук скретчу — второй раз не раскодируем. */
+export function measure(url: string): Promise<number | undefined> {
   const was = pending.get(url);
   if (was) return was;
   const p = fetch(url)
@@ -46,7 +45,7 @@ export function measure(url: string): Promise<{ loud: number; energy?: TrackEner
     .then((data) => engine.context().decodeAudioData(data))
     .then((buf) => {
       offerScratchBuffer(url, buf);
-      return { loud: Math.round(loudnessOf(buf) * 10) / 10, energy: tempoEnergy(buf.getChannelData(0), buf.sampleRate) };
+      return Math.round(loudnessOf(buf) * 10) / 10;
     })
     .catch(() => undefined)
     .finally(() => pending.delete(url));

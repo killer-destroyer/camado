@@ -10,7 +10,6 @@ import { loadPlaylists, player, playQueue, shuffleAll, toggleFavorite } from "..
 import { CoverFlow } from "../components/CoverFlow";
 import { AmbienceMixer } from "../components/Ambience";
 import { Empty } from "../components/ui";
-import { WaveCard } from "../components/WaveCard";
 
 const looksLikeUrl = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
 /** Вставили код страницы, а не ссылку. */
@@ -351,8 +350,6 @@ export function Music() {
           </button>
         </div>
       </header>
-
-      <WaveCard list={tab.kind === "all" ? undefined : { name: tabs.find((x) => tabKey(x.t) === tabKey(tab))?.label ?? "плейлист", tracks: tabTracks }} />
 
       {library.tracks.length > 0 && linkBar}
 
