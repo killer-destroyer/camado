@@ -1,4 +1,5 @@
 // 1.2.0: деньги, сон и энергия, расписание, автораскладка с парами, резервная копия.
+import { execFileSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -196,9 +197,16 @@ describe("резервная копия", () => {
     const copy = join(dir, "copy.db");
     store.backupTo(copy);
     const path = join(dir, "camado.db");
-    const db = openDb(path);
     try {
-      db.exec("PRAGMA wal_autocheckpoint = 0; INSERT INTO kv (key, value) VALUES ('x', 'недавняя запись')");
+      openDb(path).close();
+      // Имитируем выход Камадо перед перезапуском: процесс завершён, а записи остались в WAL.
+      execFileSync(process.execPath, ["--input-type=module", "--eval", `
+        import { DatabaseSync } from "node:sqlite";
+        const db = new DatabaseSync(process.argv[1]);
+        db.exec("PRAGMA wal_autocheckpoint = 0");
+        db.prepare("INSERT INTO kv (key, value) VALUES (?, ?)").run("x", "недавняя запись");
+        process.exit(0);
+      `, path], { timeout: 10_000 });
       expect(statSync(`${path}-wal`).size).toBeGreaterThan(0);
       writeFileSync(`${path}.restore`, "битый файл");
       expect(() => applyPendingRestore(path)).toThrow();
@@ -218,7 +226,6 @@ describe("резервная копия", () => {
       expect(readValue(`${path}.before-restore`)).toBe("недавняя запись");
       expect(readValue(path)).toBe("резервная копия");
     } finally {
-      db.close();
       rmSync(dir, { recursive: true, force: true });
     }
   });
