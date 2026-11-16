@@ -1,8 +1,9 @@
 // 1.2.0: деньги, сон и энергия, расписание, автораскладка с парами, резервная копия.
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { describe, expect, it, vi } from "vitest";
 import { autoPlan } from "../desktop/shared/autoplan.js";
 import {
   avgSleep,
@@ -21,7 +22,8 @@ import {
   type ScheduleState,
 } from "../desktop/shared/life.js";
 import { cleanClass } from "../src/camado/extras.js";
-import { applyPendingRestore } from "../desktop/main/life.js";
+import { applyPendingRestore, lifeHandlers } from "../desktop/main/life.js";
+import { openDb } from "../src/db.js";
 import { memoryStore } from "./helpers.js";
 
 describe("деньги", () => {
@@ -147,20 +149,78 @@ describe("автораскладка: пары заняты, тяжёлое — 
 });
 
 describe("резервная копия", () => {
-  it("копия базы — целый файл, а «вернуть копию» подменяет базу до открытия", () => {
+  it("оставляет посторонние папки и отключается без диалога выбора", async () => {
+    const root = mkdtempSync(join(tmpdir(), "camado-retention-"));
+    const store = memoryStore();
+    const folder = join(root, "Камадо — резервные копии");
+    const unrelated = join(folder, "Камадо 2000-01-01-00-00");
+    mkdirSync(unrelated, { recursive: true });
+    writeFileSync(join(unrelated, "notes.txt"), "Личные заметки");
+    for (let day = 2; day <= 15; day++) {
+      const old = join(folder, `Камадо 2000-01-${String(day).padStart(2, "0")}-00-00`);
+      mkdirSync(old);
+      writeFileSync(join(old, "camado.db"), "Старая копия");
+    }
+    const oldest = join(folder, "Камадо 2000-01-02-00-00");
+    writeFileSync(join(oldest, "notes.txt"), "Заметки рядом с копией");
+    const showOpenDialog = vi.fn();
+    const { handlers } = lifeHandlers({
+      core: { store } as Parameters<typeof lifeHandlers>[0]["core"],
+      withAi: (fn) => fn(),
+      dataDir: root,
+      dbPath: () => join(root, "camado.db"),
+      dialog: { showOpenDialog } as unknown as Parameters<typeof lifeHandlers>[0]["dialog"],
+      win: () => undefined,
+      notify: () => {},
+      send: () => {},
+    });
+    const setFolder = handlers["backup.setFolder"] as (folder: string | null) => Promise<{ last?: string; error?: string }>;
+    try {
+      const result = await setFolder(root);
+      expect(result.error).toBeUndefined();
+      expect(result.last).toBeDefined();
+      expect(existsSync(join(unrelated, "notes.txt"))).toBe(true);
+      expect(existsSync(join(oldest, "camado.db"))).toBe(false);
+      expect(existsSync(join(oldest, "notes.txt"))).toBe(true);
+      expect(await setFolder(null)).toEqual({});
+      expect(showOpenDialog).not.toHaveBeenCalled();
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("заменяет базу и сохраняет последние записи из WAL в страховочной копии", () => {
     const dir = mkdtempSync(join(tmpdir(), "camado-bk-"));
     const store = memoryStore();
-    store.setKv("x", "1");
+    store.setKv("x", "резервная копия");
     const copy = join(dir, "copy.db");
     store.backupTo(copy);
-    expect(existsSync(copy)).toBe(true);
-    const db = join(dir, "camado.db");
-    writeFileSync(db, "old");
-    writeFileSync(`${db}.restore`, "new");
-    expect(applyPendingRestore(db)).toBe(true);
-    expect(existsSync(`${db}.before-restore`)).toBe(true);
-    expect(existsSync(`${db}.restore`)).toBe(false);
-    expect(applyPendingRestore(db)).toBe(false);
+    const path = join(dir, "camado.db");
+    const db = openDb(path);
+    try {
+      db.exec("PRAGMA wal_autocheckpoint = 0; INSERT INTO kv (key, value) VALUES ('x', 'недавняя запись')");
+      expect(statSync(`${path}-wal`).size).toBeGreaterThan(0);
+      writeFileSync(`${path}.restore`, "битый файл");
+      expect(() => applyPendingRestore(path)).toThrow();
+      expect(existsSync(`${path}.before-restore`)).toBe(false);
+      copyFileSync(copy, `${path}.restore`);
+      expect(applyPendingRestore(path)).toBe(true);
+      expect(existsSync(`${path}.restore`)).toBe(false);
+      expect(applyPendingRestore(path)).toBe(false);
+      const readValue = (file: string) => {
+        const snapshot = new DatabaseSync(file, { readOnly: true });
+        try {
+          return snapshot.prepare("SELECT value FROM kv WHERE key = 'x'").get()?.value;
+        } finally {
+          snapshot.close();
+        }
+      };
+      expect(readValue(`${path}.before-restore`)).toBe("недавняя запись");
+      expect(readValue(path)).toBe("резервная копия");
+    } finally {
+      db.close();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

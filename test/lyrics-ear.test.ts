@@ -1,6 +1,6 @@
 // Подгонка текста по звуку: выбор строк, разбор ответа ИИ, отсев ошибок ИИ.
 import { describe, expect, it } from "vitest";
-import { mapLyricsTime, pickSyncLines, syncFromHeard } from "../desktop/shared/lrc.js";
+import { cleanEarWindow, mapLyricsTime, pickSyncLines, syncFromHeard } from "../desktop/shared/lrc.js";
 import { parseHeard } from "../src/camado/listen.js";
 
 describe("подгонка текста по звуку", () => {
@@ -20,6 +20,11 @@ describe("подгонка текста по звуку", () => {
       { n: 7, t: 83.4 },
     ]);
     expect(parseHeard("не могу", new Set([1]))).toEqual([]);
+  });
+
+  it("пропускает испорченные точки, сохраняя допустимые", () => {
+    const reply = '[null, {"n":null,"t":5}, {"n":false,"t":4}, {"n":0,"t":null}, {"n":0,"t":" "}, {"n":"0","t":3}]';
+    expect(parseHeard(reply, new Set([0]))).toEqual([{ n: 0, t: 3 }]);
   });
 
   it("находит сдвиг и темп, а промахи ИИ отбрасывает", () => {
@@ -43,5 +48,14 @@ describe("подгонка текста по звуку", () => {
   it("мало согласных точек — не верим и ничего не меняем", () => {
     expect(syncFromHeard([{ t: 10, l: 12 }, { t: 50, l: 20 }, { t: 90, l: 140 }])).toBeNull();
     expect(syncFromHeard([{ t: 10, l: 12 }])).toBeNull();
+  });
+
+  it("проверяет темп даже по двум строкам и не считает одну строку дважды", () => {
+    expect(cleanEarWindow([{ t: 5, l: 6 }])).toEqual([]);
+    expect(cleanEarWindow([{ t: 5, l: 6 }, { t: 30, l: 16 }])).toEqual([]);
+    const aligned = [{ t: 5, l: 6 }, { t: 15, l: 16 }];
+    expect(cleanEarWindow(aligned)).toEqual(aligned);
+    expect(syncFromHeard([...aligned, { t: 5.2, l: 6 }])).toBeNull();
+    expect(syncFromHeard([...aligned, { t: 5.2, l: 6 }, { t: 25, l: 26 }])).not.toBeNull();
   });
 });

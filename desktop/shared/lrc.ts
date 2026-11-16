@@ -219,7 +219,18 @@ export function pickSyncLines(lines: { time: number; text: string }[], n = 10): 
  */
 export function syncFromHeard(points: { t: number; l: number }[]): LyricsSync | null {
   const pts = points.filter((p) => Number.isFinite(p.t) && Number.isFinite(p.l) && p.t >= 0).sort((a, b) => a.t - b.t);
-  if (pts.length < 3) return null;
+  if (new Set(pts.map((p) => p.l)).size < 3) return null;
+  // Отрывки могут пересекаться. Совпадение для одной строки считаем только один раз.
+  const matching = (k: number, b: number, tolerance: number) => {
+    const byLineTime = new Map<number, { point: (typeof pts)[number]; error: number }>();
+    for (const point of pts) {
+      const error = Math.abs(k * point.t + b - point.l);
+      if (error <= tolerance && error < (byLineTime.get(point.l)?.error ?? Infinity)) {
+        byLineTime.set(point.l, { point, error });
+      }
+    }
+    return [...byLineTime.values()].map(({ point }) => point).sort((a, b) => a.t - b.t);
+  };
   let best: { t: number; l: number }[] = [];
   for (let i = 0; i < pts.length; i++) {
     for (let j = i + 1; j < pts.length; j++) {
@@ -228,7 +239,7 @@ export function syncFromHeard(points: { t: number; l: number }[]): LyricsSync | 
       if (b.t - a.t < 5) continue;
       const k = (b.l - a.l) / (b.t - a.t);
       if (k < MIN_SLOPE || k > MAX_SLOPE) continue;
-      const fit = pts.filter((p) => Math.abs(a.l + (p.t - a.t) * k - p.l) <= 1.5);
+      const fit = matching(k, a.l - a.t * k, 1.5);
       if (fit.length > best.length) best = fit;
     }
   }
@@ -244,7 +255,7 @@ export function syncFromHeard(points: { t: number; l: number }[]): LyricsSync | 
     return { k, b: ml - k * mt };
   };
   let line = fit(best);
-  const inliers = pts.filter((p) => Math.abs(line.k * p.t + line.b - p.l) <= 1.0);
+  const inliers = matching(line.k, line.b, 1);
   if (inliers.length >= 3) line = fit(inliers);
   if (line.k < MIN_SLOPE || line.k > MAX_SLOPE) return null;
   const used = inliers.length >= 3 ? inliers : best;
@@ -290,12 +301,12 @@ export function earWindows(duration: number, lines: { time: number; text: string
  * Если ИИ «сжал» или «растянул» время — отрывок целиком не берём; точки далеко от общей линии — тоже.
  */
 export function cleanEarWindow(points: { t: number; l: number }[]): { t: number; l: number }[] {
-  if (points.length < 3) return points;
+  if (points.length < 2) return [];
   const n = points.length;
   const mt = points.reduce((a, p) => a + p.t, 0) / n;
   const ml = points.reduce((a, p) => a + p.l, 0) / n;
   const vl = points.reduce((a, p) => a + (p.l - ml) ** 2, 0);
-  if (vl < 1) return points;
+  if (vl < 1) return [];
   const k = points.reduce((a, p) => a + (p.l - ml) * (p.t - mt), 0) / vl; // секунд песни на секунду текста
   if (k < 0.85 || k > 1.18) return [];
   return points.filter((p) => Math.abs(mt + (p.l - ml) * k - p.t) <= 1.5);

@@ -2,10 +2,11 @@
 // резервная копия базы и учёт отвлечений во время фокуса. Всё хранится у пользователя (база и папка программы).
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, renameSync, rmSync } from "node:fs";
-import { copyFile, mkdir, readdir, rename, rm, stat } from "node:fs/promises";
+import { copyFileSync, existsSync, renameSync, rmSync } from "node:fs";
+import { copyFile, mkdir, readdir, rename, rm, rmdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { BrowserWindow, Dialog } from "electron";
 import type { CamadoCore } from "../../src/core.js";
 import { cleanClass, customProblem, examinerTurn, noteFromPhotos, parseSchedule, type ClassSlot } from "../../src/camado/extras.js";
@@ -167,31 +168,50 @@ export function lifeHandlers(deps: {
 
   // ---------- резервная копия ----------
   const backup = () => load<BackupState>(BACKUP_KV, {});
-  const runBackup = async (): Promise<BackupState> => {
+  const performBackup = async (): Promise<BackupState> => {
     const b = backup();
-    if (!b.folder) return b;
+    const folder = b.folder;
+    if (!folder) return b;
     try {
-      await mkdir(b.folder, { recursive: true });
+      await mkdir(folder, { recursive: true });
       const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
-      const dir = join(b.folder, `Камадо ${stamp}`);
+      const dir = join(folder, `Камадо ${stamp}`);
       await mkdir(dir, { recursive: true });
       const tmp = join(dir, "camado.db.part");
       await rm(tmp, { force: true });
       store.backupTo(tmp);
       await rename(tmp, join(dir, "camado.db"));
       // храним 14 последних копий
-      const all = (await readdir(b.folder)).filter((n) => n.startsWith("Камадо ")).sort();
-      for (const old of all.slice(0, Math.max(0, all.length - 14))) await rm(join(b.folder, old), { recursive: true, force: true });
+      const entries = await readdir(folder, { withFileTypes: true });
+      const all = entries
+        .filter((entry) => entry.isDirectory() && /^Камадо \d{4}-\d{2}-\d{2}-\d{2}-\d{2}$/.test(entry.name))
+        .map((entry) => entry.name)
+        .filter((name) => existsSync(join(folder, name, "camado.db")))
+        .sort();
+      for (const old of all.slice(0, Math.max(0, all.length - 14))) {
+        const oldDir = join(folder, old);
+        await rm(join(oldDir, "camado.db"), { force: true });
+        await rmdir(oldDir).catch((err: NodeJS.ErrnoException) => {
+          if (err.code !== "ENOTEMPTY" && err.code !== "EEXIST" && err.code !== "ENOENT") throw err;
+        });
+      }
+      if (backup().folder !== folder) return backup();
       const next = { ...b, last: new Date().toISOString(), error: undefined };
       save(BACKUP_KV, next);
       changed("backup");
       return next;
     } catch (e) {
+      if (backup().folder !== folder) return backup();
       const next = { ...b, error: e instanceof Error ? e.message : String(e) };
       save(BACKUP_KV, next);
       changed("backup");
       return next;
     }
+  };
+  let backupQueue: Promise<BackupState> = Promise.resolve({});
+  const runBackup = (): Promise<BackupState> => {
+    backupQueue = backupQueue.then(performBackup, performBackup);
+    return backupQueue;
   };
   let backupTimer: NodeJS.Timeout | undefined;
   const tickBackup = () => {
@@ -444,7 +464,12 @@ $n=(Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName; Write-Output 
     // резервная копия
     "backup.get": async () => ({ ...backup(), clouds: await cloudFolders() }),
     "backup.setFolder": async (folder?: string | null) => {
-      let f = folder ?? undefined;
+      if (folder === null) {
+        save(BACKUP_KV, {});
+        changed("backup");
+        return {};
+      }
+      let f = folder;
       if (f === undefined) {
         const w = deps.win();
         const opts = { title: "Куда класть резервные копии (лучше — папка Google Диска или Яндекс Диска)", properties: ["openDirectory", "createDirectory"] as ("openDirectory" | "createDirectory")[] };
@@ -452,10 +477,11 @@ $n=(Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName; Write-Output 
         if (res.canceled || !res.filePaths[0]) return backup();
         f = res.filePaths[0];
       }
-      const next: BackupState = folder === null ? {} : { ...backup(), folder: join(f, f.endsWith("Камадо — резервные копии") ? "" : "Камадо — резервные копии") };
+      const current = backup();
+      const target = join(f, f.endsWith("Камадо — резервные копии") ? "" : "Камадо — резервные копии");
+      const next: BackupState = current.folder === target ? current : { folder: target };
       save(BACKUP_KV, next);
-      if (next.folder) return runBackup();
-      return next;
+      return runBackup();
     },
     "backup.now": () => runBackup(),
     "backup.restore": async () => {
@@ -475,7 +501,17 @@ $n=(Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName; Write-Output 
         detail: "Задания, заметки и настройки станут такими, как в копии. Текущие данные сохранятся рядом (camado.db.before-restore). Камадо перезапустится.",
       });
       if (ok.response !== 0) return { cancelled: true as const };
-      await copyFile(src, `${deps.dbPath()}.restore`);
+      const pending = `${deps.dbPath()}.restore`;
+      const staged = `${pending}.${randomUUID()}.part`;
+      try {
+        await copyFile(src, staged);
+        validateBackup(staged);
+        await rename(staged, pending);
+      } catch (err) {
+        return { error: `Не удалось подготовить копию: ${err instanceof Error ? err.message : String(err)}` };
+      } finally {
+        await rm(staged, { force: true }).catch(() => undefined);
+      }
       return { ok: true as const };
     },
 
@@ -503,11 +539,39 @@ $n=(Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName; Write-Output 
   };
 }
 
-/** Перед открытием базы: если пользователь выбрал «вернуть копию» — подменить файл (старый остаётся рядом). */
+function validateBackup(path: string): void {
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const integrity = db.prepare("PRAGMA quick_check(1)").get()?.quick_check;
+    const tables = db.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE type = 'table' AND name IN ('tasks', 'kv')").get()?.n;
+    if (integrity !== "ok" || tables !== 2) throw new Error("Файл не похож на исправную копию базы Камадо");
+  } finally {
+    db.close();
+  }
+}
+
+/** Перед открытием базы: сохраняем текущую базу вместе с последними записями из WAL и подменяем её. */
 export function applyPendingRestore(dbPath: string): boolean {
   const pending = `${dbPath}.restore`;
   if (!existsSync(pending)) return false;
-  if (existsSync(dbPath)) renameSync(dbPath, `${dbPath}.before-restore`);
+  validateBackup(pending);
+  if (existsSync(dbPath)) {
+    const db = new DatabaseSync(dbPath);
+    try {
+      const checkpoint = db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get();
+      if (checkpoint?.busy !== 0) throw new Error("Не удалось сохранить последние записи текущей базы");
+    } finally {
+      db.close();
+    }
+    const previous = `${dbPath}.before-restore`;
+    const staged = `${previous}.part`;
+    try {
+      copyFileSync(dbPath, staged);
+      renameSync(staged, previous);
+    } finally {
+      rmSync(staged, { force: true });
+    }
+  }
   for (const ext of ["-wal", "-shm"]) rmSync(`${dbPath}${ext}`, { force: true });
   renameSync(pending, dbPath);
   return true;

@@ -404,7 +404,10 @@ function flushListened(): void {
   if (t) void api.plays.add({ trackId: t.id, title: t.title, artist: t.artist, seconds: Math.round(l.seconds) });
 }
 
+let playbackRequest = 0;
+
 async function startCurrent(fade = 0): Promise<void> {
+  const request = ++playbackRequest;
   const t = currentTrack();
   if (!t) return;
   flushListened();
@@ -412,16 +415,19 @@ async function startCurrent(fade = 0): Promise<void> {
   history.push(t.id);
   if (history.length > 50) history.shift();
   // Сразу «ищу текст», чтобы не мелькало «текста нет», пока трек грузится.
+  ++lyricsReq;
   player.set({ lyrics: undefined, lyricsLoading: true });
   try {
     const url = `camado-media://track/${t.id}`;
     await engine.play(url, fade, trackTrim(t.id));
     void levelTrack(t.id, url);
   } catch (err) {
+    if (request !== playbackRequest) return;
     console.error(err);
     toast(`Не смог воспроизвести «${t.title}»`, "warn");
   }
-  void updateMediaSession(t);
+  if (request !== playbackRequest) return;
+  void updateMediaSession(t, request);
   void loadLyrics();
   kickWords();
   void loadCoverPalette(t.cover).then(prefetchNeighbors);
@@ -441,7 +447,7 @@ function prefetchNeighbors(): void {
 
 /** «Сейчас играет» в системе (Пункт управления на Mac, медиа-клавиши, оверлей Windows). */
 let artworkUrl: string | undefined;
-async function updateMediaSession(t: Track): Promise<void> {
+async function updateMediaSession(t: Track, request: number): Promise<void> {
   if (!("mediaSession" in navigator)) return;
   const set = (src?: string) =>
     (navigator.mediaSession.metadata = new MediaMetadata({
@@ -451,13 +457,17 @@ async function updateMediaSession(t: Track): Promise<void> {
       artwork: src ? [{ src, sizes: "512x512" }] : [],
     }));
   set();
+  if (artworkUrl) {
+    URL.revokeObjectURL(artworkUrl);
+    artworkUrl = undefined;
+  }
   if (!t.cover) return;
   try {
     // Система принимает картинку только как blob/data — свой протокол camado-media не понимает.
     const blob = await (await fetch(t.cover)).blob();
-    if (artworkUrl) URL.revokeObjectURL(artworkUrl);
+    if (request !== playbackRequest) return;
     artworkUrl = URL.createObjectURL(blob);
-    if (currentTrack()?.id === t.id) set(artworkUrl);
+    set(artworkUrl);
   } catch {
     // без обложки — не страшно
   }
@@ -672,7 +682,7 @@ export async function loadCoverPalette(cover?: string): Promise<void> {
     const pal = await paletteFor(cover);
     if (currentTrack()?.cover === cover || nowMeta()?.cover === cover) player.set({ coverPalette: pal, coverPaletteFor: cover });
   } catch {
-    player.set({ coverPalette: undefined, coverPaletteFor: cover });
+    if (currentTrack()?.cover === cover) player.set({ coverPalette: undefined, coverPaletteFor: cover });
   }
 }
 

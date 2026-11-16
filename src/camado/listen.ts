@@ -35,8 +35,12 @@ export function parseHeard(text: string, allowed: Set<number>): { n: number; t: 
   if (!Array.isArray(raw)) return [];
   const out: { n: number; t: number }[] = [];
   for (const x of raw) {
-    const n = Number((x as { n?: unknown }).n);
-    let t = (x as { t?: unknown }).t;
+    if (!x || typeof x !== "object" || Array.isArray(x)) continue;
+    const point = x as { n?: unknown; t?: unknown };
+    if (typeof point.n !== "number" && (typeof point.n !== "string" || !point.n.trim())) continue;
+    const n = Number(point.n);
+    let t = point.t;
+    if (typeof t !== "number" && (typeof t !== "string" || !t.trim())) continue;
     // «1:23.4» тоже понимаем
     if (typeof t === "string" && /^\d+:\d+(\.\d+)?$/.test(t)) {
       const [mm, ss] = t.split(":");
